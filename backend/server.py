@@ -98,7 +98,22 @@ def api_booking():
         return jsonify({"error": str(e)}), 400
 
 if __name__ == "__main__":
+    from pathlib import Path
+
     init_db()
+
+    # One-time safe bootstrap import of your CSV (skips duplicates and won't crash on error)
+    try:
+        from import_properties import import_csv
+        csv_path = Path(__file__).with_name("ota_properties_prefilled.csv")
+        if csv_path.exists():
+            import_csv(str(csv_path))
+            print("Bootstrap CSV import done:", csv_path)
+        else:
+            print("Bootstrap CSV import skipped (file not found):", csv_path)
+    except Exception as e:
+        print("Bootstrap CSV import error (continuing without it):", e)
+
     t = threading.Thread(target=periodic_sync, daemon=True)
     t.start()
     app.run(host="0.0.0.0", port=5000, debug=False)
