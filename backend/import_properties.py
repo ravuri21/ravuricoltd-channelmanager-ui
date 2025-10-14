@@ -1,6 +1,11 @@
 import csv, sys
 from sqlalchemy import and_
-from .models import SessionLocal, Unit, init_db
+
+# Try package import first, then fallback for direct execution
+try:
+    from .models import SessionLocal, Unit, init_db
+except ImportError:
+    from models import SessionLocal, Unit, init_db
 
 def import_csv(path):
     init_db()
