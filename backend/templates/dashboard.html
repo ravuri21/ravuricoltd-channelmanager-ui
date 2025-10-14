@@ -15,6 +15,28 @@
   </div>
   <div class="container">
     <h2>{% if lang=='th' %}ยูนิตทั้งหมด{% else %}All Units{% endif %}</h2>
+    <button onclick="checkIcalStatus()" style="background:#16a34a;color:white;padding:8px 14px;border:none;border-radius:8px;cursor:pointer;margin-bottom:12px;">
+  🔍 Check iCal Status
+</button>
+<div id="ical-results" style="margin-bottom:20px;font-family:monospace;"></div>
+
+<script>
+async function checkIcalStatus() {
+  document.getElementById("ical-results").innerHTML = "⏳ Checking all iCal links...";
+  const res = await fetch("/api/check_ical");
+  const data = await res.json();
+  if (data.error) {
+    document.getElementById("ical-results").innerHTML = "❌ Unauthorized — please log in again.";
+    return;
+  }
+  let html = "<table style='width:100%;border-collapse:collapse'><tr><th>OTA</th><th>Property</th><th>Status</th></tr>";
+  for (let row of data) {
+    html += `<tr><td>${row.ota}</td><td>${row.property_id}</td><td>${row.status}</td></tr>`;
+  }
+  html += "</table>";
+  document.getElementById("ical-results").innerHTML = html;
+}
+</script>
     <table>
       <tr><th>OTA</th><th>{% if lang=='th' %}รหัสทรัพย์/ห้อง{% else %}Property/Room ID{% endif %}</th><th>iCal</th></tr>
       {% for u in units %}
