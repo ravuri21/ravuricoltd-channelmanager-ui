@@ -58,7 +58,7 @@ async function checkIcalStatus() {
     html += "</table>";
     resultsDiv.innerHTML = html;
   } catch (err) {
-    resultsDiv.innerHTML = "❌ Error checking iCal status.";
+    resultsDiv.innerHTML = "❌ Error checking iCal status:<br>" + err;
   }
 }
 </script>
