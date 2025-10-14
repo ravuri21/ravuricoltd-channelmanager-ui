@@ -131,7 +131,6 @@ def api_booking():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-
 @app.route("/api/check_ical", methods=["GET"])
 def api_check_ical():
     """Check iCal links for all properties and return status list."""
