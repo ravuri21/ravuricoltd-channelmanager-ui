@@ -16,7 +16,12 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "changeme")
 APP_LANG_DEFAULT = os.environ.get("APP_LANG_DEFAULT", "en")
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "sk_test_4eC39HqLyjWDarjtT1zdp7dc")
 
+# ==========================================================
+# iCal Fetch and Background Sync
+# ==========================================================
+
 def fetch_ical(ical_url):
+    """Download and parse iCal events."""
     try:
         resp = requests.get(ical_url, timeout=12)
         resp.raise_for_status()
@@ -36,6 +41,7 @@ def fetch_ical(ical_url):
         return []
 
 def periodic_sync():
+    """Continuously sync all OTA calendars every 2 minutes."""
     while True:
         try:
             db = SessionLocal()
@@ -50,7 +56,10 @@ def periodic_sync():
             traceback.print_exc()
         time.sleep(120)
 
-# ---- Bootstrap when module is imported by Gunicorn ----
+# ==========================================================
+# Startup Bootstrap
+# ==========================================================
+
 try:
     print("Bootstrap: init_db()")
     init_db()
@@ -60,12 +69,16 @@ try:
         importer.import_csv(str(csv_path))
     else:
         print(f"Bootstrap: CSV not found (skipping) {csv_path}")
-    # Start background sync thread (single worker on free plan)
+    # Start background sync thread
     t = threading.Thread(target=periodic_sync, daemon=True)
     t.start()
 except Exception as e:
     print("Bootstrap error:", e)
     traceback.print_exc()
+
+# ==========================================================
+# Routes
+# ==========================================================
 
 @app.route("/")
 def index():
@@ -77,11 +90,11 @@ def index():
     db.close()
     return render_template("dashboard.html", units=units, lang=lang)
 
-@app.route("/login", methods=["GET","POST"])
+@app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        email = request.form.get("email","").strip().lower()
-        password = request.form.get("password","")
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
         if email == ADMIN_EMAIL.lower() and password == ADMIN_PASSWORD:
             session["user"] = email
             return redirect(url_for("index"))
@@ -97,28 +110,31 @@ def logout():
 def lang(code):
     if "user" not in session:
         return redirect(url_for("login"))
-    if code in ("en","th"):
+    if code in ("en", "th"):
         session["lang"] = code
     return redirect(url_for("index"))
 
 @app.route("/api/booking", methods=["POST"])
 def api_booking():
     if "user" not in session:
-        return jsonify({"error":"unauthorized"}),401
+        return jsonify({"error": "unauthorized"}), 401
     data = request.json or {}
     try:
-        amount = int(float(data.get("amount", 0))*100)
-        currency = data.get("currency","usd")
+        amount = int(float(data.get("amount", 0)) * 100)
+        currency = data.get("currency", "usd")
         payment_method = data.get("payment_method_id")
         intent = stripe.PaymentIntent.create(
             amount=amount, currency=currency,
             payment_method=payment_method, confirm=True
         )
-        return jsonify({"ok":True, "payment_intent": intent.id})
+        return jsonify({"ok": True, "payment_intent": intent.id})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
-        @app.route("/api/check_ical", methods=["GET"])
+
+
+@app.route("/api/check_ical", methods=["GET"])
 def api_check_ical():
+    """Check iCal links for all properties and return status list."""
     if "user" not in session:
         return jsonify({"error": "unauthorized"}), 401
 
