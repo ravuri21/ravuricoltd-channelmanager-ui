@@ -117,3 +117,28 @@ def api_booking():
         return jsonify({"ok":True, "payment_intent": intent.id})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+        @app.route("/api/check_ical", methods=["GET"])
+def api_check_ical():
+    if "user" not in session:
+        return jsonify({"error": "unauthorized"}), 401
+
+    db = SessionLocal()
+    units = db.query(Unit).all()
+    db.close()
+
+    results = []
+    for u in units:
+        try:
+            r = requests.get(u.ical_url, timeout=10)
+            if r.status_code == 200 and "BEGIN:VCALENDAR" in r.text:
+                status = "✅ OK"
+            else:
+                status = f"⚠️ Unexpected ({r.status_code})"
+        except Exception as e:
+            status = f"❌ Error: {str(e)[:40]}"
+        results.append({
+            "ota": u.ota,
+            "property_id": u.property_id,
+            "status": status
+        })
+    return jsonify(results)
