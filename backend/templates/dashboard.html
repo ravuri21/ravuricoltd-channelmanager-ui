@@ -19,24 +19,50 @@
   🔍 Check iCal Status
 </button>
 <div id="ical-results" style="margin-bottom:20px;font-family:monospace;"></div>
-
 <script>
 async function checkIcalStatus() {
-  document.getElementById("ical-results").innerHTML = "⏳ Checking all iCal links...";
-  const res = await fetch("/api/check_ical");
-  const data = await res.json();
-  if (data.error) {
-    document.getElementById("ical-results").innerHTML = "❌ Unauthorized — please log in again.";
-    return;
+  const resultsDiv = document.getElementById("ical-results");
+  resultsDiv.innerHTML = "<div style='padding:8px;'>⏳ Checking all iCal links...</div>";
+
+  try {
+    const res = await fetch("/api/check_ical");
+    const data = await res.json();
+    if (data.error) {
+      resultsDiv.innerHTML = "❌ Unauthorized — please log in again.";
+      return;
+    }
+
+    let html = `
+      <table style='width:100%;border-collapse:collapse;margin-top:12px;'>
+        <tr style='background:#f0f0f0;'>
+          <th style='text-align:left;padding:8px;'>OTA</th>
+          <th style='text-align:left;padding:8px;'>Property</th>
+          <th style='text-align:left;padding:8px;'>Status</th>
+        </tr>
+    `;
+
+    for (let row of data) {
+      let color = "#dc2626"; // red default
+      if (row.status.includes("✅")) color = "#16a34a"; // green
+      else if (row.status.includes("⚠️")) color = "#ca8a04"; // orange
+
+      html += `
+        <tr>
+          <td style='padding:8px;border-bottom:1px solid #eee;'>${row.ota}</td>
+          <td style='padding:8px;border-bottom:1px solid #eee;'>${row.property_id}</td>
+          <td style='padding:8px;border-bottom:1px solid #eee;color:${color};font-weight:600;'>${row.status}</td>
+        </tr>
+      `;
+    }
+
+    html += "</table>";
+    resultsDiv.innerHTML = html;
+  } catch (err) {
+    resultsDiv.innerHTML = "❌ Error checking iCal status.";
   }
-  let html = "<table style='width:100%;border-collapse:collapse'><tr><th>OTA</th><th>Property</th><th>Status</th></tr>";
-  for (let row of data) {
-    html += `<tr><td>${row.ota}</td><td>${row.property_id}</td><td>${row.status}</td></tr>`;
-  }
-  html += "</table>";
-  document.getElementById("ical-results").innerHTML = html;
 }
 </script>
+
     <table>
       <tr><th>OTA</th><th>{% if lang=='th' %}รหัสทรัพย์/ห้อง{% else %}Property/Room ID{% endif %}</th><th>iCal</th></tr>
       {% for u in units %}
