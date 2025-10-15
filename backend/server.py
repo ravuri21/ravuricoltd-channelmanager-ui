@@ -103,6 +103,14 @@ def index():
     db.close()
     return render_template("dashboard.html", units=units, lang=session.get("lang", APP_LANG_DEFAULT))
 
+@app.route("/r")
+def list_public_links():
+    db = SessionLocal()
+    rows = db.query(Unit).all()
+    db.close()
+    links = [f'<li><a href="/r/{u.id}">/r/{u.id}</a> — {u.ota} / {u.property_id}</li>' for u in rows]
+    return "<h2>Public links</h2><ul>" + "".join(links) + "</ul>"
+
 @app.route("/login", methods=["GET","POST"])
 def login():
     if request.method == "POST":
