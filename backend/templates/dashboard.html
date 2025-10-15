@@ -4,10 +4,22 @@
   <meta charset="utf-8" />
   <title>Dashboard - Channel Manager</title>
   <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; background:#f7f8fa; margin:0; }
+    table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; }
+    th, td { padding:10px; text-align:left; border-bottom:1px solid #eee; }
+    th { background:#f0f0f0; font-weight:600; }
+    .container { max-width: 900px; margin: 40px auto; background:white; border-radius:8px; padding:20px; box-shadow:0 4px 10px rgba(0,0,0,.05);}
+    .topbar { background:#0070f3; color:#fff; padding:12px 18px; display:flex; justify-content:space-between; align-items:center; }
+    .topbar a { color:white; text-decoration:none; margin:0 6px; }
+    button { border:none; background:#0070f3; color:white; border-radius:6px; padding:6px 12px; cursor:pointer; }
+    button:hover { background:#005bd1; }
+    .muted { font-size:0.85rem; color:#555; margin-top:16px; }
+  </style>
 </head>
 <body>
   <div class="topbar">
-    <div>Channel Manager</div>
+    <div>🏠 Channel Manager</div>
     <div>
       <a href="/lang/en">EN</a> | <a href="/lang/th">ไทย</a> |
       <a href="/logout">Logout</a>
@@ -15,50 +27,42 @@
   </div>
 
   <div class="container">
-    <h2>All Units</h2>
+    <h2>All Properties</h2>
 
     <!-- Actions -->
-    <button onclick="checkIcalStatus()" style="background:#16a34a;color:white;padding:8px 14px;border:none;border-radius:8px;cursor:pointer;margin-bottom:12px;">
-      🔍 Check iCal Status
-    </button>
-    <div id="ical-results" style="margin-bottom:20px;font-family:system-ui,monospace;"></div>
+    <button onclick="checkIcalStatus()">🔍 Check iCal Status</button>
+    <div id="ical-results" style="margin:15px 0;font-family:monospace;"></div>
 
     <!-- Table -->
     <table>
       <tr>
         <th>OTA</th>
         <th>Property / Room ID</th>
-        <th>iCal</th>
+        <th>Public Link</th>
+        <th>iCal URL</th>
+        <th>Actions</th>
       </tr>
       {% for u in units %}
       <tr>
-        <td>{{u.ota}}</td>
-        <td>{{u.property_id}}</td>
-
-        <!-- NEW: Public link cell -->
+        <td>{{ u.ota }}</td>
+        <td>{{ u.property_id }}</td>
+        <td><a href="/r/{{ u.id }}" target="_blank">/r/{{ u.id }}</a></td>
+        <td><a href="{{ u.ical_url }}" target="_blank">open</a></td>
         <td>
-          <a href="/r/{{u.id}}" target="_blank">/r/{{u.id}}</a>
-       </td>
-
-        <td>
-          <div style="display:flex; gap:6px; align-items:center;">
-             <a href="{{u.ical_url}}" target="_blank">open</a>
-             <input id="in-{{u.id}}" type="text" value="{{u.ical_url}}" style="width:60%; padding:6px;" />
-             <button onclick="saveIcal({{u.id}})" style="padding:6px 10px;">Save</button>
-          </div>
-         </td>
-       </tr>
+          <input id="in-{{u.id}}" type="text" value="{{u.ical_url}}" style="width:60%; padding:6px;" />
+          <button onclick="saveIcal({{u.id}})">Save</button>
+        </td>
+      </tr>
       {% endfor %}
     </table>
 
-    <p class="muted">Background sync fetches calendars every ~2 minutes.</p>
+    <p class="muted">⏱ Background sync runs every 10 minutes — keeps calendars auto-updated.</p>
   </div>
 
   <script>
   async function checkIcalStatus() {
     const resultsDiv = document.getElementById("ical-results");
-    resultsDiv.innerHTML = "<div style='padding:8px;'>⏳ Checking all iCal links...</div>";
-
+    resultsDiv.innerHTML = "⏳ Checking all iCal links...";
     try {
       const res = await fetch("/api/check_ical");
       const data = await res.json();
@@ -77,10 +81,9 @@
       `;
 
       for (let row of data) {
-        let color = "#dc2626"; // red default
-        if (row.status.includes("✅")) color = "#16a34a"; // green
-        else if (row.status.includes("⚠️")) color = "#ca8a04"; // orange
-
+        let color = "#dc2626";
+        if (row.status.includes("✅")) color = "#16a34a";
+        else if (row.status.includes("⚠️")) color = "#ca8a04";
         html += `
           <tr>
             <td style='padding:8px;border-bottom:1px solid #eee;'>${row.ota}</td>
@@ -89,7 +92,6 @@
           </tr>
         `;
       }
-
       html += "</table>";
       resultsDiv.innerHTML = html;
     } catch (err) {
@@ -99,27 +101,23 @@
 
   async function saveIcal(id){
     const val = document.getElementById("in-"+id).value.trim();
-    
-    // ---- Strong URL validation before saving ----
-  if(!val.match(/^https:\/\/[^\s]+$/)){
-    alert("⚠️ Invalid iCal URL. It must start with https:// and contain no spaces.");
-    return;
-  }
-
-  // Specific OTA pattern checks
-  const lower = val.toLowerCase();
-  if(lower.includes("airbnb.com") || lower.includes("agoda.com")){
-    if(!lower.endsWith(".ics") && !lower.includes(".ics?")){
-      alert("⚠️ Airbnb/Agoda iCal links must end with .ics or contain .ics? — please recheck the full URL.");
+    if(!val.match(/^https:\/\/[^\s]+$/)){
+      alert("⚠️ Invalid iCal URL. Must start with https:// and have no spaces.");
       return;
     }
-  }
 
-  if(lower.includes("booking.com") && !lower.includes("/v1/export?t=")){
-    alert("⚠️ Booking.com iCal must contain /v1/export?t= followed by token.");
-    return;
-  }
-    
+    const lower = val.toLowerCase();
+    if(lower.includes("airbnb.com") || lower.includes("agoda.com")){
+      if(!lower.endsWith(".ics") && !lower.includes(".ics?")){
+        alert("⚠️ Airbnb/Agoda iCal must end with .ics or contain .ics?");
+        return;
+      }
+    }
+    if(lower.includes("booking.com") && !lower.includes("/v1/export?t=")){
+      alert("⚠️ Booking.com iCal must contain /v1/export?t= followed by token.");
+      return;
+    }
+
     const r = await fetch(`/api/unit/${id}/ical`, {
       method: "POST",
       headers: {"Content-Type":"application/json"},
