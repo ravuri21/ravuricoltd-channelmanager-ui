@@ -108,6 +108,17 @@ def list_public_links():
     db = SessionLocal()
     rows = db.query(Unit).all()
     db.close()
+    items = [
+        f'<li><a href="/r/{u.id}">/r/{u.id}</a> — {u.ota} / {u.property_id}</li>'
+        for u in rows
+    ]
+    return "<h2>Public links</h2><ul>" + "".join(items) + "</ul>"
+
+@app.route("/r")
+def list_public_links():
+    db = SessionLocal()
+    rows = db.query(Unit).all()
+    db.close()
     links = [f'<li><a href="/r/{u.id}">/r/{u.id}</a> — {u.ota} / {u.property_id}</li>' for u in rows]
     return "<h2>Public links</h2><ul>" + "".join(links) + "</ul>"
 
