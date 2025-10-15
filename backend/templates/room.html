@@ -1,117 +1,68 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>{{ title }}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body {
-            font-family: system-ui, sans-serif;
-            margin: 0;
-            padding: 0;
-            background: #f6f8fa;
-            color: #222;
-        }
-        .container {
-            max-width: 600px;
-            margin: 40px auto;
-            background: #fff;
-            border-radius: 12px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        .hero img {
-            width: 100%;
-            height: 260px;
-            object-fit: cover;
-        }
-        .content {
-            padding: 20px;
-        }
-        h1 {
-            font-size: 1.6rem;
-            margin-bottom: 10px;
-        }
-        p.desc {
-            color: #555;
-            font-size: 0.95rem;
-            margin-bottom: 20px;
-        }
-        input, button {
-            width: 100%;
-            padding: 10px;
-            margin: 8px 0;
-            border-radius: 6px;
-            border: 1px solid #ccc;
-            font-size: 1rem;
-        }
-        button {
-            background: #0070f3;
-            color: #fff;
-            border: none;
-            cursor: pointer;
-            font-weight: 600;
-        }
-        button:hover { background: #005ad1; }
-        .footer {
-            text-align: center;
-            font-size: 0.8rem;
-            color: #777;
-            margin-top: 10px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <title>{{ title }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin:0; background:#f6f8fa; color:#222; }
+    .container { max-width: 640px; margin: 32px auto; background:#fff; border-radius:12px;
+      box-shadow:0 4px 12px rgba(0,0,0,.08); overflow:hidden; }
+    .hero img { width:100%; height:240px; object-fit:cover; display:block; }
+    .content { padding:20px; }
+    h1 { font-size:1.4rem; margin:0 0 8px; }
+    p.desc { color:#555; margin:0 0 16px; }
+    label { display:block; font-size:.9rem; margin:10px 0 4px; color:#333; }
+    input, button { width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; font-size:1rem; }
+    button { background:#0070f3; color:#fff; border:none; font-weight:600; margin-top:12px; cursor:pointer; }
+    button:hover { background:#005ad1; }
+    .footer { text-align:center; font-size:.8rem; color:#777; margin:14px 0 4px; }
+  </style>
 </head>
 <body>
-<div class="container">
+  <div class="container">
     <div class="hero">
-        <img src="https://source.unsplash.com/featured/?villa,pattaya" alt="Property photo">
+      <img src="https://source.unsplash.com/featured/?pattaya,villa" alt="Property photo">
     </div>
     <div class="content">
-        <h1>{{ title }}</h1>
-        <p class="desc">Enjoy a relaxing stay at our {{ title }} — perfectly located in Pattaya, Thailand. Private pool, WiFi, and all amenities included.</p>
+      <h1>{{ title }}</h1>
+      <p class="desc">Enjoy a relaxing stay — private, comfortable, and centrally located in Pattaya. Book your dates below.</p>
 
-        <form id="bookForm">
-            <label>Check-in Date</label>
-            <input type="date" id="start" required>
+      <form id="bookForm">
+        <label>Check-in</label>
+        <input id="start" type="date" required>
+        <label>Check-out</label>
+        <input id="end" type="date" required>
+        <label>Your Name</label>
+        <input id="name" type="text" placeholder="Full name" required>
+        <label>Your Email</label>
+        <input id="email" type="email" placeholder="Email address" required>
+        <button type="submit">Book & Pay (test)</button>
+      </form>
 
-            <label>Check-out Date</label>
-            <input type="date" id="end" required>
-
-            <label>Your Name</label>
-            <input type="text" id="name" placeholder="Full name" required>
-
-            <label>Your Email</label>
-            <input type="email" id="email" placeholder="Email address" required>
-
-            <button type="submit">Book & Pay</button>
-        </form>
-
-        <p class="footer">Powered by RavuriCo Ltd. Secure payment via Stripe.</p>
+      <p id="msg" class="desc" style="margin-top:10px;"></p>
+      <div class="footer">Powered by RavuriCo Ltd • Stripe test mode</div>
     </div>
-</div>
+  </div>
 
-<script>
-document.getElementById("bookForm").addEventListener("submit", async (e) => {
+  <script>
+  document.getElementById("bookForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const data = {
-        start_date: document.getElementById("start").value,
-        end_date: document.getElementById("end").value,
-        name: document.getElementById("name").value,
-        email: document.getElementById("email").value
+      start_date: document.getElementById("start").value,
+      end_date: document.getElementById("end").value,
+      name: document.getElementById("name").value,
+      email: document.getElementById("email").value
     };
-    const res = await fetch(location.pathname.replace("/r/", "/api/public/book/"), {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(data)
+    const res = await fetch(location.pathname.replace("/r/","/api/public/book/"), {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(data)
     });
-    const json = await res.json();
-    if (json.ok) {
-        alert("✅ Booking request received! Stripe test payment successful.");
-        location.reload();
-    } else {
-        alert("⚠️ " + json.error);
-    }
-});
-</script>
+    const j = await res.json();
+    const msg = document.getElementById("msg");
+    if (j.ok) { msg.textContent = "✅ Booking request received — dates blocked (test)."; }
+    else { msg.textContent = "❌ " + (j.error || "Unknown error"); }
+  });
+  </script>
 </body>
 </html>
