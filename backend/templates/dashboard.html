@@ -34,14 +34,20 @@
       <tr>
         <td>{{u.ota}}</td>
         <td>{{u.property_id}}</td>
+
+        <!-- NEW: Public link cell -->
+        <td>
+          <a href="/r/{{u.id}}" target="_blank">/r/{{u.id}}</a>
+       </td>
+
         <td>
           <div style="display:flex; gap:6px; align-items:center;">
-            <a href="{{u.ical_url}}" target="_blank">open</a>
-            <input id="in-{{u.id}}" type="text" value="{{u.ical_url}}" style="width:60%; padding:6px;" />
-            <button onclick="saveIcal({{u.id}})" style="padding:6px 10px;">Save</button>
+             <a href="{{u.ical_url}}" target="_blank">open</a>
+             <input id="in-{{u.id}}" type="text" value="{{u.ical_url}}" style="width:60%; padding:6px;" />
+             <button onclick="saveIcal({{u.id}})" style="padding:6px 10px;">Save</button>
           </div>
-        </td>
-      </tr>
+         </td>
+       </tr>
       {% endfor %}
     </table>
 
