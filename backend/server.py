@@ -77,7 +77,7 @@ except Exception as e:
     traceback.print_exc()
 
 # ==========================================================
-# Routes
+# Routes (Admin)
 # ==========================================================
 
 @app.route("/")
@@ -131,6 +131,7 @@ def api_booking():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+
 @app.route("/api/check_ical", methods=["GET"])
 def api_check_ical():
     """Check iCal links for all properties and return status list."""
@@ -144,16 +145,39 @@ def api_check_ical():
     results = []
     for u in units:
         try:
-            r = requests.get(u.ical_url, timeout=10)
+            r = requests.get(u.ical_url, timeout=15)
             if r.status_code == 200 and "BEGIN:VCALENDAR" in r.text:
                 status = "✅ OK"
             else:
                 status = f"⚠️ Unexpected ({r.status_code})"
         except Exception as e:
-            status = f"❌ Error: {str(e)[:40]}"
+            status = f"❌ Error: {str(e)[:60]}"
         results.append({
+            "id": u.id,
             "ota": u.ota,
             "property_id": u.property_id,
             "status": status
         })
     return jsonify(results)
+
+
+@app.route("/api/unit/<int:unit_id>/ical", methods=["POST"])
+def api_update_ical(unit_id):
+    """Update the iCal URL for a specific unit."""
+    if "user" not in session:
+        return jsonify({"error": "unauthorized"}), 401
+
+    new_url = (request.json or {}).get("ical_url", "").strip()
+    if not new_url.startswith("http"):
+        return jsonify({"error": "invalid url"}), 400
+
+    db = SessionLocal()
+    u = db.query(Unit).filter(Unit.id == unit_id).first()
+    if not u:
+        db.close()
+        return jsonify({"error": "not found"}), 404
+
+    u.ical_url = new_url
+    db.commit()
+    db.close()
+    return jsonify({"ok": True})
