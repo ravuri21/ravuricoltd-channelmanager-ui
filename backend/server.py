@@ -48,7 +48,7 @@ def send_alert(subject, body):
 
 def fetch_ical(ical_url):
     try:
-        resp = requests.get(ical_url, timeout=12)
+        resp = requests.get(ical_url, timeout=8)
         resp.raise_for_status()
         cal = Calendar.from_ical(resp.text)
         events = []
@@ -78,9 +78,10 @@ def periodic_sync():
         except Exception as e:
             print("sync error:", e)
             traceback.print_exc()
+        # run every 10 minutes to keep deploys snappy
         time.sleep(600)
 
-# Bootstrap
+# ---------- Bootstrap on start ----------
 try:
     print("Bootstrap: init_db()")
     init_db()
@@ -94,6 +95,7 @@ except Exception as e:
     print("Bootstrap error:", e)
     traceback.print_exc()
 
+# ---------- Web UI ----------
 @app.route("/")
 def index():
     if "user" not in session:
@@ -102,51 +104,6 @@ def index():
     units = db.query(Unit).all()
     db.close()
     return render_template("dashboard.html", units=units, lang=session.get("lang", APP_LANG_DEFAULT))
-
-@app.route("/r")
-def list_public_links():
-    db = SessionLocal()
-    rows = db.query(Unit).all()
-    db.close()
-    html = ["<h2>Public Links</h2><ul>"]
-    for u in rows:
-        html.append(f'<li><a href="/r/{u.id}" target="_blank">/r/{u.id}</a> — {u.ota} / {u.property_id}</li>')
-    html.append("</ul>")
-    return "".join(html)
-
-@app.route("/r")
-def list_public_links():
-    db = SessionLocal()
-    rows = db.query(Unit).all()
-    db.close()
-    html = ["<h2>Public Links</h2><ul>"]
-    for u in rows:
-        html.append(f'<li><a href="/r/{u.id}" target="_blank">/r/{u.id}</a> — {u.ota} / {u.property_id}</li>')
-    html.append("</ul>")
-    return "".join(html)
-
-@app.route("/r")
-def list_public_links():
-    db = SessionLocal()
-    rows = db.query(Unit).all()
-    db.close()
-    items = [
-        f'<li><a href="/r/{u.id}">/r/{u.id}</a> — {u.ota} / {u.property_id}</li>'
-        for u in rows
-    ]
-    return "<h2>Public links</h2><ul>" + "".join(items) + "</ul>"
-
-@app.route("/hello")
-def hello():
-    return "hello", 200
-
-@app.route("/r")
-def list_public_links():
-    db = SessionLocal()
-    rows = db.query(Unit).all()
-    db.close()
-    links = [f'<li><a href="/r/{u.id}">/r/{u.id}</a> — {u.ota} / {u.property_id}</li>' for u in rows]
-    return "<h2>Public links</h2><ul>" + "".join(links) + "</ul>"
 
 @app.route("/login", methods=["GET","POST"])
 def login():
@@ -172,6 +129,16 @@ def lang(code):
         session["lang"] = code
     return redirect(url_for("index"))
 
+# ---------- Health / simple test ----------
+@app.route("/health")
+def health():
+    return "ok", 200
+
+@app.route("/hello")
+def hello():
+    return "hello", 200
+
+# ---------- API ----------
 @app.route("/api/booking", methods=["POST"])
 def api_booking():
     if "user" not in session:
@@ -271,9 +238,9 @@ def ical_export(unit_id):
                  f"DTEND;VALUE=DATE:{b.end_date.replace('-','')}",
                  "END:VEVENT"]
     lines.append("END:VCALENDAR")
-    ics="\\r\\n".join(lines)
+    ics="\r\n".join(lines)
     return (ics,200,{"Content-Type":"text/calendar; charset=utf-8",
-                     "Content-Disposition":f'attachment; filename="unit-{unit_id}.ics"'})
+                     "Content-Disposition":f'attachment; filename=\"unit-{unit_id}.ics\""})
 
 @app.route("/api/rates", methods=["POST"])
 def api_rates():
@@ -292,34 +259,9 @@ def api_rates():
     db.commit(); db.close()
     return jsonify({"ok":True})
 
-@app.route("/r/<int:unit_id>")
-def room(unit_id):
-    db = SessionLocal()
-    u = db.query(Unit).filter(Unit.id == unit_id).first()
-    db.close()
-    if not u:
-        return "Not found", 404
-    return render_template("room.html", title=f"{u.ota} — {u.property_id}")
-
-@app.route("/health")
-def health():
-    return "ok", 200
-    
-@app.route("/api/public/book/<int:unit_id>", methods=["POST"])
-def public_book(unit_id):
-    data=request.json or {}
-    start=data.get("start_date"); end=data.get("end_date"); name=data.get("name",""); email=data.get("email","")
-    if not (start and end and name and email): return jsonify({"error":"missing fields"}),400
-    db=SessionLocal()
-    b=AvailabilityBlock(unit_id=unit_id,start_date=start,end_date=end,source="direct",note=f"Guest: {name} {email}")
-    db.add(b); db.commit(); db.close()
-    send_alert("New Direct Booking", f"Unit {unit_id}: {start}–{end} Guest: {name} ({email})")
-    return jsonify({"ok":True,"id":b.id})
-
 # ==========================================================
 # PUBLIC BOOKING PAGES
 # ==========================================================
-
 @app.route("/r")
 def list_public_links():
     """Show list of all public room links."""
@@ -343,3 +285,14 @@ def room(unit_id):
     if not u:
         return "Not found", 404
     return render_template("room.html", title=f"{u.ota} — {u.property_id}")
+
+@app.route("/api/public/book/<int:unit_id>", methods=["POST"])
+def public_book(unit_id):
+    data=request.json or {}
+    start=data.get("start_date"); end=data.get("end_date"); name=data.get("name",""); email=data.get("email","")
+    if not (start and end and name and email): return jsonify({"error":"missing fields"}),400
+    db=SessionLocal()
+    b=AvailabilityBlock(unit_id=unit_id,start_date=start,end_date=end,source="direct",note=f"Guest: {name} {email}")
+    db.add(b); db.commit(); db.close()
+    send_alert("New Direct Booking", f"Unit {unit_id}: {start}–{end} Guest: {name} ({email})")
+    return jsonify({"ok":True,"id":b.id})
