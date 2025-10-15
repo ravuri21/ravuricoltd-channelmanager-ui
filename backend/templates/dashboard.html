@@ -93,6 +93,27 @@
 
   async function saveIcal(id){
     const val = document.getElementById("in-"+id).value.trim();
+    
+    // ---- Strong URL validation before saving ----
+  if(!val.match(/^https:\/\/[^\s]+$/)){
+    alert("⚠️ Invalid iCal URL. It must start with https:// and contain no spaces.");
+    return;
+  }
+
+  // Specific OTA pattern checks
+  const lower = val.toLowerCase();
+  if(lower.includes("airbnb.com") || lower.includes("agoda.com")){
+    if(!lower.endsWith(".ics") && !lower.includes(".ics?")){
+      alert("⚠️ Airbnb/Agoda iCal links must end with .ics or contain .ics? — please recheck the full URL.");
+      return;
+    }
+  }
+
+  if(lower.includes("booking.com") && !lower.includes("/v1/export?t=")){
+    alert("⚠️ Booking.com iCal must contain /v1/export?t= followed by token.");
+    return;
+  }
+    
     const r = await fetch(`/api/unit/${id}/ical`, {
       method: "POST",
       headers: {"Content-Type":"application/json"},
