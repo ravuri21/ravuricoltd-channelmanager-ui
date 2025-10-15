@@ -253,6 +253,10 @@ def room(unit_id):
     if not u: return "Not found",404
     return render_template("room.html", title=f"{u.ota} — {u.property_id}")
 
+@app.route("/health")
+def health():
+    return "ok", 200
+    
 @app.route("/api/public/book/<int:unit_id>", methods=["POST"])
 def public_book(unit_id):
     data=request.json or {}
