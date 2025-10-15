@@ -136,6 +136,10 @@ def list_public_links():
     ]
     return "<h2>Public links</h2><ul>" + "".join(items) + "</ul>"
 
+@app.route("/hello")
+def hello():
+    return "hello", 200
+
 @app.route("/r")
 def list_public_links():
     db = SessionLocal()
