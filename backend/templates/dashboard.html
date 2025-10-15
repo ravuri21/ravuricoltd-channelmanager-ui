@@ -13,67 +13,95 @@
       <a href="/logout">Logout</a>
     </div>
   </div>
+
   <div class="container">
-    <h2>{% if lang=='th' %}ยูนิตทั้งหมด{% else %}All Units{% endif %}</h2>
+    <h2>All Units</h2>
+
+    <!-- Actions -->
     <button onclick="checkIcalStatus()" style="background:#16a34a;color:white;padding:8px 14px;border:none;border-radius:8px;cursor:pointer;margin-bottom:12px;">
-  🔍 Check iCal Status
-</button>
-<div id="ical-results" style="margin-bottom:20px;font-family:monospace;"></div>
-<script>
-async function checkIcalStatus() {
-  const resultsDiv = document.getElementById("ical-results");
-  resultsDiv.innerHTML = "<div style='padding:8px;'>⏳ Checking all iCal links...</div>";
+      🔍 Check iCal Status
+    </button>
+    <div id="ical-results" style="margin-bottom:20px;font-family:system-ui,monospace;"></div>
 
-  try {
-    const res = await fetch("/api/check_ical");
-    const data = await res.json();
-    if (data.error) {
-      resultsDiv.innerHTML = "❌ Unauthorized — please log in again.";
-      return;
-    }
-
-    let html = `
-      <table style='width:100%;border-collapse:collapse;margin-top:12px;'>
-        <tr style='background:#f0f0f0;'>
-          <th style='text-align:left;padding:8px;'>OTA</th>
-          <th style='text-align:left;padding:8px;'>Property</th>
-          <th style='text-align:left;padding:8px;'>Status</th>
-        </tr>
-    `;
-
-    for (let row of data) {
-      let color = "#dc2626"; // red default
-      if (row.status.includes("✅")) color = "#16a34a"; // green
-      else if (row.status.includes("⚠️")) color = "#ca8a04"; // orange
-
-      html += `
-        <tr>
-          <td style='padding:8px;border-bottom:1px solid #eee;'>${row.ota}</td>
-          <td style='padding:8px;border-bottom:1px solid #eee;'>${row.property_id}</td>
-          <td style='padding:8px;border-bottom:1px solid #eee;color:${color};font-weight:600;'>${row.status}</td>
-        </tr>
-      `;
-    }
-
-    html += "</table>";
-    resultsDiv.innerHTML = html;
-  } catch (err) {
-    resultsDiv.innerHTML = "❌ Error checking iCal status:<br>" + err;
-  }
-}
-</script>
-
+    <!-- Table -->
     <table>
-      <tr><th>OTA</th><th>{% if lang=='th' %}รหัสทรัพย์/ห้อง{% else %}Property/Room ID{% endif %}</th><th>iCal</th></tr>
+      <tr>
+        <th>OTA</th>
+        <th>Property / Room ID</th>
+        <th>iCal</th>
+      </tr>
       {% for u in units %}
       <tr>
         <td>{{u.ota}}</td>
         <td>{{u.property_id}}</td>
-        <td><a href="{{u.ical_url}}" target="_blank">open</a></td>
+        <td>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <a href="{{u.ical_url}}" target="_blank">open</a>
+            <input id="in-{{u.id}}" type="text" value="{{u.ical_url}}" style="width:60%; padding:6px;" />
+            <button onclick="saveIcal({{u.id}})" style="padding:6px 10px;">Save</button>
+          </div>
+        </td>
       </tr>
       {% endfor %}
     </table>
+
     <p class="muted">Background sync fetches calendars every ~2 minutes.</p>
   </div>
+
+  <script>
+  async function checkIcalStatus() {
+    const resultsDiv = document.getElementById("ical-results");
+    resultsDiv.innerHTML = "<div style='padding:8px;'>⏳ Checking all iCal links...</div>";
+
+    try {
+      const res = await fetch("/api/check_ical");
+      const data = await res.json();
+      if (data.error) {
+        resultsDiv.innerHTML = "❌ Unauthorized — please log in again.";
+        return;
+      }
+
+      let html = `
+        <table style='width:100%;border-collapse:collapse;margin-top:12px;'>
+          <tr style='background:#f0f0f0;'>
+            <th style='text-align:left;padding:8px;'>OTA</th>
+            <th style='text-align:left;padding:8px;'>Property</th>
+            <th style='text-align:left;padding:8px;'>Status</th>
+          </tr>
+      `;
+
+      for (let row of data) {
+        let color = "#dc2626"; // red default
+        if (row.status.includes("✅")) color = "#16a34a"; // green
+        else if (row.status.includes("⚠️")) color = "#ca8a04"; // orange
+
+        html += `
+          <tr>
+            <td style='padding:8px;border-bottom:1px solid #eee;'>${row.ota}</td>
+            <td style='padding:8px;border-bottom:1px solid #eee;'>${row.property_id}</td>
+            <td style='padding:8px;border-bottom:1px solid #eee;color:${color};font-weight:600;'>${row.status}</td>
+          </tr>
+        `;
+      }
+
+      html += "</table>";
+      resultsDiv.innerHTML = html;
+    } catch (err) {
+      resultsDiv.innerHTML = "❌ Error checking iCal status:<br>" + err;
+    }
+  }
+
+  async function saveIcal(id){
+    const val = document.getElementById("in-"+id).value.trim();
+    const r = await fetch(`/api/unit/${id}/ical`, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ ical_url: val })
+    });
+    const j = await r.json();
+    if(j.ok){ alert("Saved ✅"); }
+    else { alert("Error: " + (j.error || "unknown")); }
+  }
+  </script>
 </body>
 </html>
