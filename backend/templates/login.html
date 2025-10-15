@@ -1,21 +1,92 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>Login - Channel Manager</title>
-  <link rel="stylesheet" href="/static/style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      background: #f5f6fa;
+      font-family: system-ui, Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .container {
+      background: white;
+      padding: 32px;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    h1 {
+      margin-bottom: 20px;
+      color: #0070f3;
+    }
+    label {
+      display: block;
+      text-align: left;
+      margin-top: 12px;
+      color: #333;
+      font-size: 0.9rem;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      margin-top: 4px;
+      font-size: 1rem;
+    }
+    button {
+      width: 100%;
+      background: #0070f3;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 1rem;
+      margin-top: 20px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #005bd1;
+    }
+    .error {
+      background: #fee2e2;
+      color: #b91c1c;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      font-size: 0.9rem;
+    }
+    .footer {
+      margin-top: 14px;
+      font-size: 0.8rem;
+      color: #777;
+    }
+  </style>
 </head>
 <body>
   <div class="container">
     <h1>Channel Manager</h1>
-    {% if error %}<div class="error">{{error}}</div>{% endif %}
+    {% if error %}
+      <div class="error">{{ error }}</div>
+    {% endif %}
     <form method="post">
       <label>Email</label>
       <input type="email" name="email" placeholder="Email" required />
       <label>Password</label>
       <input type="password" name="password" placeholder="Password" required />
-      <button type="submit">Log in</button>
+      <button type="submit">Log In</button>
     </form>
+    <div class="footer">
+      © 2025 RavuriCo Ltd
+    </div>
   </div>
 </body>
 </html>
