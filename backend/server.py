@@ -311,3 +311,31 @@ def public_book(unit_id):
     db.add(b); db.commit(); db.close()
     send_alert("New Direct Booking", f"Unit {unit_id}: {start}–{end} Guest: {name} ({email})")
     return jsonify({"ok":True,"id":b.id})
+
+# ==========================================================
+# PUBLIC BOOKING PAGES
+# ==========================================================
+
+@app.route("/r")
+def list_public_links():
+    """Show list of all public room links."""
+    db = SessionLocal()
+    rows = db.query(Unit).all()
+    db.close()
+    html = ["<h2>Public Links</h2><ul>"]
+    for u in rows:
+        html.append(
+            f'<li><a href="/r/{u.id}" target="_blank">/r/{u.id}</a> — {u.ota} / {u.property_id}</li>'
+        )
+    html.append("</ul>")
+    return "".join(html)
+
+@app.route("/r/<int:unit_id>")
+def room(unit_id):
+    """Show public booking page for a specific room."""
+    db = SessionLocal()
+    u = db.query(Unit).filter(Unit.id == unit_id).first()
+    db.close()
+    if not u:
+        return "Not found", 404
+    return render_template("room.html", title=f"{u.ota} — {u.property_id}")
