@@ -78,7 +78,7 @@ def periodic_sync():
         except Exception as e:
             print("sync error:", e)
             traceback.print_exc()
-        time.sleep(120)
+        time.sleep(600)
 
 # Bootstrap
 try:
