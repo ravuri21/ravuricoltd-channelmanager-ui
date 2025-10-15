@@ -268,8 +268,11 @@ def api_rates():
 
 @app.route("/r/<int:unit_id>")
 def room(unit_id):
-    db=SessionLocal(); u=db.query(Unit).filter(Unit.id==unit_id).first(); db.close()
-    if not u: return "Not found",404
+    db = SessionLocal()
+    u = db.query(Unit).filter(Unit.id == unit_id).first()
+    db.close()
+    if not u:
+        return "Not found", 404
     return render_template("room.html", title=f"{u.ota} — {u.property_id}")
 
 @app.route("/health")
