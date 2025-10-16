@@ -515,6 +515,20 @@ def public_book(unit_id):
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/admin/find_group")
+def api_admin_find_group():
+    """Given a unit_id, return the property group (slug + unit_ids) it belongs to."""
+    unit_id = request.args.get("unit_id", type=int)
+    if not unit_id:
+        return jsonify({"error":"unit_id required"}), 400
+    meta = _load_meta()
+    groups = meta.get("groups", {})
+    for slug, info in groups.items():
+        ids = info.get("unit_ids", [])
+        if unit_id in ids:
+            return jsonify({"ok": True, "slug": slug, "unit_ids": ids, "title": info.get("title", slug)})
+    return jsonify({"ok": False, "slug": None, "unit_ids": []})
+
 # ---------- Admin: Set Price (quick helper) ----------
 @app.route("/admin/set_price/<int:unit_id>/<amount>")
 def admin_set_price(unit_id, amount):
