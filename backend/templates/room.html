@@ -348,10 +348,11 @@
       const j = await res.json();
       if(res.ok && j.ok){
         setMsg("✅ Booking confirmed — dates blocked.", true);
+        try { alert("✅ Booking confirmed — dates blocked."); } catch(_) {}
+        try { document.getElementById("msg")?.scrollIntoView({behavior:"smooth", block:"center"}); } catch(_) {}
         clearSelection();
-        // refresh availability colors
         if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
-      }else{
+      } else {
         throw new Error(j.error || "Unknown error");
       }
     }catch(err){
