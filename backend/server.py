@@ -1,26 +1,36 @@
+# backend/server.py
 import os, threading, time, requests, traceback, smtplib, json
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pathlib import Path
-from datetime import datetime, date
-from flask import Flask, request, session, redirect, url_for, render_template, jsonify
-from icalendar import Calendar
+from datetime import datetime, date, timedelta, timezone
+
+from flask import (
+    Flask, request, session, redirect, url_for,
+    render_template, jsonify, Response
+)
+from icalendar import Calendar as ICal
 import stripe
 
-# Absolute imports (works with --chdir backend)
+# ====== Absolute imports (run with --chdir backend) ======
 from models import init_db, SessionLocal, Unit, AvailabilityBlock, RatePlan
 import import_properties as importer
 
+# ====== App & Config ======
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "change_this_secret")
 
-ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "pradeep@ravuricoltd.com")
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@example.com")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "changeme")
 APP_LANG_DEFAULT = os.environ.get("APP_LANG_DEFAULT", "en")
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "sk_test_4eC39HqLyjWDarjtT1zdp7dc")
+
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 
-# ---------------- EMAIL ALERTS ----------------
+# Run background sync thread only once
+SINGLE_WORKER = os.getenv("WEB_CONCURRENCY", "1") == "1"
+
+# ====== Email alerts (optional) ======
 def send_alert(subject, body):
     try:
         smtp_server = os.environ.get("SMTP_SERVER", "")
@@ -30,7 +40,7 @@ def send_alert(subject, body):
         alert_to = os.environ.get("ALERT_TO", "")
 
         if not all([smtp_server, smtp_user, smtp_pass, alert_to]):
-            print("⚠️ Email not configured correctly, skipping alert")
+            print("⚠️ Email not configured; skipping alert")
             return
 
         msg = MIMEMultipart()
@@ -47,56 +57,7 @@ def send_alert(subject, body):
     except Exception as e:
         print("❌ Error sending alert:", e)
 
-# ---------------- iCal fetch + background sync ----------------
-def fetch_ical(ical_url):
-    try:
-        resp = requests.get(ical_url, timeout=8)
-        resp.raise_for_status()
-        cal = Calendar.from_ical(resp.text)
-        events = []
-        for comp in cal.walk("VEVENT"):
-            try:
-                start = comp.get("dtstart").dt
-                end = comp.get("dtend").dt
-                uid = str(comp.get("uid"))
-                events.append({"uid": uid, "start": str(start), "end": str(end)})
-            except Exception:
-                continue
-        return events
-    except Exception as e:
-        print("iCal fetch error:", e)
-        return []
-
-def periodic_sync():
-    while True:
-        try:
-            db = SessionLocal()
-            units = db.query(Unit).all()
-            for u in units:
-                if u.ical_url:
-                    events = fetch_ical(u.ical_url)
-                    print(f"[{datetime.now()}] {u.ota} {u.property_id}: {len(events)} events")
-            db.close()
-        except Exception as e:
-            print("sync error:", e)
-            traceback.print_exc()
-        time.sleep(600)
-
-# ---------------- Bootstrap on start ----------------
-try:
-    print("Bootstrap: init_db()")
-    init_db()
-    csv_path = Path(__file__).with_name("ota_properties_prefilled.csv")
-    if csv_path.exists():
-        print(f"Bootstrap: importing CSV {csv_path}")
-        importer.import_csv(str(csv_path))
-    t = threading.Thread(target=periodic_sync, daemon=True)
-    t.start()
-except Exception as e:
-    print("Bootstrap error:", e)
-    traceback.print_exc()
-
-# ---------------- Helpers ----------------
+# ====== Helpers ======
 def _load_meta():
     """Read backend/unit_meta.json to get grouped properties."""
     try:
@@ -110,18 +71,129 @@ def _load_meta():
 
 def _group_info(slug):
     meta = _load_meta()
-    groups = meta.get("groups", {})
-    return groups.get(slug)
+    return meta.get("groups", {}).get(slug)
 
 def _parse_yyyy_mm_dd(s):
     y, m, d = s.split("-")
     return date(int(y), int(m), int(d))
 
-# ---------------- Web UI (admin) ----------------
+def _as_date_str(dval) -> str:
+    # Normalize icalendar dt to "YYYY-MM-DD"
+    if isinstance(dval, datetime):
+        return dval.date().isoformat()
+    return dval.isoformat()
+
+def _overlaps(db, unit_id: int, start: str, end: str) -> bool:
+    """
+    Overlap if NOT (existing.end <= start OR existing.start >= end)
+    """
+    q = db.query(AvailabilityBlock).filter(
+        AvailabilityBlock.unit_id == unit_id,
+        ~(
+            (AvailabilityBlock.end_date <= start) |
+            (AvailabilityBlock.start_date >= end)
+        )
+    )
+    return db.query(q.exists()).scalar()
+
+def fetch_ical(ical_url):
+    """
+    Lightweight fetch for public availability merge endpoint.
+    Background sync uses a more robust parser below.
+    """
+    try:
+        resp = requests.get(ical_url, timeout=12)
+        resp.raise_for_status()
+        cal = ICal.from_ical(resp.content)
+        events = []
+        for comp in cal.walk("VEVENT"):
+            try:
+                start = comp.get("dtstart").dt
+                end = comp.get("dtend").dt
+                events.append({"start": _as_date_str(start), "end": _as_date_str(end)})
+            except Exception:
+                continue
+        return events
+    except Exception as e:
+        print("iCal fetch error:", e)
+        return []
+
+# ====== Background iCal sync → write to DB ======
+def periodic_sync():
+    """Every 10 minutes: mirror each unit's OTA iCal into availability_blocks."""
+    while True:
+        try:
+            db = SessionLocal()
+            units = db.query(Unit).all()
+            for u in units:
+                if not u.ical_url:
+                    continue
+                try:
+                    r = requests.get(u.ical_url, timeout=15)
+                    r.raise_for_status()
+                    cal = ICal.from_ical(r.content)
+
+                    # Wipe previous OTA-sourced rows for this unit
+                    db.query(AvailabilityBlock).filter(
+                        AvailabilityBlock.unit_id == u.id,
+                        AvailabilityBlock.source == (u.ota or "").lower()
+                    ).delete()
+
+                    inserted = 0
+                    for comp in cal.walk('VEVENT'):
+                        try:
+                            s = comp.get('dtstart').dt
+                            e = comp.get('dtend').dt
+                            s_str = _as_date_str(s)
+                            e_str = _as_date_str(e)
+                            if e_str <= s_str:
+                                continue
+                            db.add(AvailabilityBlock(
+                                unit_id=u.id,
+                                start_date=s_str,
+                                end_date=e_str,
+                                source=(u.ota or "").lower(),
+                                note=str(comp.get('summary', ""))[:120]
+                            ))
+                            inserted += 1
+                        except Exception:
+                            continue
+
+                    db.commit()
+                    print(f"[{datetime.now()}] {u.ota} {u.property_id}: {inserted} events mirrored")
+                except Exception as e:
+                    db.rollback()
+                    print(f"[SYNC ERROR] {u.ota} {u.property_id}:", e)
+            db.close()
+        except Exception as e:
+            print("sync loop error:", e)
+            traceback.print_exc()
+        time.sleep(600)  # 10 minutes
+
+# ====== Bootstrap ======
+try:
+    print("Bootstrap: init_db()")
+    init_db()
+    csv_path = Path(__file__).with_name("ota_properties_prefilled.csv")
+    if csv_path.exists():
+        print(f"Bootstrap: importing CSV {csv_path}")
+        importer.import_csv(str(csv_path))
+    if SINGLE_WORKER:
+        print("Starting periodic_sync thread (single worker)")
+        threading.Thread(target=periodic_sync, daemon=True).start()
+    else:
+        print("Skipping periodic_sync thread (multiple workers)")
+except Exception as e:
+    print("Bootstrap error:", e)
+    traceback.print_exc()
+
+# ====== Auth & Basic ======
 @app.route("/")
 def index():
     if "user" not in session:
         return redirect(url_for("login"))
+    # You likely have templates/dashboard.html
+    # If you only use React at /app, you can redirect there instead.
     db = SessionLocal()
     units = db.query(Unit).all()
     db.close()
@@ -159,13 +231,13 @@ def health():
 def hello():
     return "hello", 200
 
-# ---------------- Admin APIs ----------------
+# ====== Admin APIs ======
 @app.route("/api/unit/<int:unit_id>/ical", methods=["POST"])
 def api_update_ical(unit_id):
     if "user" not in session:
         return jsonify({"error":"unauthorized"}),401
     new_url = (request.json or {}).get("ical_url","").strip()
-    if not new_url.startswith("https://"):
+    if not new_url.startswith("http"):
         return jsonify({"error":"invalid url"}),400
     db = SessionLocal()
     u = db.query(Unit).filter(Unit.id==unit_id).first()
@@ -183,14 +255,23 @@ def api_check_ical():
     db.close()
     results = []
     for u in units:
+        if not u.ical_url:
+            results.append({"ota":u.ota,"property_id":u.property_id,"status":"(empty — add later)"})
+            continue
         try:
-            r = requests.get(u.ical_url, timeout=10)
-            if r.status_code == 200 and "BEGIN:VCALENDAR" in r.text:
-                status = "✅ OK"
+            r = requests.get(u.ical_url, timeout=12)
+            if r.status_code == 200 and ("BEGIN:VCALENDAR" in r.text or "BEGIN:VCALENDAR" in r.content.decode("utf-8", errors="ignore")):
+                # quick count of events (best-effort)
+                try:
+                    cal = ICal.from_ical(r.content)
+                    cnt = sum(1 for _ in cal.walk("VEVENT"))
+                    status = f"✅ OK ({cnt} events)"
+                except Exception:
+                    status = "✅ OK"
             else:
                 status = f"⚠️ Unexpected ({r.status_code})"
         except Exception as e:
-            status = f"❌ Error: {str(e)[:50]}"
+            status = f"❌ Error: {str(e)[:80]}"
         results.append({"ota":u.ota,"property_id":u.property_id,"status":status})
     return jsonify(results)
 
@@ -244,7 +325,7 @@ def api_blocks():
     finally:
         db.close()
 
-# ---------------- iCal export (per-unit) ----------------
+# ====== iCal export (per-unit) ======
 @app.route("/ical/export/<int:unit_id>.ics")
 def ical_export(unit_id):
     db=SessionLocal()
@@ -252,36 +333,53 @@ def ical_export(unit_id):
     blocks=db.query(AvailabilityBlock).filter(AvailabilityBlock.unit_id==unit_id).all()
     db.close()
     if not u: return "Not found",404
-    lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//ravuricoltd//channel-manager//EN"]
+    # Minimal ICS (all-day). End date is exclusive, as stored.
+    lines=[
+        "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//ravuricoltd//channel-manager//EN"
+    ]
     for b in blocks:
-        lines+=["BEGIN:VEVENT",f"UID:cm-{unit_id}-{b.id}@ravuricoltd",
-                 f"SUMMARY:{u.ota} {u.property_id} ({b.source})",
-                 f"DTSTART;VALUE=DATE:{b.start_date.replace('-','')}",
-                 f"DTEND;VALUE=DATE:{b.end_date.replace('-','')}",
-                 "END:VEVENT"]
+        lines+=[
+            "BEGIN:VEVENT",
+            f"UID:cm-{unit_id}-{b.id}@ravuricoltd",
+            f"SUMMARY:BLOCKED ({u.ota} {u.property_id})",
+            f"DTSTART;VALUE=DATE:{b.start_date.replace('-','')}",
+            f"DTEND;VALUE=DATE:{b.end_date.replace('-','')}",
+            "END:VEVENT"
+        ]
     lines.append("END:VCALENDAR")
     ics="\r\n".join(lines)
     return (ics,200,{"Content-Type":"text/calendar; charset=utf-8",
                      "Content-Disposition":f'attachment; filename=unit-{unit_id}.ics'})
 
-# ==========================================================
-# PUBLIC PAGES — GROUPED BY REAL PROPERTY
-# ==========================================================
+# ====== Public / Grouped pages ======
 @app.route("/properties")
 def properties_index():
-    """Show only real properties (grouped), not 27 OTA rows."""
+    if "user" not in session:
+        return redirect(url_for("login"))
     meta = _load_meta()
     groups = meta.get("groups", {})
-    html = ["<h2>Properties</h2><ul>"]
-    for slug, info in groups.items():
-        title = info.get("title", slug)
-        html.append(f'<li><a href="/prop/{slug}" target="_blank">{title}</a></li>')
-    html.append("</ul>")
-    return "".join(html)
+
+    # build "pending iCal" count per group
+    db = SessionLocal()
+    pending_map = {}
+    try:
+        for slug, info in groups.items():
+            unit_ids = info.get("unit_ids", [])
+            if not unit_ids: 
+                continue
+            missing = db.query(Unit).filter(
+                Unit.id.in_(unit_ids),
+                (Unit.ical_url == None) | (Unit.ical_url == "")
+            ).count()
+            if missing:
+                pending_map[slug] = missing
+    finally:
+        db.close()
+
+    return render_template("properties.html", groups=groups, pending_map=pending_map)
 
 @app.route("/prop/<slug>")
 def property_page(slug):
-    """Show a single property page (photo+price), using the first unit's rate as default."""
     info = _group_info(slug)
     if not info:
         return "Not found", 404
@@ -310,7 +408,6 @@ def property_page(slug):
         slug=slug
     )
 
-# ---- Availability (grouped): DB blocks + iCal events merged ----
 @app.route("/api/public/availability/<slug>", methods=["GET"])
 def api_public_availability(slug):
     info = _group_info(slug)
@@ -332,8 +429,7 @@ def api_public_availability(slug):
                     "source": b.source or "manual",
                     "unit_id": uid
                 })
-
-        # iCal events
+        # OTA iCal (best-effort merge)
         for uid in unit_ids:
             u = db.query(Unit).filter(Unit.id == uid).first()
             if not u or not u.ical_url:
@@ -341,10 +437,9 @@ def api_public_availability(slug):
             try:
                 ev = fetch_ical(u.ical_url)
                 for e in ev:
-                    s = str(e["start"])[:10]
-                    en = str(e["end"])[:10]
                     blocks_out.append({
-                        "start_date": s, "end_date": en, "source": "ical", "unit_id": uid
+                        "start_date": e["start"], "end_date": e["end"],
+                        "source": "ical", "unit_id": uid
                     })
             except Exception:
                 continue
@@ -356,13 +451,12 @@ def api_public_availability(slug):
     unique = []
     for b in blocks_out:
         key = (b["start_date"], b["end_date"], b["unit_id"], b["source"])
-        if key in seen:
+        if key in seen: 
             continue
         seen.add(key); unique.append(b)
 
     return jsonify(unique)
 
-# ---- Stripe: create PaymentIntent for group (price × nights) ----
 @app.route("/api/public/create_intent/<slug>", methods=["POST"])
 def api_public_create_intent(slug):
     info = _group_info(slug)
@@ -372,7 +466,6 @@ def api_public_create_intent(slug):
     data = request.json or {}
     start = (data.get("start_date") or "").strip()
     end   = (data.get("end_date") or "").strip()
-
     if not (start and end):
         return jsonify({"error": "missing dates"}), 400
     if end <= start:
@@ -385,7 +478,6 @@ def api_public_create_intent(slug):
     db = SessionLocal()
     rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
     db.close()
-
     if not rp or not rp.base_rate:
         return jsonify({"error": "price not set for this property"}), 400
 
@@ -393,7 +485,7 @@ def api_public_create_intent(slug):
     if nights <= 0:
         return jsonify({"error": "nights must be > 0"}), 400
 
-    amount = int(round(rp.base_rate * nights * 100))  # THB to satang
+    amount = int(round(rp.base_rate * nights * 100))  # THB→satang
     currency = (rp.currency or "THB").lower()
 
     try:
@@ -406,7 +498,6 @@ def api_public_create_intent(slug):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-# ---- Public booking: grouped + per-unit ----
 @app.route("/api/public/book_group/<slug>", methods=["POST"])
 def public_book_group(slug):
     """Block dates across ALL unit_ids in the group (Airbnb+Booking+Agoda)."""
@@ -432,22 +523,25 @@ def public_book_group(slug):
 
         db = SessionLocal()
         try:
+            # Reject if ANY unit overlaps
             for uid in unit_ids:
-                u = db.query(Unit).filter(Unit.id == uid).first()
-                if not u:
-                    continue
-                b = AvailabilityBlock(
+                if _overlaps(db, uid, start, end):
+                    return jsonify({"error": "Dates not available"}), 409
+
+            # Safe: create blocks for ALL units
+            for uid in unit_ids:
+                db.add(AvailabilityBlock(
                     unit_id=uid,
                     start_date=start,
                     end_date=end,
                     source="direct",
                     note=f"Guest: {name} {email} (group:{slug})"
-                )
-                db.add(b)
+                ))
             db.commit()
         finally:
             db.close()
 
+        # Alert
         try:
             send_alert("New Direct Booking (Grouped)",
                        f"Property {slug}: {start}–{end} Guest: {name} ({email}) on {len(unit_ids)} OTA listings")
@@ -459,7 +553,7 @@ def public_book_group(slug):
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-# ---------- Legacy public pages (for admin/testing) ----------
+# ====== Legacy public/testing ======
 @app.route("/r")
 def list_public_links():
     db = SessionLocal()
@@ -485,7 +579,14 @@ def room(unit_id):
     price = rp.base_rate if rp else None
     currency = rp.currency if rp else "THB"
 
-    return render_template("room.html", title=display_name, image_url=image_url, price=price, currency=currency, publishable_key=STRIPE_PUBLISHABLE_KEY)
+    return render_template(
+        "room.html",
+        title=display_name,
+        image_url=image_url,
+        price=price,
+        currency=currency,
+        publishable_key=STRIPE_PUBLISHABLE_KEY
+    )
 
 @app.route("/api/public/book/<int:unit_id>", methods=["POST"])
 def public_book(unit_id):
@@ -505,8 +606,13 @@ def public_book(unit_id):
         if not u:
             db.close()
             return jsonify({"error": "unit not found"}), 404
-        b = AvailabilityBlock(unit_id=unit_id, start_date=start, end_date=end, source="direct", note=f"Guest: {name} {email}")
-        db.add(b)
+
+        # Overlap guard
+        if _overlaps(db, unit_id, start, end):
+            db.close()
+            return jsonify({"error": "Dates not available"}), 409
+
+        db.add(AvailabilityBlock(unit_id=unit_id, start_date=start, end_date=end, source="direct", note=f"Guest: {name} {email}"))
         db.commit()
         db.close()
         send_alert("New Direct Booking", f"Unit {unit_id}: {start}–{end} Guest: {name} ({email})")
@@ -515,21 +621,19 @@ def public_book(unit_id):
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-@app.route("/api/admin/find_group")
-def api_admin_find_group():
-    """Given a unit_id, return the property group (slug + unit_ids) it belongs to."""
-    unit_id = request.args.get("unit_id", type=int)
-    if not unit_id:
-        return jsonify({"error":"unit_id required"}), 400
+# ====== Grouped Admin UI ======
+@app.route("/admin/groups")
+def admin_groups():
+    if "user" not in session:
+        return redirect(url_for("login"))
     meta = _load_meta()
     groups = meta.get("groups", {})
+    html = ["<h2>Grouped Admin</h2><ul>"]
     for slug, info in groups.items():
-        ids = info.get("unit_ids", [])
-        if unit_id in ids:
-            return jsonify({"ok": True, "slug": slug, "unit_ids": ids, "title": info.get("title", slug)})
-    return jsonify({"ok": False, "slug": None, "unit_ids": []})
-
-from datetime import datetime, timedelta
+        title = info.get("title", slug)
+        html.append(f'<li><a href="/admin/calendar/{slug}">{title}</a> — <code>{slug}</code></li>')
+    html.append("</ul>")
+    return "".join(html)
 
 @app.route("/admin/calendar/<slug>")
 def admin_calendar(slug):
@@ -570,27 +674,33 @@ def api_admin_toggle_day(slug):
     db = SessionLocal()
     try:
         if action == "block":
-            # create single-day blocks across all units
+            # Avoid duplicates: only create if not exists
             for uid in unit_ids:
-                b = AvailabilityBlock(
-                    unit_id=uid,
-                    start_date=start,
-                    end_date=end,
-                    source="manual",
-                    note=f"admin calendar ({slug})"
-                )
-                db.add(b)
+                exists = db.query(AvailabilityBlock).filter(
+                    AvailabilityBlock.unit_id == uid,
+                    AvailabilityBlock.start_date == start,
+                    AvailabilityBlock.end_date == end,
+                    AvailabilityBlock.source == "manual"
+                ).first()
+                if not exists:
+                    db.add(AvailabilityBlock(
+                        unit_id=uid,
+                        start_date=start,
+                        end_date=end,
+                        source="manual",
+                        note=f"admin calendar ({slug})"
+                    ))
             db.commit()
             return jsonify({"ok": True})
 
         elif action == "unblock":
-            # remove ONLY single-day blocks we created for that date
-            # (won't try to split multi-day OTA blocks)
+            # remove ONLY single-day manual blocks we created for that date
             for uid in unit_ids:
                 q = db.query(AvailabilityBlock).filter(
                     AvailabilityBlock.unit_id == uid,
                     AvailabilityBlock.start_date == start,
                     AvailabilityBlock.end_date == end,
+                    AvailabilityBlock.source == "manual"
                 )
                 for row in q.all():
                     db.delete(row)
@@ -603,24 +713,19 @@ def api_admin_toggle_day(slug):
     finally:
         db.close()
 
-# ---------- Admin: Set Price (quick helper) ----------
-@app.route("/admin/set_price/<int:unit_id>/<amount>")
-def admin_set_price(unit_id, amount):
+# ====== Helper: list export links ======
+@app.get("/admin/export_links")
+def admin_export_links():
     if "user" not in session:
-        return "Login required", 401
-    try:
-        amt = float(amount)
-    except ValueError:
-        return "Invalid amount", 400
-
+        return redirect(url_for("login"))
     db = SessionLocal()
-    rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_id).first()
-    if not rp:
-        rp = RatePlan(unit_id=unit_id, base_rate=amt, currency="THB")
-        db.add(rp)
-    else:
-        rp.base_rate = amt
-        rp.currency = "THB"
-    db.commit()
+    rows = db.query(Unit).all()
     db.close()
-    return f"✅ OK: unit {unit_id} price set to {amt} THB"
+    base = request.host_url.rstrip("/")
+    html = ["<h3>Export iCal URLs (paste into Airbnb/Booking/Agoda)</h3><ul>"]
+    for u in rows:
+        url = f"{base}/ical/export/{u.id}.ics"
+        html.append(f"<li>Unit {u.id} — {u.ota} / {u.property_id}: "
+                    f"<a target='_blank' href='{url}'>{url}</a></li>")
+    html.append("</ul>")
+    return "".join(html)
