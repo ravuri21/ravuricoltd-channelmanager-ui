@@ -183,14 +183,16 @@ def periodic_sync():
 # ====== Bootstrap ======
 try:
     print("Bootstrap: init_db()")
-    init_db()
-    csv_path = Path(__file__).with_name("ota_properties_prefilled.csv")
-    if csv_path.exists():
-        print(f"Bootstrap: importing CSV {csv_path}")
-        importer.import_csv(str(csv_path))
-    if SINGLE_WORKER:
-        print("Starting periodic_sync thread (single worker)")
-        threading.Thread(target=periodic_sync, daemon=True).start()
+init_db()
+
+# ⚠️ Only import CSV the first time (commented out after setup)
+# csv_path = Path(__file__).with_name("ota_properties_prefilled.csv")
+# if csv_path.exists():
+#     print(f"Bootstrap: importing CSV {csv_path}")
+#     importer.import_csv(str(csv_path))
+
+t = threading.Thread(target=periodic_sync, daemon=True)
+t.start()
     else:
         print("Skipping periodic_sync thread (multiple workers)")
 except Exception as e:
