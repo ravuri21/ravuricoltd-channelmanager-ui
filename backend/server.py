@@ -57,6 +57,16 @@ def send_alert(subject, body):
     except Exception as e:
         print("❌ Error sending alert:", e)
 
+@app.get("/admin/test_email")
+def admin_test_email():
+    if "user" not in session:
+        return "Login required", 401
+    try:
+        send_alert("Test email from Channel Manager", "If you see this, SMTP works!")
+        return "Sent (check your inbox/spam)", 200
+    except Exception as e:
+        return f"Error: {e}", 500
+
 # ====== Helpers ======
 def _load_meta():
     """Read backend/unit_meta.json to get grouped properties."""
