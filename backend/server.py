@@ -193,11 +193,22 @@ except Exception as e:
 def index():
     if "user" not in session:
         return redirect(url_for("login"))
+    db = SessionLocal()
     try:
-        db = SessionLocal()
         units = db.query(Unit).all()
+        rates = db.query(RatePlan).all()
+        # Build maps for quick lookup in the template
+        rates_map = {r.unit_id: r.base_rate for r in rates}
+        currency_map = {r.unit_id: (r.currency or "THB") for r in rates}
+    finally:
         db.close()
-        return render_template("dashboard.html", units=units, lang=session.get("lang", APP_LANG_DEFAULT))
+    return render_template(
+        "dashboard.html",
+        units=units,
+        rates_map=rates_map,
+        currency_map=currency_map,
+        lang=session.get("lang", APP_LANG_DEFAULT)
+    )
     except TemplateNotFound:
         # Fallback minimal admin list if dashboard.html is missing
         db = SessionLocal()
