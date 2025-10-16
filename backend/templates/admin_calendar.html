@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="/static/style.css" />
   <style>
     .wrap{max-width:980px;margin:18px auto;background:#fff;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.08);overflow:hidden}
-    .head{padding:12px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between}
+    .head{padding:12px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
     .muted{color:#6b7280}
     .calwrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;padding:16px}
     .cal{border:1px solid #eee;border-radius:10px;overflow:hidden;background:#fafafa}
@@ -18,16 +18,18 @@
     .cell.dis{color:#bbb;background:#fafafa;cursor:not-allowed}
     .cell.ok{background:#ecfdf5;border-bottom-color:#a7f3d0;cursor:pointer}
     .cell.bad{background:#fef2f2;border-bottom-color:#fecaca;color:#991b1b;cursor:pointer}
-    .legend{display:flex;gap:12px;align-items:center;padding:0 16px 16px}
+    .legend{display:flex;gap:12px;align-items:center;padding:0 16px 16px;flex-wrap:wrap}
     .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
     .okd{background:#ecfdf5;border:1px solid #a7f3d0}
     .badd{background:#fef2f2;border:1px solid #fecaca}
     .msg{margin:10px 16px;padding:10px;border-radius:8px;display:none}
     .ok{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
     .err{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
-    .actions{display:flex;gap:8px;align-items:center}
+    .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .btn{padding:8px 12px;border:none;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer}
     .btn.secondary{background:#6b7280}
+    .btn.warn{background:#16a34a}
+    .result{margin:0 16px 16px;font-family:system-ui,monospace}
   </style>
 </head>
 <body>
@@ -36,6 +38,7 @@
     <div>
       <a href="/">Admin (All 27)</a> |
       <a href="/admin/groups">Grouped Admin</a> |
+      <a href="/prop/{{ slug }}" target="_blank">Public Page</a> |
       <a href="/logout">Logout</a>
     </div>
   </div>
@@ -48,11 +51,12 @@
       </div>
       <div class="actions">
         <button class="btn secondary" onclick="window.history.back()">← Back</button>
-        <a class="btn" href="/prop/{{ slug }}" target="_blank">View Public Page</a>
+        <button class="btn warn" onclick="syncThis()">🔄 Sync This Property Now</button>
       </div>
     </div>
 
     <div id="msg" class="msg"></div>
+    <div id="syncbox" class="result"></div>
 
     <div class="calwrap" id="calwrap"></div>
     <div class="legend">
@@ -96,6 +100,44 @@ async function loadAvailability(){
     setMsg("Loaded.", true); setTimeout(()=>setMsg(""),800);
   }catch(e){
     setMsg("Failed to load availability.");
+  }
+}
+
+// ---- NEW: per-property sync ----
+async function syncThis(){
+  const box = document.getElementById("syncbox");
+  box.innerHTML = "⏳ Syncing this property…";
+  try{
+    const res = await fetch(`/api/admin/sync_property/${slug}`, { method:"POST" });
+    const j = await res.json();
+    if(!(res.ok && j.ok)){ throw new Error(j.error || "Failed"); }
+    const rows = j.summary || [];
+    let html = `
+      <table style='width:100%;border-collapse:collapse;margin-top:8px;'>
+        <tr style='background:#f0f0f0;'>
+          <th style='text-align:left;padding:8px;'>Unit</th>
+          <th style='text-align:left;padding:8px;'>OTA</th>
+          <th style='text-align:left;padding:8px;'>Property</th>
+          <th style='text-align:left;padding:8px;'>Result</th>
+        </tr>`;
+    for(const r of rows){
+      let color = "#111";
+      if(String(r.status).startsWith("OK")) color = "#16a34a";
+      if(String(r.status).startsWith("ERROR")) color = "#dc2626";
+      html += `
+        <tr>
+          <td style='padding:8px;border-bottom:1px solid #eee;'>${r.unit_id}</td>
+          <td style='padding:8px;border-bottom:1px solid #eee;'>${r.ota || ''}</td>
+          <td style='padding:8px;border-bottom:1px solid #eee;'>${r.property_id || ''}</td>
+          <td style='padding:8px;border-bottom:1px solid #eee;color:${color};font-weight:600;'>${r.status}</td>
+        </tr>`;
+    }
+    html += "</table>";
+    box.innerHTML = html;
+    // Refresh calendar colors after sync
+    try { await loadAvailability(); } catch(_){}
+  }catch(e){
+    box.innerHTML = "❌ Sync error: " + (e.message || e);
   }
 }
 
