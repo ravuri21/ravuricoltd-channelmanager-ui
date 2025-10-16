@@ -529,6 +529,80 @@ def api_admin_find_group():
             return jsonify({"ok": True, "slug": slug, "unit_ids": ids, "title": info.get("title", slug)})
     return jsonify({"ok": False, "slug": None, "unit_ids": []})
 
+from datetime import datetime, timedelta
+
+@app.route("/admin/calendar/<slug>")
+def admin_calendar(slug):
+    """Admin visual calendar for a property group."""
+    info = _group_info(slug)
+    if not info:
+        return "Property group not found", 404
+    title = info.get("title", slug)
+    unit_ids = info.get("unit_ids", [])
+    return render_template("admin_calendar.html", title=title, slug=slug, unit_ids=unit_ids)
+
+@app.route("/api/admin/toggle_day/<slug>", methods=["POST"])
+def api_admin_toggle_day(slug):
+    """Block or unblock ONE day across all units in the property group."""
+    if "user" not in session:
+        return jsonify({"error": "unauthorized"}), 401
+
+    info = _group_info(slug)
+    if not info:
+        return jsonify({"error": "group not found"}), 404
+    unit_ids = info.get("unit_ids", [])
+    if not unit_ids:
+        return jsonify({"error": "no units linked"}), 400
+
+    data = request.json or {}
+    date_str = (data.get("date") or "").strip()
+    action = (data.get("action") or "block").strip().lower()
+
+    # Expect YYYY-MM-DD
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except Exception:
+        return jsonify({"error": "invalid date"}), 400
+
+    start = dt.strftime("%Y-%m-%d")
+    end = (dt + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    db = SessionLocal()
+    try:
+        if action == "block":
+            # create single-day blocks across all units
+            for uid in unit_ids:
+                b = AvailabilityBlock(
+                    unit_id=uid,
+                    start_date=start,
+                    end_date=end,
+                    source="manual",
+                    note=f"admin calendar ({slug})"
+                )
+                db.add(b)
+            db.commit()
+            return jsonify({"ok": True})
+
+        elif action == "unblock":
+            # remove ONLY single-day blocks we created for that date
+            # (won't try to split multi-day OTA blocks)
+            for uid in unit_ids:
+                q = db.query(AvailabilityBlock).filter(
+                    AvailabilityBlock.unit_id == uid,
+                    AvailabilityBlock.start_date == start,
+                    AvailabilityBlock.end_date == end,
+                )
+                for row in q.all():
+                    db.delete(row)
+            db.commit()
+            return jsonify({"ok": True})
+
+        else:
+            return jsonify({"error": "unknown action"}), 400
+
+    finally:
+        db.close()
+
 # ---------- Admin: Set Price (quick helper) ----------
 @app.route("/admin/set_price/<int:unit_id>/<amount>")
 def admin_set_price(unit_id, amount):
