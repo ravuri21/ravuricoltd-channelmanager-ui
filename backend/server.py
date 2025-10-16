@@ -7,8 +7,8 @@ from flask import Flask, request, session, redirect, url_for, render_template, j
 from icalendar import Calendar
 import stripe
 
-from .models import init_db, SessionLocal, Unit, AvailabilityBlock, RatePlan
-from . import import_properties as importer
+from models import init_db, SessionLocal, Unit, AvailabilityBlock, RatePlan
+import import_properties as importer
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "change_this_secret")
