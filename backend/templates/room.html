@@ -5,34 +5,50 @@
   <title>{{ title }}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root { --blue:#0070f3; --blue-d:#005ad1; --bg:#f6f8fa; --text:#222; --muted:#555; --ok:#10b981; --bad:#ef4444; }
+    :root { --bg:#f6f8fa; --text:#222; --muted:#666; --ok:#ecfdf5; --okb:#a7f3d0; --bad:#fef2f2; --badb:#fecaca; --sel:#e0f2fe; --selb:#93c5fd; --blue:#0070f3; --blue-d:#005ad1; }
     * { box-sizing: border-box; }
     body { font-family: system-ui, Arial, sans-serif; margin:0; background:var(--bg); color:var(--text); }
     .container { max-width: 980px; margin: 24px auto; background:#fff; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,.08); overflow:hidden; }
     .hero img { width:100%; height:300px; object-fit:cover; display:block; }
-    .content { padding:20px; display:grid; grid-template-columns: 1.2fr 0.8fr; gap:24px; }
+    .content { padding:20px; display:grid; grid-template-columns: 1.15fr 0.85fr; gap:24px; }
     @media (max-width: 960px){ .content { grid-template-columns: 1fr; } }
     h1 { font-size:1.3rem; margin:0 0 6px; }
-    .price { font-weight:700; margin:0 0 14px; color:#111; }
+    .price { font-weight:700; margin:0 0 10px; }
     .muted { color:var(--muted); }
-    .panel { background:#fafafa; border:1px solid #eee; border-radius:10px; padding:14px; }
-    .footer { text-align:center; font-size:.8rem; color:#777; margin:16px 0 10px; }
 
     /* Calendar */
-    .calwrap { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:16px; }
+    .panel { background:#fafafa; border:1px solid #eee; border-radius:10px; padding:14px; }
+    .calwrap { display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:16px; }
     .cal { border:1px solid #eee; border-radius:10px; overflow:hidden; }
     .cal h3 { margin:0; padding:8px 10px; background:#f3f4f6; border-bottom:1px solid #eee; font-size:.95rem; }
     .grid { display:grid; grid-template-columns: repeat(7, 1fr); }
-    .dow, .cell { padding:8px; text-align:center; border-bottom:1px solid #f1f1f1; border-right:1px solid #f1f1f1; }
+    .dow, .cell { padding:10px; text-align:center; border-bottom:1px solid #f1f1f1; border-right:1px solid #f1f1f1; user-select:none; }
     .grid > *:nth-child(7n){ border-right:none; }
     .dow { background:#fafafa; font-weight:600; font-size:.85rem; }
-    .cell.dis { color:#bbb; }
-    .cell.ok { background:#ecfdf5; color:#065f46; }
-    .cell.bad { background:#fef2f2; color:#991b1b; }
+    .cell.dis { color:#bbb; background:#fafafa; cursor:not-allowed; }
+    .cell.ok { background:var(--ok); border-bottom-color:var(--okb); cursor:pointer; }
+    .cell.bad { background:var(--bad); border-bottom-color:var(--badb); color:#991b1b; cursor:not-allowed; }
+    .cell.sel { background:var(--sel); border-bottom-color:var(--selb); outline:2px solid var(--selb); }
     .legend{display:flex; gap:10px; align-items:center; font-size:.9rem; margin-top:10px;}
     .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
-    .d-ok{background:#ecfdf5;border:1px solid #a7f3d0}
-    .d-bad{background:#fef2f2;border:1px solid #fecaca}
+    .d-ok{background:var(--ok);border:1px solid var(--okb)}
+    .d-bad{background:var(--bad);border:1px solid var(--badb)}
+    .d-sel{background:var(--sel);border:1px solid var(--selb)}
+
+    /* Form */
+    label { display:block; font-size:.9rem; margin:10px 0 4px; color:#333; }
+    input, button { width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; font-size:1rem; }
+    input[readonly]{ background:#f9fafb }
+    input:focus { outline:none; border-color: var(--blue); }
+    .actions { display:flex; gap:10px; align-items:center; margin-top:10px; }
+    button { background:var(--blue); color:#fff; border:none; font-weight:600; cursor:pointer; }
+    button:hover { background:var(--blue-d); }
+    button.secondary { background:#6b7280; }
+    button[disabled] { opacity:.65; cursor:not-allowed; }
+    .msg { margin-top:10px; padding:10px; border-radius:8px; font-size:.95rem; display:none; }
+    .ok { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+    .err { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
+    .footer { text-align:center; font-size:.8rem; color:#777; margin:16px 0 10px; }
   </style>
   <script src="https://js.stripe.com/v3/"></script>
 </head>
@@ -47,28 +63,27 @@
         <h1>{{ title }}</h1>
         {% if price %}
           <div class="price">฿ {{ '%.0f'|format(price) }} <span class="muted">/ night {{ currency or 'THB' }}</span></div>
-        {% else %}
-          <div class="price">Contact for price</div>
         {% endif %}
-        <p class="muted">Choose your dates. Red = booked, Green = available.</p>
+        <p class="muted">Tap the calendar to choose check-in and check-out. <b>Red</b> = booked, <b>Green</b> = available.</p>
 
         <div class="panel">
-          <div class="calwrap" id="calwrap"></div>
+          <div id="calwrap" class="calwrap"></div>
           <div class="legend">
             <span class="dot d-ok"></span> Available
             <span class="dot d-bad"></span> Booked
+            <span class="dot d-sel"></span> Selected
           </div>
         </div>
 
-        <div class="footer">Powered by RavuriCo Ltd • Stripe test mode</div>
+        <div class="footer">Powered by RavuriCo Ltd</div>
       </div>
 
       <div>
         <form id="bookForm" class="panel" novalidate>
           <label>Check-in</label>
-          <input id="start" type="date" required>
+          <input id="start" type="date" required readonly>
           <label>Check-out</label>
-          <input id="end" type="date" required>
+          <input id="end" type="date" required readonly>
           <label>Your Name</label>
           <input id="name" type="text" placeholder="Full name" required>
           <label>Your Email</label>
@@ -79,39 +94,38 @@
             <div id="card-element" style="padding:10px;border:1px solid #ddd;border-radius:8px;"></div>
           </div>
 
-          <button id="submitBtn" type="submit">Book & Pay (test)</button>
-          <div id="msg" class="panel" style="display:none; margin-top:10px;"></div>
+          <div class="actions">
+            <button id="bookBtn" type="submit" disabled>Book & Pay</button>
+            <button type="button" class="secondary" onclick="clearSelection()">Clear</button>
+          </div>
+          <div id="msg" class="msg"></div>
         </form>
       </div>
     </div>
   </div>
 
   <script>
+  // --------- Context (works for /prop/<slug> and /r/<id>) ----------
   const path = location.pathname;
   const isGroup = path.startsWith("/prop/");
-  const slug = isGroup ? path.split("/").pop() : null;
+  const isUnit  = path.startsWith("/r/");
+  const slug    = isGroup ? path.split("/").pop() : null;
+  const unitId  = isUnit  ? parseInt(path.split("/").pop(), 10) : null;
 
-  function showMsg(text, ok=false){
-    const m = document.getElementById("msg");
-    m.textContent = text;
-    m.style.display = "block";
-    m.style.background = ok ? "#ecfdf5" : "#fef2f2";
-    m.style.color = ok ? "#065f46" : "#991b1b";
-    m.style.border = ok ? "1px solid #a7f3d0" : "1px solid #fecaca";
-  }
+  // For /r/<id>, we’ll find the property group (slug) then use group availability/booking
+  let groupSlug = slug;   // will be filled for /r/<id> after lookup
+  let groupUnitIds = [];
 
-  (function setMinDates(){
-    const t = new Date();
-    const iso = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
-    start.min = iso; end.min = iso;
-  })();
+  // Stripe (only if publishable key provided)
+  const STRIPE_PK = "{{ publishable_key or '' }}".trim();
+  let stripe, card;
 
-  // Build calendar for current & next month
-  function ymd(d){ return d.toISOString().slice(0,10); }
-  function addDays(dt, n){ const d = new Date(dt); d.setDate(d.getDate()+n); return d; }
+  // --------- Helpers ----------
+  function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}` }
+  function addDays(dt, n){ const d=new Date(dt); d.setDate(d.getDate()+n); return d; }
 
   function expandRanges(ranges){
-    // ranges: [{start_date, end_date}] (end is checkout, exclusive)
+    // ranges: [{start_date, end_date}] (end = checkout, exclusive)
     const set = new Set();
     for(const r of ranges){
       let d = new Date(r.start_date);
@@ -121,90 +135,195 @@
     return set;
   }
 
-  async function loadAvailability(){
-    if(!isGroup) return;
-    try{
-      const res = await fetch(`/api/public/availability/${slug}`);
-      const data = await res.json();
-      if(!Array.isArray(data)) return;
-      const blocked = expandRanges(data);
-      renderCalendars(blocked);
-    }catch(_){}
+  function setMsg(text, ok=false){
+    const m = document.getElementById("msg");
+    m.textContent = text || "";
+    m.className = "msg " + (ok ? "ok" : "err");
+    m.style.display = text ? "block" : "none";
   }
 
-  function renderCalendars(blocked){
-    const wrap = document.getElementById("calwrap");
-    wrap.innerHTML = "";
+  // --------- Calendar state ----------
+  let blocked = new Set();   // booked days
+  const monthsToShow = 2;    // show 2 months
+  let selStart = null;       // "YYYY-MM-DD"
+  let selEnd   = null;
+
+  function clearSelection(){
+    selStart = selEnd = null;
+    document.getElementById("start").value = "";
+    document.getElementById("end").value = "";
+    setMsg("");
+    renderCalendars();
+    document.getElementById("bookBtn").disabled = true;
+  }
+
+  // --------- Build calendar ----------
+  function buildMonth(year, month){ // month = 0..11
+    const wrap = document.createElement("div");
+    wrap.className = "cal";
+    const title = new Date(year, month, 1).toLocaleString('default', { month:'long', year:'numeric' });
+    wrap.innerHTML = `<h3>${title}</h3><div class="grid"></div>`;
+    const grid = wrap.querySelector(".grid");
+
+    const dows = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    dows.forEach(d => {
+      const el=document.createElement("div"); el.className="dow"; el.textContent=d; grid.appendChild(el);
+    });
+
+    const startDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+
+    // leading blanks
+    for(let i=0;i<startDay;i++){
+      const el=document.createElement("div"); el.className="cell dis"; el.textContent=""; grid.appendChild(el);
+    }
+
+    // actual days
+    for(let day=1; day<=daysInMonth; day++){
+      const el = document.createElement("div");
+      const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+
+      let cls = "ok";
+      if(blocked.has(dateStr)) cls = "bad";
+      if(selStart && !selEnd && dateStr===selStart) cls = "sel";
+      if(selStart && selEnd && dateStr>=selStart && dateStr<selEnd) cls = "sel"; // highlight nights
+
+      el.className = "cell " + cls;
+      el.textContent = day;
+
+      if(cls !== "bad"){ // clickable only if available
+        el.addEventListener("click", () => onPick(dateStr));
+      }
+
+      grid.appendChild(el);
+    }
+    return wrap;
+  }
+
+  function renderCalendars(){
+    const holder = document.getElementById("calwrap");
+    holder.innerHTML = "";
     const now = new Date();
-    for(let m=0; m<2; m++){
-      const first = new Date(now.getFullYear(), now.getMonth()+m, 1);
-      const year = first.getFullYear();
-      const month = first.getMonth(); // 0-11
-      const title = first.toLocaleString('default', { month: 'long', year: 'numeric' });
-
-      const cal = document.createElement("div");
-      cal.className = "cal";
-      cal.innerHTML = `<h3>${title}</h3><div class="grid"></div>`;
-      const grid = cal.querySelector(".grid");
-
-      const dows = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-      dows.forEach(d => {
-        const el = document.createElement("div");
-        el.className = "dow"; el.textContent = d; grid.appendChild(el);
-      });
-
-      const startDay = new Date(year, month, 1).getDay();
-      const daysInMonth = new Date(year, month+1, 0).getDate();
-
-      // empty cells
-      for(let i=0; i<startDay; i++){
-        const el = document.createElement("div");
-        el.className = "cell dis"; el.textContent = "";
-        grid.appendChild(el);
-      }
-      // days
-      for(let day=1; day<=daysInMonth; day++){
-        const el = document.createElement("div");
-        const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-        const isBlocked = blocked && blocked.has(dateStr);
-        el.className = "cell " + (isBlocked ? "bad" : "ok");
-        el.textContent = day;
-        grid.appendChild(el);
-      }
-      wrap.appendChild(cal);
+    for(let m=0; m<monthsToShow; m++){
+      const dt = new Date(now.getFullYear(), now.getMonth()+m, 1);
+      holder.appendChild(buildMonth(dt.getFullYear(), dt.getMonth()));
     }
   }
 
-  // Stripe
-  let stripe, card;
-  (function initStripe(){
-    if(!isGroup) return;
-    const pk = "{{ publishable_key or '' }}".trim();
-    if(!pk) return;
-    stripe = Stripe(pk);
-    const elements = stripe.elements();
-    card = elements.create('card');
-    card.mount('#card-element');
-    document.getElementById("cardWrap").style.display = "block";
-  })();
+  // --------- Selection logic ----------
+  function isAllAvailable(startStr, endStr){
+    // endStr is checkout (exclusive)
+    let d = new Date(startStr);
+    const end = new Date(endStr);
+    while(d < end){
+      if(blocked.has(ymd(d))) return false;
+      d = addDays(d,1);
+    }
+    return true;
+  }
 
+  function onPick(dateStr){
+    // 1st click: set start if available
+    if(!selStart){
+      if(blocked.has(dateStr)) return;
+      selStart = dateStr; selEnd = null;
+      document.getElementById("start").value = selStart;
+      document.getElementById("end").value = "";
+      setMsg("");
+      renderCalendars();
+      document.getElementById("bookBtn").disabled = true;
+      return;
+    }
+    // if click before/equal start → reset start
+    if(dateStr <= selStart){
+      if(blocked.has(dateStr)) return;
+      selStart = dateStr; selEnd = null;
+      document.getElementById("start").value = selStart;
+      document.getElementById("end").value = "";
+      setMsg("");
+      renderCalendars();
+      document.getElementById("bookBtn").disabled = true;
+      return;
+    }
+    // treat as end (checkout), ensure whole range is available
+    if(!isAllAvailable(selStart, dateStr)){
+      setMsg("❌ Some dates in between are already booked (red). Please pick different dates.");
+      return;
+    }
+    selEnd = dateStr;
+    document.getElementById("end").value = selEnd;
+    setMsg("");
+    renderCalendars();
+    document.getElementById("bookBtn").disabled = false;
+  }
+
+  // --------- Availability loading ----------
+  async function loadAvailabilityViaSlug(theSlug){
+    try{
+      const r = await fetch(`/api/public/availability/${theSlug}`);
+      const data = await r.json();
+      if(Array.isArray(data)){
+        blocked = expandRanges(data);
+      }else{
+        blocked = new Set();
+      }
+    }catch(_){ blocked = new Set(); }
+    renderCalendars();
+  }
+
+  async function initPage(){
+    // Initialize Stripe if publishable key present
+    if(STRIPE_PK){
+      stripe = Stripe(STRIPE_PK);
+      const elements = stripe.elements();
+      card = elements.create('card');
+      card.mount('#card-element');
+      document.getElementById("cardWrap").style.display = "block";
+    }
+
+    // For /prop/<slug>, slug already known
+    if(isGroup){ await loadAvailabilityViaSlug(groupSlug); return; }
+
+    // For /r/<id>, find its group, then use group availability + group booking
+    if(isUnit){
+      try{
+        const r = await fetch(`/api/admin/find_group?unit_id=${unitId}`);
+        const j = await r.json();
+        if(j.ok && j.slug){
+          groupSlug = j.slug;
+          groupUnitIds = j.unit_ids || [];
+          await loadAvailabilityViaSlug(groupSlug);
+          return;
+        }
+      }catch(_){}
+      // fallback: no group found -> show empty (all green)
+      blocked = new Set();
+      renderCalendars();
+    }
+  }
+
+  // --------- Booking with payment ----------
   document.getElementById("bookForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const startDate = document.getElementById("start").value;
     const endDate   = document.getElementById("end").value;
     const name      = document.getElementById("name").value.trim();
     const email     = document.getElementById("email").value.trim();
-    if(!startDate || !endDate || !name || !email){ showMsg("❌ Please fill all fields."); return; }
-    if(endDate <= startDate){ showMsg("❌ Check-out must be after check-in."); return; }
 
-    const btn = document.getElementById("submitBtn");
+    if(!startDate || !endDate){ setMsg("❌ Please select dates from the calendar."); return; }
+    if(endDate <= startDate){ setMsg("❌ Check-out must be after check-in."); return; }
+    if(!name || !email){ setMsg("❌ Please enter your name and email."); return; }
+
+    const btn = document.getElementById("bookBtn");
     const original = btn.textContent;
-    btn.disabled = true; btn.textContent = "Processing…"; document.getElementById("msg").style.display = "none";
+    btn.disabled = true; btn.textContent = "Processing…"; setMsg("");
 
-    try {
-      if(isGroup && "{{ publishable_key or '' }}"){
-        const piRes = await fetch("/api/public/create_intent/" + slug, {
-          method:"POST", headers:{"Content-Type":"application/json"},
+    try{
+      // If Stripe is configured (pk provided), create + confirm a PaymentIntent first
+      if(STRIPE_PK){
+        const piRes = await fetch("/api/public/create_intent/" + groupSlug, {
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
           body: JSON.stringify({ start_date: startDate, end_date: endDate })
         });
         const pi = await piRes.json();
@@ -216,31 +335,34 @@
         if(paymentIntent.status !== "succeeded") throw new Error("Payment not completed");
       }
 
-      let apiUrl;
-      if(isGroup){ apiUrl = "/api/public/book_group/" + slug; }
-      else if(path.startsWith("/r/")){ apiUrl = path.replace("/r/","/api/public/book/"); }
-      else { apiUrl = "/api/public/book"; }
+      // Always block at property-group level so all 3 OTAs close together
+      const postUrl = groupSlug
+        ? `/api/public/book_group/${groupSlug}`
+        : (isUnit ? `/api/public/book/${unitId}` : "/api/public/book"); // safety fallback
 
-      const res = await fetch(apiUrl, {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ start_date: startDate, end_date: endDate, name, email })
+      const res = await fetch(postUrl, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ start_date:startDate, end_date:endDate, name, email })
       });
       const j = await res.json();
       if(res.ok && j.ok){
-        showMsg("✅ Booking confirmed — dates blocked.", true);
-        loadAvailability(); // refresh calendar colors
+        setMsg("✅ Booking confirmed — dates blocked.", true);
+        clearSelection();
+        // refresh availability colors
+        if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
       }else{
         throw new Error(j.error || "Unknown error");
       }
-    } catch(err){
-      showMsg("❌ " + (err.message || err));
-    } finally {
+    }catch(err){
+      setMsg("❌ " + (err.message || err));
+    }finally{
       btn.disabled = false; btn.textContent = original;
     }
   });
 
   // init
-  loadAvailability();
+  initPage();
   </script>
 </body>
 </html>
