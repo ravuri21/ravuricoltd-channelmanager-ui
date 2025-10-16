@@ -337,6 +337,17 @@ def api_blocks():
     finally:
         db.close()
 
+@app.get("/admin/reimport")
+def admin_reimport():
+    if "user" not in session:
+        return "Login required", 401
+    try:
+        csv_path = Path(__file__).with_name("ota_properties_prefilled.csv")
+        importer.import_csv(str(csv_path))
+        return "CSV reimported successfully", 200
+    except Exception as e:
+        return f"Error: {e}", 500
+
 # ====== iCal export (per-unit) ======
 @app.route("/ical/export/<int:unit_id>.ics")
 def ical_export(unit_id):
