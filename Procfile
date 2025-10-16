@@ -1,1 +1,1 @@
-web: gunicorn -w 2 -k gthread --threads 4 --timeout 120 --keep-alive 5 -b 0.0.0.0:$PORT backend.server:app
+web: gunicorn -w 1 -k gthread --threads 8 --timeout 120 --keep-alive 5 --chdir backend server:app
