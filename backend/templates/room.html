@@ -5,43 +5,34 @@
   <title>{{ title }}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root { --blue:#0070f3; --blue-d:#005ad1; --bg:#f6f8fa; --text:#222; --muted:#555; }
-    * { box-sizing: border-box; }
-    body { font-family: system-ui, Arial, sans-serif; margin:0; background:var(--bg); color:var(--text); }
+    body { font-family: system-ui, Arial, sans-serif; margin:0; background:#f6f8fa; color:#222; }
     .container { max-width: 640px; margin: 32px auto; background:#fff; border-radius:12px;
       box-shadow:0 4px 12px rgba(0,0,0,.08); overflow:hidden; }
-    .hero img { width:100%; height:260px; object-fit:cover; display:block; }
+    .hero img { width:100%; height:240px; object-fit:cover; display:block; }
     .content { padding:20px; }
-    h1 { font-size:1.4rem; margin:0 0 6px; }
-    .price { font-weight:700; margin:0 0 14px; color:#111; }
-    .muted { color:var(--muted); }
+    h1 { font-size:1.4rem; margin:0 0 8px; }
+    p.desc { color:#555; margin:0 0 16px; }
     label { display:block; font-size:.9rem; margin:10px 0 4px; color:#333; }
     input, button { width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; font-size:1rem; }
-    input:focus { outline:none; border-color: var(--blue); }
-    button { background:var(--blue); color:#fff; border:none; font-weight:600; margin-top:12px; cursor:pointer; }
-    button:hover { background:var(--blue-d); }
-    button[disabled] { opacity:.7; cursor:not-allowed; }
-    .footer { text-align:center; font-size:.8rem; color:#777; margin:16px 0 10px; }
-    .msg { margin-top:10px; padding:10px; border-radius:8px; font-size:.95rem; }
-    .ok { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
-    .err { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
+    button { background:#0070f3; color:#fff; border:none; font-weight:600; margin-top:12px; cursor:pointer; }
+    button:hover { background:#005ad1; }
+    .footer { text-align:center; font-size:.8rem; color:#777; margin:14px 0 4px; }
+    .price { font-size:1.1rem; color:#0070f3; font-weight:600; margin-bottom:8px; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="hero">
-      <img src="{{ image_url }}" alt="Property photo">
+      <img src="{{ image_url or 'https://source.unsplash.com/featured/?pattaya,villa' }}" alt="Property photo">
     </div>
     <div class="content">
       <h1>{{ title }}</h1>
       {% if price %}
-        <div class="price">฿ {{ '%.0f'|format(price) }} <span class="muted">/ night {{ currency }}</span></div>
-      {% else %}
-        <div class="price">Contact for price</div>
+        <div class="price">{{ price }} {{ currency or 'THB' }} / night</div>
       {% endif %}
-      <p class="muted">Enjoy a relaxing stay — private, comfortable, and centrally located in Pattaya.</p>
+      <p class="desc">Enjoy a relaxing stay — private, comfortable, and centrally located in Pattaya. Book your dates below.</p>
 
-      <form id="bookForm" novalidate>
+      <form id="bookForm">
         <label>Check-in</label>
         <input id="start" type="date" required>
         <label>Check-out</label>
@@ -50,84 +41,53 @@
         <input id="name" type="text" placeholder="Full name" required>
         <label>Your Email</label>
         <input id="email" type="email" placeholder="Email address" required>
-        <button id="submitBtn" type="submit">Book &amp; Pay (test)</button>
+        <button type="submit">Book & Pay (test)</button>
       </form>
 
-      <div id="msg" class="msg" style="display:none;"></div>
+      <p id="msg" class="desc" style="margin-top:10px;"></p>
       <div class="footer">Powered by RavuriCo Ltd • Stripe test mode</div>
     </div>
   </div>
 
   <script>
-  (function setMinDates(){
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth()+1).padStart(2,'0');
-    const dd = String(today.getDate()).padStart(2,'0');
-    const iso = `${yyyy}-${mm}-${dd}`;
-    start.min = iso; end.min = iso;
-  })();
-
-  const form = document.getElementById("bookForm");
-  const msg  = document.getElementById("msg");
-  const btn  = document.getElementById("submitBtn");
-  const start = document.getElementById("start");
-  const end = document.getElementById("end");
-
-  function showMsg(text, ok=false){
-    msg.textContent = text;
-    msg.className = ok ? "msg ok" : "msg err";
-    msg.style.display = "block";
-  }
-
-  form.addEventListener("submit", async (e) => {
+  document.getElementById("bookForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    msg.style.display = "none";
+
+    // Build API URL for property group or single unit
+    const path = location.pathname;
+    let apiUrl;
+    if (path.startsWith("/prop/")) {
+      const slug = path.split("/").pop();
+      apiUrl = "/api/public/book_group/" + slug;
+    } else if (path.startsWith("/r/")) {
+      apiUrl = path.replace("/r/","/api/public/book/");
+    } else {
+      apiUrl = "/api/public/book";
+    }
 
     const data = {
-      start_date: start.value,
-      end_date:   end.value,
-      name:       document.getElementById("name").value.trim(),
-      email:      document.getElementById("email").value.trim()
+      start_date: document.getElementById("start").value,
+      end_date: document.getElementById("end").value,
+      name: document.getElementById("name").value,
+      email: document.getElementById("email").value
     };
 
-    if (!data.start_date || !data.end_date || !data.name || !data.email) {
-      showMsg("❌ Please fill all fields.");
-      return;
-    }
-    if (data.end_date <= data.start_date) {
-      showMsg("❌ Check-out must be after check-in.");
-      return;
-    }
-
-    const apiUrl = location.pathname.replace("/r/","/api/public/book/");
-    btn.disabled = true;
-    const original = btn.textContent;
-    btn.textContent = "Processing…";
-
+    const msg = document.getElementById("msg");
+    msg.textContent = "⏳ Sending your booking...";
     try {
       const res = await fetch(apiUrl, {
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body: JSON.stringify(data)
       });
-      const text = await res.text();
-      let json = null;
-      try { json = JSON.parse(text); } catch(_) {}
-
-      if (!res.ok) {
-        showMsg("❌ " + (json && json.error ? json.error : `Server error (${res.status}). ${text.slice(0,120)}`));
-      } else if (json && json.ok) {
-        showMsg("✅ Booking request received — dates blocked (test).", true);
-        form.reset();
+      const j = await res.json();
+      if (j.ok) {
+        msg.textContent = "✅ Booking request received — dates blocked (test mode).";
       } else {
-        showMsg("❌ Unexpected response: " + text.slice(0,200));
+        msg.textContent = "❌ " + (j.error || "Unknown error");
       }
     } catch (err) {
-      showMsg("❌ Network error: " + (err && err.message ? err.message : err));
-    } finally {
-      btn.disabled = false;
-      btn.textContent = original;
+      msg.textContent = "❌ Network or server error.";
     }
   });
   </script>
