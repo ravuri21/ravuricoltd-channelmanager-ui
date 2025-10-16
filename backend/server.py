@@ -1,4 +1,4 @@
-import os, threading, time, requests, traceback, smtplib
+import os, threading, time, requests, traceback, smtplib, json
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pathlib import Path
@@ -262,8 +262,19 @@ def api_rates():
     return jsonify({"ok":True})
 
 # ==========================================================
-# PUBLIC BOOKING PAGES
+# PUBLIC PAGES (with photos + price)
 # ==========================================================
+def _load_unit_meta():
+    """Read backend/unit_meta.json to get display_name and image_url per unit_id."""
+    try:
+        meta_path = Path(__file__).with_name("unit_meta.json")
+        if meta_path.exists():
+            with open(meta_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        print("unit_meta load error:", e)
+    return {}
+
 @app.route("/r")
 def list_public_links():
     db = SessionLocal()
@@ -279,12 +290,31 @@ def list_public_links():
 def room(unit_id):
     db = SessionLocal()
     u = db.query(Unit).filter(Unit.id == unit_id).first()
+    rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_id).first()
     db.close()
     if not u:
         return "Not found", 404
-    return render_template("room.html", title=f"{u.ota} — {u.property_id}")
 
-# ---------- FIXED: Public Booking API ----------
+    meta = _load_unit_meta()
+    m = meta.get(str(unit_id), {})
+    display_name = m.get("display_name") or f"{u.ota} — {u.property_id}"
+    image_url = m.get("image_url") or "https://source.unsplash.com/featured/?pattaya,villa"
+
+    price = None
+    currency = "THB"
+    if rp:
+        price = rp.base_rate
+        currency = rp.currency or "THB"
+
+    return render_template(
+        "room.html",
+        title=display_name,
+        image_url=image_url,
+        price=price,
+        currency=currency
+    )
+
+# ---------- Public Booking API ----------
 @app.route("/api/public/book/<int:unit_id>", methods=["POST"])
 def public_book(unit_id):
     """Create a direct booking (test mode)."""
