@@ -239,8 +239,10 @@ def ical_export(unit_id):
                  "END:VEVENT"]
     lines.append("END:VCALENDAR")
     ics="\r\n".join(lines)
-    return (ics,200,{"Content-Type":"text/calendar; charset=utf-8",
-                     "Content-Disposition":f'attachment; filename=\"unit-{unit_id}.ics\""})
+    return (ics, 200, {
+    "Content-Type": "text/calendar; charset=utf-8",
+    "Content-Disposition": f'attachment; filename="unit-{unit_id}.ics"'
+     })
 
 @app.route("/api/rates", methods=["POST"])
 def api_rates():
