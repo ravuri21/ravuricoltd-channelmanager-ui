@@ -7,7 +7,7 @@ from flask import Flask, request, session, redirect, url_for, render_template, j
 from icalendar import Calendar
 import stripe
 
-# IMPORTANT: absolute imports (works with --chdir backend)
+# Absolute imports (important for Render's --chdir backend)
 from models import init_db, SessionLocal, Unit, AvailabilityBlock, RatePlan
 import import_properties as importer
 
@@ -45,8 +45,8 @@ def send_alert(subject, body):
         print(f"📧 Alert email sent to {alert_to}")
     except Exception as e:
         print("❌ Error sending alert:", e)
-# ------------------------------------------------
 
+# ---------------- iCal fetch + background sync ----------------
 def fetch_ical(ical_url):
     try:
         resp = requests.get(ical_url, timeout=8)
@@ -81,7 +81,7 @@ def periodic_sync():
             traceback.print_exc()
         time.sleep(600)
 
-# ---------- Bootstrap on start ----------
+# ---------------- Bootstrap on start ----------------
 try:
     print("Bootstrap: init_db()")
     init_db()
@@ -95,7 +95,19 @@ except Exception as e:
     print("Bootstrap error:", e)
     traceback.print_exc()
 
-# ---------- Web UI ----------
+# ---------------- Helpers ----------------
+def _load_meta():
+    """Read backend/unit_meta.json to get grouped properties."""
+    try:
+        meta_path = Path(__file__).with_name("unit_meta.json")
+        if meta_path.exists():
+            with open(meta_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        print("unit_meta load error:", e)
+    return {"groups": {}}
+
+# ---------------- Web UI (admin) ----------------
 @app.route("/")
 def index():
     if "user" not in session:
@@ -137,25 +149,22 @@ def health():
 def hello():
     return "hello", 200
 
-# ---------- API ----------
-@app.route("/api/booking", methods=["POST"])
-def api_booking():
+# ---------------- Admin APIs ----------------
+@app.route("/api/unit/<int:unit_id>/ical", methods=["POST"])
+def api_update_ical(unit_id):
     if "user" not in session:
         return jsonify({"error":"unauthorized"}),401
-    data = request.json or {}
-    try:
-        amount = int(float(data.get("amount",0))*100)
-        currency = data.get("currency","thb")
-        payment_method = data.get("payment_method_id")
-        intent = stripe.PaymentIntent.create(
-            amount=amount, currency=currency,
-            payment_method=payment_method, confirm=True
-        )
-        return jsonify({"ok":True,"payment_intent":intent.id})
-    except Exception as e:
-        return jsonify({"error":str(e)}),400
+    new_url = (request.json or {}).get("ical_url","").strip()
+    if not new_url.startswith("https://"):
+        return jsonify({"error":"invalid url"}),400
+    db = SessionLocal()
+    u = db.query(Unit).filter(Unit.id==unit_id).first()
+    if not u:
+        db.close(); return jsonify({"error":"not found"}),404
+    u.ical_url = new_url; db.commit(); db.close()
+    return jsonify({"ok":True})
 
-@app.route("/api/check_ical", methods=["GET"])
+@app.route("/api/check_ical")
 def api_check_ical():
     if "user" not in session:
         return jsonify({"error":"unauthorized"}),401
@@ -175,21 +184,6 @@ def api_check_ical():
         results.append({"ota":u.ota,"property_id":u.property_id,"status":status})
     return jsonify(results)
 
-@app.route("/api/unit/<int:unit_id>/ical", methods=["POST"])
-def api_update_ical(unit_id):
-    if "user" not in session:
-        return jsonify({"error":"unauthorized"}),401
-    new_url = (request.json or {}).get("ical_url","").strip()
-    if not new_url.startswith("https://"):
-        return jsonify({"error":"invalid url"}),400
-    db = SessionLocal()
-    u = db.query(Unit).filter(Unit.id==unit_id).first()
-    if not u:
-        db.close(); return jsonify({"error":"not found"}),404
-    u.ical_url = new_url; db.commit(); db.close()
-    return jsonify({"ok":True})
-
-# ---------- Manual / Auto Blocks ----------
 @app.route("/api/blocks", methods=["GET","POST","DELETE"])
 def api_blocks():
     if "user" not in session:
@@ -223,7 +217,7 @@ def api_blocks():
     finally:
         db.close()
 
-# ---------- iCal export ----------
+# ---------------- iCal export (per-unit) ----------------
 @app.route("/ical/export/<int:unit_id>.ics")
 def ical_export(unit_id):
     db=SessionLocal()
@@ -243,38 +237,101 @@ def ical_export(unit_id):
     return (ics,200,{"Content-Type":"text/calendar; charset=utf-8",
                      "Content-Disposition":f'attachment; filename=unit-{unit_id}.ics'})
 
-# ---------- Rates ----------
-@app.route("/api/rates", methods=["POST"])
-def api_rates():
-    if "user" not in session:
-        return jsonify({"error":"unauthorized"}),401
-    data=request.json or {}
-    unit_id=data.get("unit_id")
-    base_rate=float(data.get("base_rate",0))
-    currency=data.get("currency","THB")
-    db=SessionLocal()
-    rp=db.query(RatePlan).filter(RatePlan.unit_id==unit_id).first()
-    if not rp:
-        rp=RatePlan(unit_id=unit_id,base_rate=base_rate,currency=currency); db.add(rp)
-    else:
-        rp.base_rate=base_rate; rp.currency=currency
-    db.commit(); db.close()
-    return jsonify({"ok":True})
+# ==========================================================
+# PUBLIC PAGES — GROUPED BY REAL PROPERTY
+# ==========================================================
+@app.route("/properties")
+def properties_index():
+    """Show only real properties (grouped), not 27 OTA rows."""
+    meta = _load_meta()
+    groups = meta.get("groups", {})
+    html = ["<h2>Properties</h2><ul>"]
+    for slug, info in groups.items():
+        title = info.get("title", slug)
+        html.append(f'<li><a href="/prop/{slug}" target="_blank">{title}</a></li>')
+    html.append("</ul>")
+    return "".join(html)
 
-# ==========================================================
-# PUBLIC PAGES (with photos + price)
-# ==========================================================
-def _load_unit_meta():
-    """Read backend/unit_meta.json to get display_name and image_url per unit_id."""
+@app.route("/prop/<slug>")
+def property_page(slug):
+    """Show a single property page (photo+price), using the first unit's rate as default."""
+    meta = _load_meta()
+    groups = meta.get("groups", {})
+    info = groups.get(slug)
+    if not info:
+        return "Not found", 404
+
+    title = info.get("title", slug)
+    image_url = info.get("image_url") or "https://source.unsplash.com/featured/?pattaya,villa"
+    unit_ids = info.get("unit_ids", [])
+
+    price = None
+    currency = "THB"
+    if unit_ids:
+        db = SessionLocal()
+        rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
+        db.close()
+        if rp:
+            price = rp.base_rate
+            currency = rp.currency or "THB"
+
+    return render_template("room.html", title=title, image_url=image_url, price=price, currency=currency)
+
+@app.route("/api/public/book_group/<slug>", methods=["POST"])
+def public_book_group(slug):
+    """Block dates across ALL unit_ids in the group (Airbnb+Booking+Agoda)."""
     try:
-        meta_path = Path(__file__).with_name("unit_meta.json")
-        if meta_path.exists():
-            with open(meta_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception as e:
-        print("unit_meta load error:", e)
-    return {}
+        meta = _load_meta()
+        groups = meta.get("groups", {})
+        info = groups.get(slug)
+        if not info:
+            return jsonify({"error": "property not found"}), 404
 
+        data = request.json or {}
+        start = (data.get("start_date") or "").strip()
+        end   = (data.get("end_date") or "").strip()
+        name  = (data.get("name") or "").strip()
+        email = (data.get("email") or "").strip()
+
+        if not (start and end and name and email):
+            return jsonify({"error": "missing fields"}), 400
+        if end <= start:
+            return jsonify({"error": "check-out must be after check-in"}), 400
+
+        unit_ids = info.get("unit_ids", [])
+        if not unit_ids:
+            return jsonify({"error": "no units linked to this property"}), 400
+
+        db = SessionLocal()
+        try:
+            for uid in unit_ids:
+                u = db.query(Unit).filter(Unit.id == uid).first()
+                if not u:
+                    continue
+                b = AvailabilityBlock(
+                    unit_id=uid,
+                    start_date=start,
+                    end_date=end,
+                    source="direct",
+                    note=f"Guest: {name} {email} (group:{slug})"
+                )
+                db.add(b)
+            db.commit()
+        finally:
+            db.close()
+
+        try:
+            send_alert("New Direct Booking (Grouped)",
+                       f"Property {slug}: {start}–{end} Guest: {name} ({email}) on {len(unit_ids)} OTA listings")
+        except Exception as e:
+            print("alert error:", e)
+
+        return jsonify({"ok": True})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+# ---------- Legacy public pages (for admin/testing) ----------
 @app.route("/r")
 def list_public_links():
     db = SessionLocal()
@@ -295,36 +352,21 @@ def room(unit_id):
     if not u:
         return "Not found", 404
 
-    meta = _load_unit_meta()
-    m = meta.get(str(unit_id), {})
-    display_name = m.get("display_name") or f"{u.ota} — {u.property_id}"
-    image_url = m.get("image_url") or "https://source.unsplash.com/featured/?pattaya,villa"
+    display_name = f"{u.ota} — {u.property_id}"
+    image_url = "https://source.unsplash.com/featured/?pattaya,villa"
+    price = rp.base_rate if rp else None
+    currency = rp.currency if rp else "THB"
 
-    price = None
-    currency = "THB"
-    if rp:
-        price = rp.base_rate
-        currency = rp.currency or "THB"
+    return render_template("room.html", title=display_name, image_url=image_url, price=price, currency=currency)
 
-    return render_template(
-        "room.html",
-        title=display_name,
-        image_url=image_url,
-        price=price,
-        currency=currency
-    )
-
-# ---------- Public Booking API ----------
 @app.route("/api/public/book/<int:unit_id>", methods=["POST"])
 def public_book(unit_id):
-    """Create a direct booking (test mode)."""
     try:
         data = request.json or {}
         start = (data.get("start_date") or "").strip()
-        end   = (data.get("end_date") or "").strip()
-        name  = (data.get("name") or "").strip()
+        end = (data.get("end_date") or "").strip()
+        name = (data.get("name") or "").strip()
         email = (data.get("email") or "").strip()
-
         if not (start and end and name and email):
             return jsonify({"error": "missing fields"}), 400
         if end <= start:
@@ -335,27 +377,34 @@ def public_book(unit_id):
         if not u:
             db.close()
             return jsonify({"error": "unit not found"}), 404
-
-        b = AvailabilityBlock(
-            unit_id=unit_id,
-            start_date=start,
-            end_date=end,
-            source="direct",
-            note=f"Guest: {name} {email}"
-        )
+        b = AvailabilityBlock(unit_id=unit_id, start_date=start, end_date=end, source="direct", note=f"Guest: {name} {email}")
         db.add(b)
         db.commit()
-        bid = b.id
         db.close()
-
-        try:
-            send_alert("New Direct Booking", f"Unit {unit_id}: {start}–{end} Guest: {name} ({email})")
-        except Exception as e:
-            print("alert error:", e)
-
-        return jsonify({"ok": True, "id": bid})
-
+        send_alert("New Direct Booking", f"Unit {unit_id}: {start}–{end} Guest: {name} ({email})")
+        return jsonify({"ok": True})
     except Exception as e:
-        print("public_book error:", e)
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+# ---------- Admin: Set Price (quick helper) ----------
+@app.route("/admin/set_price/<int:unit_id>/<amount>")
+def admin_set_price(unit_id, amount):
+    if "user" not in session:
+        return "Login required", 401
+    try:
+        amt = float(amount)
+    except ValueError:
+        return "Invalid amount", 400
+
+    db = SessionLocal()
+    rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_id).first()
+    if not rp:
+        rp = RatePlan(unit_id=unit_id, base_rate=amt, currency="THB")
+        db.add(rp)
+    else:
+        rp.base_rate = amt
+        rp.currency = "THB"
+    db.commit()
+    db.close()
+    return f"✅ OK: unit {unit_id} price set to {amt} THB"
