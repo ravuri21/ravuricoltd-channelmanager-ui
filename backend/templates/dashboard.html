@@ -22,6 +22,7 @@
     .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:.8rem}
     .switch{display:inline-flex;align-items:center;gap:8px}
     .switch input{width:18px;height:18px}
+    .price-note{font-size:.85rem;color:#6b7280}
   </style>
 </head>
 <body>
@@ -61,16 +62,25 @@
 
         <td>
           <div style="display:flex; gap:6px; align-items:center; max-width:700px;">
-            <a href="{{u.ical_url}}" target="_blank">open</a>
-            <input id="in-{{u.id}}" type="text" value="{{u.ical_url}}" style="flex:1; min-width:280px; padding:6px;" />
+            {% if u.ical_url %}
+              <a href="{{u.ical_url}}" target="_blank">open</a>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+            <input id="in-{{u.id}}" type="text" value="{{u.ical_url or ''}}" style="flex:1; min-width:280px; padding:6px;" placeholder="https://...ics" />
             <button class="btn small" onclick="saveIcal({{u.id}})">Save</button>
           </div>
         </td>
 
         <td>
           <div style="display:flex; gap:6px; align-items:center;">
-            <input id="rate-{{u.id}}" type="number" placeholder="Price" style="width:120px; padding:6px;" />
+            <input id="rate-{{u.id}}" type="number" placeholder="Price"
+                   value="{{ rates_map.get(u.id) if rates_map else '' }}"
+                   style="width:120px; padding:6px;" />
             <button class="btn small" onclick="savePrice({{u.id}})">Save</button>
+            {% if rates_map.get(u.id) %}
+              <span class="price-note">Current: ฿ {{ '%.0f'|format(rates_map.get(u.id)) }} {{ (currency_map.get(u.id) or 'THB') }}</span>
+            {% endif %}
           </div>
         </td>
 
@@ -168,14 +178,7 @@
 
   async function saveIcal(id){
     const val = document.getElementById("in-"+id).value.trim();
-    if(!/^https:\/\/[^\s]+$/.test(val)){ alert("⚠️ Invalid iCal URL."); return; }
-    const lower = val.toLowerCase();
-    if((lower.includes("airbnb.com") || lower.includes("agoda.com")) && !lower.includes(".ics")){
-      alert("⚠️ Airbnb/Agoda iCal should include .ics"); return;
-    }
-    if(lower.includes("booking.com") && !lower.includes("/v1/export?t=")){
-      alert("⚠️ Booking.com iCal should include /v1/export?t="); return;
-    }
+    if(!/^https?:\/\/[^\s]+$/.test(val)){ alert("⚠️ Invalid iCal URL."); return; }
     const r = await fetch(`/api/unit/${id}/ical`, {
       method: "POST",
       headers: {"Content-Type":"application/json"},
@@ -194,7 +197,14 @@
       body: JSON.stringify({ unit_id: unitId, base_rate: parseFloat(v), currency: "THB" })
     });
     const j = await r.json();
-    alert(j.ok ? "Price saved ✅" : ("Error: " + (j.error || "unknown")));
+    if(j.ok){
+      alert("Price saved ✅");
+      // Update the “Current” note inline without reload
+      const note = document.querySelector(`#rate-${unitId}`).parentElement.querySelector(".price-note");
+      if(note){ note.textContent = `Current: ฿ ${parseFloat(v).toFixed(0)} THB`; }
+    }else{
+      alert("Error: " + (j.error || "unknown"));
+    }
   }
 
   // ---------- Manage modal ----------
@@ -278,7 +288,6 @@
 
     try{
       if(applyGroup){
-        // block across ALL unit_ids in the property
         const r = await fetch(`/api/admin/block_group/${currentSlug}`,{
           method:"POST",
           headers:{ "Content-Type":"application/json" },
@@ -287,7 +296,6 @@
         const j = await r.json();
         if(!(r.ok && j.ok)) throw new Error(j.error || "Group block failed");
       }else{
-        // block only this unit
         const r = await fetch("/api/blocks",{
           method:"POST",
           headers:{ "Content-Type":"application/json" },
