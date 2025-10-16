@@ -4,11 +4,31 @@
   <meta charset="utf-8" />
   <title>Dashboard - Channel Manager</title>
   <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:9999}
+    .modal{width:min(820px,96vw);background:#fff;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);overflow:hidden}
+    .modal header{padding:12px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between}
+    .modal header h3{margin:0;font-size:1.05rem}
+    .modal .body{padding:14px 16px}
+    .muted{color:#6b7280}
+    .row{display:flex;gap:8px;align-items:center;margin:8px 0}
+    .row input{padding:8px;border:1px solid #ddd;border-radius:8px}
+    .btn{padding:8px 12px;border:none;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer}
+    .btn.secondary{background:#6b7280}
+    .btn.danger{background:#dc2626}
+    .btn.small{padding:6px 8px;font-size:.9rem}
+    table.av{width:100%;border-collapse:collapse;margin-top:10px}
+    table.av th, table.av td{padding:8px;border-bottom:1px solid #eee;text-align:left}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:.8rem}
+    .switch{display:inline-flex;align-items:center;gap:8px}
+    .switch input{width:18px;height:18px}
+  </style>
 </head>
 <body>
   <div class="topbar">
     <div>Channel Manager</div>
     <div>
+      <a href="/properties" target="_blank">Public</a> |
       <a href="/lang/en">EN</a> | <a href="/lang/th">ไทย</a> |
       <a href="/logout">Logout</a>
     </div>
@@ -17,13 +37,12 @@
   <div class="container">
     <h2>All Units</h2>
 
-    <!-- Actions -->
-    <button onclick="checkIcalStatus()" style="background:#16a34a;color:white;padding:8px 14px;border:none;border-radius:8px;cursor:pointer;margin-bottom:12px;">
-      🔍 Check iCal Status
-    </button>
-    <div id="ical-results" style="margin-bottom:20px;font-family:system-ui,monospace;"></div>
+    <div class="row" style="justify-content:space-between;">
+      <button onclick="checkIcalStatus()" class="btn" style="background:#16a34a;">🔍 Check iCal Status</button>
+      <div class="muted">Use <b>Manage</b> to close/open dates. Toggle “Apply to all OTAs”.</div>
+    </div>
+    <div id="ical-results" style="margin-bottom:16px;font-family:system-ui,monospace;"></div>
 
-    <!-- Table -->
     <table>
       <tr>
         <th>OTA</th>
@@ -31,74 +50,115 @@
         <th>Public</th>
         <th>iCal</th>
         <th>Price (THB)</th>
+        <th>Availability</th>
       </tr>
       {% for u in units %}
       <tr>
         <td>{{u.ota}}</td>
         <td>{{u.property_id}}</td>
 
-        <td>
-          <a href="/r/{{u.id}}" target="_blank">/r/{{u.id}}</a>
-        </td>
+        <td><a href="/r/{{u.id}}" target="_blank">/r/{{u.id}}</a></td>
 
         <td>
-          <div style="display:flex; gap:6px; align-items:center;">
+          <div style="display:flex; gap:6px; align-items:center; max-width:700px;">
             <a href="{{u.ical_url}}" target="_blank">open</a>
-            <input id="in-{{u.id}}" type="text" value="{{u.ical_url}}" style="width:60%; padding:6px;" />
-            <button onclick="saveIcal({{u.id}})" style="padding:6px 10px;">Save</button>
+            <input id="in-{{u.id}}" type="text" value="{{u.ical_url}}" style="flex:1; min-width:280px; padding:6px;" />
+            <button class="btn small" onclick="saveIcal({{u.id}})">Save</button>
           </div>
         </td>
 
         <td>
           <div style="display:flex; gap:6px; align-items:center;">
             <input id="rate-{{u.id}}" type="number" placeholder="Price" style="width:120px; padding:6px;" />
-            <button onclick="savePrice({{u.id}})" style="padding:6px 10px;">Save</button>
+            <button class="btn small" onclick="savePrice({{u.id}})">Save</button>
           </div>
+        </td>
+
+        <td>
+          <button class="btn small" onclick="openManage({{u.id}},'{{u.ota|e}}','{{u.property_id|e}}')">Manage</button>
         </td>
       </tr>
       {% endfor %}
     </table>
 
     <p class="muted">Background sync fetches calendars every ~10 minutes.</p>
-    <p class="muted">Public grouped pages: <a href="/properties" target="_blank">/properties</a></p>
+  </div>
+
+  <!-- Manage Modal -->
+  <div id="backdrop" class="modal-backdrop">
+    <div class="modal">
+      <header>
+        <h3 id="m-title">Manage Availability</h3>
+        <button class="btn secondary" onclick="closeManage()">✕</button>
+      </header>
+      <div class="body">
+        <div class="row">
+          <span class="pill" id="m-pill"></span>
+          <span class="muted" id="m-sub" style="margin-left:8px;"></span>
+        </div>
+
+        <div class="row">
+          <label class="switch">
+            <input type="checkbox" id="m-group">
+            <span>Apply to <b>all OTAs</b> in this property</span>
+          </label>
+          <span id="m-group-info" class="muted"></span>
+        </div>
+
+        <div class="row">
+          <input id="m-start" type="date" />
+          <input id="m-end" type="date" />
+          <input id="m-note" type="text" placeholder="Note (optional)" style="flex:1;" />
+          <button class="btn" onclick="addBlock()">➕ Block dates</button>
+        </div>
+        <div class="muted">Block creates a hold from check-in (start) to check-out (end).</div>
+
+        <h4 style="margin:14px 0 6px;">Existing Blocks (this unit)</h4>
+        <table class="av">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Source</th>
+              <th>Note</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="m-rows">
+            <tr><td colspan="6" class="muted">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <script>
   async function checkIcalStatus() {
     const resultsDiv = document.getElementById("ical-results");
     resultsDiv.innerHTML = "<div style='padding:8px;'>⏳ Checking all iCal links...</div>";
-
     try {
       const res = await fetch("/api/check_ical");
       const data = await res.json();
-      if (data.error) {
-        resultsDiv.innerHTML = "❌ Unauthorized — please log in again.";
-        return;
-      }
-
+      if (data.error) { resultsDiv.innerHTML = "❌ Unauthorized — please log in again."; return; }
       let html = `
         <table style='width:100%;border-collapse:collapse;margin-top:12px;'>
           <tr style='background:#f0f0f0;'>
             <th style='text-align:left;padding:8px;'>OTA</th>
             <th style='text-align:left;padding:8px;'>Property</th>
             <th style='text-align:left;padding:8px;'>Status</th>
-          </tr>
-      `;
-
+          </tr>`;
       for (let row of data) {
         let color = "#dc2626";
         if (row.status.includes("✅")) color = "#16a34a";
         else if (row.status.includes("⚠️")) color = "#ca8a04";
-
         html += `
           <tr>
             <td style='padding:8px;border-bottom:1px solid #eee;'>${row.ota}</td>
             <td style='padding:8px;border-bottom:1px solid #eee;'>${row.property_id}</td>
             <td style='padding:8px;border-bottom:1px solid #eee;color:${color};font-weight:600;'>${row.status}</td>
-          </tr>
-        `;
+          </tr>`;
       }
-
       html += "</table>";
       resultsDiv.innerHTML = html;
     } catch (err) {
@@ -108,25 +168,21 @@
 
   async function saveIcal(id){
     const val = document.getElementById("in-"+id).value.trim();
-    if(!val.match(/^https:\/\/[^\s]+$/)){
-      alert("⚠️ Invalid iCal URL."); return;
-    }
+    if(!/^https:\/\/[^\s]+$/.test(val)){ alert("⚠️ Invalid iCal URL."); return; }
     const lower = val.toLowerCase();
     if((lower.includes("airbnb.com") || lower.includes("agoda.com")) && !lower.includes(".ics")){
-      alert("⚠️ Airbnb/Agoda iCal should contain .ics"); return;
+      alert("⚠️ Airbnb/Agoda iCal should include .ics"); return;
     }
     if(lower.includes("booking.com") && !lower.includes("/v1/export?t=")){
-      alert("⚠️ Booking.com iCal should contain /v1/export?t="); return;
+      alert("⚠️ Booking.com iCal should include /v1/export?t="); return;
     }
-
     const r = await fetch(`/api/unit/${id}/ical`, {
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({ ical_url: val })
     });
     const j = await r.json();
-    if(j.ok){ alert("Saved ✅"); }
-    else { alert("Error: " + (j.error || "unknown")); }
+    alert(j.ok ? "Saved ✅" : ("Error: " + (j.error || "unknown")));
   }
 
   async function savePrice(unitId){
@@ -138,7 +194,127 @@
       body: JSON.stringify({ unit_id: unitId, base_rate: parseFloat(v), currency: "THB" })
     });
     const j = await r.json();
-    if(j.ok) alert("Price saved ✅"); else alert("Error: " + (j.error || "unknown"));
+    alert(j.ok ? "Price saved ✅" : ("Error: " + (j.error || "unknown")));
+  }
+
+  // ---------- Manage modal ----------
+  let currentUnitId = null;
+  let currentSlug = null;
+  let currentGroupIds = [];
+
+  function todayISO(){
+    const t = new Date();
+    return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`;
+  }
+
+  async function openManage(unitId, ota, propId){
+    currentUnitId = unitId; currentSlug = null; currentGroupIds = [];
+    document.getElementById("m-title").textContent = "Manage Availability";
+    document.getElementById("m-pill").textContent = `${ota}`;
+    document.getElementById("m-sub").textContent = propId;
+    const s = document.getElementById("m-start");
+    const e = document.getElementById("m-end");
+    const min = todayISO(); s.min = min; e.min = min; s.value = ""; e.value = "";
+    document.getElementById("m-note").value = "";
+    document.getElementById("m-group").checked = false;
+    document.getElementById("m-group-info").textContent = "Detecting property group…";
+
+    // find group
+    try{
+      const r = await fetch(`/api/admin/find_group?unit_id=${unitId}`);
+      const j = await r.json();
+      if(j.ok){
+        currentSlug = j.slug; currentGroupIds = j.unit_ids || [];
+        document.getElementById("m-group-info").textContent = `Property: ${j.title || j.slug} — Units: ${currentGroupIds.join(", ")}`;
+      }else{
+        document.getElementById("m-group-info").textContent = "This unit is not mapped to a property group.";
+      }
+    }catch(_){
+      document.getElementById("m-group-info").textContent = "Group lookup failed.";
+    }
+
+    loadBlocks();
+    document.getElementById("backdrop").style.display = "flex";
+  }
+
+  function closeManage(){
+    currentUnitId = null; currentSlug = null; currentGroupIds = [];
+    document.getElementById("backdrop").style.display = "none";
+  }
+
+  async function loadBlocks(){
+    const tbody = document.getElementById("m-rows");
+    tbody.innerHTML = `<tr><td colspan="6" class="muted">Loading…</td></tr>`;
+    try{
+      const r = await fetch(`/api/blocks?unit_id=${currentUnitId}`);
+      const data = await r.json();
+      if(!Array.isArray(data) || !data.length){
+        tbody.innerHTML = `<tr><td colspan="6" class="muted">No blocks</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = data.map(b => `
+        <tr>
+          <td>${b.id}</td>
+          <td>${b.start_date}</td>
+          <td>${b.end_date}</td>
+          <td>${b.source || ''}</td>
+          <td>${b.note || ''}</td>
+          <td><button class="btn danger small" onclick="delBlock(${b.id})">Delete</button></td>
+        </tr>
+      `).join("");
+    }catch(err){
+      tbody.innerHTML = `<tr><td colspan="6" class="muted">Error loading blocks</td></tr>`;
+    }
+  }
+
+  async function addBlock(){
+    const s = document.getElementById("m-start").value;
+    const e = document.getElementById("m-end").value;
+    const note = document.getElementById("m-note").value.trim() || "manual";
+    if(!s || !e){ alert("Pick start and end dates"); return; }
+    if(e <= s){ alert("Check-out must be after check-in"); return; }
+
+    const applyGroup = document.getElementById("m-group").checked && currentSlug;
+
+    try{
+      if(applyGroup){
+        // block across ALL unit_ids in the property
+        const r = await fetch(`/api/admin/block_group/${currentSlug}`,{
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({ start_date: s, end_date: e, note })
+        });
+        const j = await r.json();
+        if(!(r.ok && j.ok)) throw new Error(j.error || "Group block failed");
+      }else{
+        // block only this unit
+        const r = await fetch("/api/blocks",{
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({
+            unit_id: currentUnitId, start_date: s, end_date: e,
+            source: "manual", note
+          })
+        });
+        const j = await r.json();
+        if(!(r.ok && j.ok)) throw new Error(j.error || "Block failed");
+      }
+      loadBlocks();
+      alert(applyGroup ? "Blocked for ALL OTAs ✅" : "Blocked ✅");
+    }catch(err){
+      alert("Error: " + err.message);
+    }
+  }
+
+  async function delBlock(id){
+    if(!confirm("Delete this block? This will open those dates for this unit.")) return;
+    try{
+      const r = await fetch(`/api/blocks?id=${id}`, { method:"DELETE" });
+      const j = await r.json();
+      if(r.ok && j.ok){ loadBlocks(); } else { alert(j.error || "Delete failed"); }
+    }catch(err){
+      alert("Network error");
+    }
   }
   </script>
 </body>
