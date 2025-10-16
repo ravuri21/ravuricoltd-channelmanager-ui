@@ -7,7 +7,7 @@ from datetime import datetime, date, timedelta, timezone
 
 from flask import (
     Flask, request, session, redirect, url_for,
-    render_template, jsonify, Response
+    render_template, jsonify
 )
 from icalendar import Calendar as ICal
 import stripe
@@ -56,16 +56,6 @@ def send_alert(subject, body):
         print(f"📧 Alert email sent to {alert_to}")
     except Exception as e:
         print("❌ Error sending alert:", e)
-
-@app.get("/admin/test_email")
-def admin_test_email():
-    if "user" not in session:
-        return "Login required", 401
-    try:
-        send_alert("Test email from Channel Manager", "If you see this, SMTP works!")
-        return "Sent (check your inbox/spam)", 200
-    except Exception as e:
-        return f"Error: {e}", 500
 
 # ====== Helpers ======
 def _load_meta():
@@ -183,16 +173,18 @@ def periodic_sync():
 # ====== Bootstrap ======
 try:
     print("Bootstrap: init_db()")
-init_db()
+    init_db()
 
-# ⚠️ Only import CSV the first time (commented out after setup)
-# csv_path = Path(__file__).with_name("ota_properties_prefilled.csv")
-# if csv_path.exists():
-#     print(f"Bootstrap: importing CSV {csv_path}")
-#     importer.import_csv(str(csv_path))
+    # ⚠️ IMPORTANT: Do not auto-import CSV on every boot, it resets prices/rates.
+    # If you ever need to reimport, use /admin/reimport (see route below).
+    # csv_path = Path(__file__).with_name("ota_properties_prefilled.csv")
+    # if csv_path.exists():
+    #     print(f"Bootstrap: importing CSV {csv_path}")
+    #     importer.import_csv(str(csv_path))
 
-t = threading.Thread(target=periodic_sync, daemon=True)
-t.start()
+    if SINGLE_WORKER:
+        print("Starting periodic_sync thread (single worker)")
+        threading.Thread(target=periodic_sync, daemon=True).start()
     else:
         print("Skipping periodic_sync thread (multiple workers)")
 except Exception as e:
@@ -204,8 +196,6 @@ except Exception as e:
 def index():
     if "user" not in session:
         return redirect(url_for("login"))
-    # You likely have templates/dashboard.html
-    # If you only use React at /app, you can redirect there instead.
     db = SessionLocal()
     units = db.query(Unit).all()
     db.close()
@@ -272,7 +262,12 @@ def api_check_ical():
             continue
         try:
             r = requests.get(u.ical_url, timeout=12)
-            if r.status_code == 200 and ("BEGIN:VCALENDAR" in r.text or "BEGIN:VCALENDAR" in r.content.decode("utf-8", errors="ignore")):
+            ok_text = ""
+            try:
+                ok_text = r.text
+            except Exception:
+                ok_text = r.content.decode("utf-8", errors="ignore")
+            if r.status_code == 200 and ("BEGIN:VCALENDAR" in ok_text):
                 # quick count of events (best-effort)
                 try:
                     cal = ICal.from_ical(r.content)
@@ -336,17 +331,6 @@ def api_blocks():
             return jsonify({"ok":True})
     finally:
         db.close()
-
-@app.get("/admin/reimport")
-def admin_reimport():
-    if "user" not in session:
-        return "Login required", 401
-    try:
-        csv_path = Path(__file__).with_name("ota_properties_prefilled.csv")
-        importer.import_csv(str(csv_path))
-        return "CSV reimported successfully", 200
-    except Exception as e:
-        return f"Error: {e}", 500
 
 # ====== iCal export (per-unit) ======
 @app.route("/ical/export/<int:unit_id>.ics")
@@ -752,3 +736,17 @@ def admin_export_links():
                     f"<a target='_blank' href='{url}'>{url}</a></li>")
     html.append("</ul>")
     return "".join(html)
+
+# ====== Manual re-import (optional, only when you WANT to refresh CSV) ======
+@app.get("/admin/reimport")
+def admin_reimport():
+    if "user" not in session:
+        return "Login required", 401
+    try:
+        csv_path = Path(__file__).with_name("ota_properties_prefilled.csv")
+        if not csv_path.exists():
+            return "CSV not found", 404
+        importer.import_csv(str(csv_path))
+        return "CSV reimported successfully", 200
+    except Exception as e:
+        return f"Error: {e}", 500
