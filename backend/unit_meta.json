@@ -1,14 +1,49 @@
 {
-  "16": {
-    "display_name": "Amazing stay pool view seven sea2",
-    "image_url": "https://images.unsplash.com/photo-1505691723518-36a5ac3b2d73?q=80&w=1200&auto=format&fit=crop"
-  },
-  "17": {
-    "display_name": "Luxury stay Venetian",
-    "image_url": "https://images.unsplash.com/photo-1505691938895-1758d7feb511?q=80&w=1200&auto=format&fit=crop"
-  },
-  "18": {
-    "display_name": "Unixx floor 27 — Sea view",
-    "image_url": "https://images.unsplash.com/photo-1505691726540-36a5ac3b2d73?q=80&w=1200&auto=format&fit=crop"
+  "groups": {
+    "sevensea2": {
+      "title": "Amazing Stay Pool View Seven Sea 2",
+      "image_url": "https://images.unsplash.com/photo-1568605114967-8130f3a36994?q=80&w=1200&auto=format&fit=crop",
+      "unit_ids": [1, 2, 3]
+    },
+    "sevenseas2": {
+      "title": "Luxury Stay Seven Cote Azur",
+      "image_url": "https://images.unsplash.com/photo-1613977257363-707ba9348227?q=80&w=1200&auto=format&fit=crop",
+      "unit_ids": [4, 5, 6]
+    },
+    "sunshine-pool": {
+      "title": "Sunshine Pool Villa Sattahip",
+      "image_url": "https://images.unsplash.com/photo-1505691938895-1758d7feb511?q=80&w=1200&auto=format&fit=crop",
+      "unit_ids": [7, 8, 9]
+    },
+    "chillpool": {
+      "title": "Chill Pool Villa Sattahip",
+      "image_url": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=1200&auto=format&fit=crop",
+      "unit_ids": [10, 11, 12]
+    },
+    "unixx": {
+      "title": "Beautiful Stay Unixx FL27",
+      "image_url": "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=1200&auto=format&fit=crop",
+      "unit_ids": [13, 14, 15]
+    },
+    "venetian": {
+      "title": "Luxury Stay Venetian",
+      "image_url": "https://images.unsplash.com/photo-1590490360182-c33d57733427?q=80&w=1200&auto=format&fit=crop",
+      "unit_ids": [16, 17, 18]
+    },
+    "lumpini-park": {
+      "title": "Luxury Lumpini Jomtien Pattaya",
+      "image_url": "https://images.unsplash.com/photo-1618213837799-15d9c178fcd0?q=80&w=1200&auto=format&fit=crop",
+      "unit_ids": [19, 20, 21]
+    },
+    "lumpini-sea-view": {
+      "title": "Beautiful Seaview Lumpini",
+      "image_url": "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=1200&auto=format&fit=crop",
+      "unit_ids": [22, 23, 24]
+    },
+    "sevenseas-fl6": {
+      "title": "Happy Stay Seven Seas FL6",
+      "image_url": "https://images.unsplash.com/photo-1613553507747-5f0e2afc67b6?q=80&w=1200&auto=format&fit=crop",
+      "unit_ids": [25, 26, 27]
+    }
   }
 }
