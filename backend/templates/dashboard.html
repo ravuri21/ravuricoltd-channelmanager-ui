@@ -38,11 +38,15 @@
   <div class="container">
     <h2>All Units</h2>
 
-    <div class="row" style="justify-content:space-between;">
-      <button onclick="checkIcalStatus()" class="btn" style="background:#16a34a;">🔍 Check iCal Status</button>
+    <div class="row" style="justify-content:space-between; gap:8px; flex-wrap:wrap;">
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button onclick="checkIcalStatus()" class="btn" style="background:#16a34a;">🔍 Check iCal Status</button>
+        <button onclick="syncNow()" class="btn" title="Fetch all OTA iCals and mirror into DB">🔄 Sync All Calendars Now</button>
+      </div>
       <div class="muted">Use <b>Manage</b> to close/open dates. Toggle “Apply to all OTAs”.</div>
     </div>
     <div id="ical-results" style="margin-bottom:16px;font-family:system-ui,monospace;"></div>
+    <div id="sync-results" style="margin-bottom:16px;font-family:system-ui,monospace;"></div>
 
     <table>
       <tr>
@@ -176,6 +180,42 @@
     }
   }
 
+  async function syncNow(){
+    const box = document.getElementById("sync-results");
+    box.innerHTML = "<div style='padding:8px;'>⏳ Syncing all calendars…</div>";
+    try{
+      const res = await fetch("/api/admin/sync_now", { method:"POST" });
+      const j = await res.json();
+      if(!(res.ok && j.ok)){ throw new Error(j.error || "Failed"); }
+      const rows = j.summary || [];
+      let html = `
+        <table style='width:100%;border-collapse:collapse;margin-top:12px;'>
+          <tr style='background:#f0f0f0;'>
+            <th style='text-align:left;padding:8px;'>Unit</th>
+            <th style='text-align:left;padding:8px;'>OTA</th>
+            <th style='text-align:left;padding:8px;'>Property</th>
+            <th style='text-align:left;padding:8px;'>Result</th>
+          </tr>`;
+      for(const r of rows){
+        let color = "#111";
+        if(String(r.status).startsWith("OK")) color = "#16a34a";
+        if(String(r.status).startsWith("ERROR")) color = "#dc2626";
+        html += `
+          <tr>
+            <td style='padding:8px;border-bottom:1px solid #eee;'>${r.unit_id}</td>
+            <td style='padding:8px;border-bottom:1px solid #eee;'>${r.ota || ''}</td>
+            <td style='padding:8px;border-bottom:1px solid #eee;'>${r.property_id || ''}</td>
+            <td style='padding:8px;border-bottom:1px solid #eee;color:${color};font-weight:600;'>${r.status}</td>
+          </tr>`;
+      }
+      html += "</table>";
+      box.innerHTML = html;
+      try { await checkIcalStatus(); } catch(_){}
+    }catch(e){
+      box.innerHTML = "❌ Sync error: " + (e.message || e);
+    }
+  }
+
   async function saveIcal(id){
     const val = document.getElementById("in-"+id).value.trim();
     if(!/^https?:\/\/[^\s]+$/.test(val)){ alert("⚠️ Invalid iCal URL."); return; }
@@ -199,7 +239,6 @@
     const j = await r.json();
     if(j.ok){
       alert("Price saved ✅");
-      // Update the “Current” note inline without reload
       const note = document.querySelector(`#rate-${unitId}`).parentElement.querySelector(".price-note");
       if(note){ note.textContent = `Current: ฿ ${parseFloat(v).toFixed(0)} THB`; }
     }else{
