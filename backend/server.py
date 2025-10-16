@@ -209,21 +209,6 @@ def index():
         currency_map=currency_map,
         lang=session.get("lang", APP_LANG_DEFAULT)
     )
-    except TemplateNotFound:
-        # Fallback minimal admin list if dashboard.html is missing
-        db = SessionLocal()
-        units = db.query(Unit).all()
-        db.close()
-        rows = "".join(
-            f"<tr><td>{u.ota}</td><td>{u.property_id}</td>"
-            f"<td><a href='/r/{u.id}' target='_blank'>/r/{u.id}</a></td>"
-            f"<td>{u.ical_url or ''}</td></tr>"
-            for u in units
-        )
-        return (f"<h2>Admin — Units</h2><table border=1 cellpadding=6>"
-                f"<tr><th>OTA</th><th>Property</th><th>Public</th><th>iCal</th></tr>"
-                f"{rows}</table>"
-                f"<p><a href='/properties' target='_blank'>Public Properties</a></p>")
 
 @app.route("/login", methods=["GET","POST"])
 def login():
