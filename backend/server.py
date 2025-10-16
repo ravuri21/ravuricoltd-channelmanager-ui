@@ -3,7 +3,7 @@ import os, threading, time, requests, traceback, smtplib, json
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pathlib import Path
-from datetime import datetime, date, timedelta, timezone
+from datetime import datetime, date, timedelta
 
 from flask import (
     Flask, request, session, redirect, url_for,
@@ -175,12 +175,8 @@ try:
     print("Bootstrap: init_db()")
     init_db()
 
-    # ⚠️ IMPORTANT: Do not auto-import CSV on every boot, it resets prices/rates.
-    # If you ever need to reimport, use /admin/reimport (see route below).
-    # csv_path = Path(__file__).with_name("ota_properties_prefilled.csv")
-    # if csv_path.exists():
-    #     print(f"Bootstrap: importing CSV {csv_path}")
-    #     importer.import_csv(str(csv_path))
+    # ⚠️ IMPORTANT: Do NOT auto-import CSV on every boot (it resets prices).
+    # Seed manually once via /admin/reimport when DB is empty.
 
     if SINGLE_WORKER:
         print("Starting periodic_sync thread (single worker)")
@@ -358,21 +354,20 @@ def ical_export(unit_id):
     return (ics,200,{"Content-Type":"text/calendar; charset=utf-8",
                      "Content-Disposition":f'attachment; filename=unit-{unit_id}.ics'})
 
-# ====== Public / Grouped pages ======
+# ====== PUBLIC: Properties page (now open without login) ======
 @app.route("/properties")
 def properties_index():
-    if "user" not in session:
-        return redirect(url_for("login"))
+    # Public: no login required
     meta = _load_meta()
     groups = meta.get("groups", {})
 
-    # build "pending iCal" count per group
+    # Optional: show "pending iCal" counts
     db = SessionLocal()
     pending_map = {}
     try:
         for slug, info in groups.items():
             unit_ids = info.get("unit_ids", [])
-            if not unit_ids: 
+            if not unit_ids:
                 continue
             missing = db.query(Unit).filter(
                 Unit.id.in_(unit_ids),
@@ -385,6 +380,7 @@ def properties_index():
 
     return render_template("properties.html", groups=groups, pending_map=pending_map)
 
+# ====== Public property page ======
 @app.route("/prop/<slug>")
 def property_page(slug):
     info = _group_info(slug)
@@ -415,6 +411,7 @@ def property_page(slug):
         slug=slug
     )
 
+# ---- Availability (grouped): DB blocks + iCal events merged ----
 @app.route("/api/public/availability/<slug>", methods=["GET"])
 def api_public_availability(slug):
     info = _group_info(slug)
@@ -458,12 +455,13 @@ def api_public_availability(slug):
     unique = []
     for b in blocks_out:
         key = (b["start_date"], b["end_date"], b["unit_id"], b["source"])
-        if key in seen: 
+        if key in seen:
             continue
         seen.add(key); unique.append(b)
 
     return jsonify(unique)
 
+# ---- Stripe: create PaymentIntent for group (price × nights) ----
 @app.route("/api/public/create_intent/<slug>", methods=["POST"])
 def api_public_create_intent(slug):
     info = _group_info(slug)
@@ -473,6 +471,7 @@ def api_public_create_intent(slug):
     data = request.json or {}
     start = (data.get("start_date") or "").strip()
     end   = (data.get("end_date") or "").strip()
+
     if not (start and end):
         return jsonify({"error": "missing dates"}), 400
     if end <= start:
@@ -485,6 +484,7 @@ def api_public_create_intent(slug):
     db = SessionLocal()
     rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
     db.close()
+
     if not rp or not rp.base_rate:
         return jsonify({"error": "price not set for this property"}), 400
 
@@ -492,7 +492,7 @@ def api_public_create_intent(slug):
     if nights <= 0:
         return jsonify({"error": "nights must be > 0"}), 400
 
-    amount = int(round(rp.base_rate * nights * 100))  # THB→satang
+    amount = int(round(rp.base_rate * nights * 100))  # THB → satang
     currency = (rp.currency or "THB").lower()
 
     try:
@@ -505,6 +505,7 @@ def api_public_create_intent(slug):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+# ---- Public booking: grouped + per-unit ----
 @app.route("/api/public/book_group/<slug>", methods=["POST"])
 def public_book_group(slug):
     """Block dates across ALL unit_ids in the group (Airbnb+Booking+Agoda)."""
@@ -548,7 +549,6 @@ def public_book_group(slug):
         finally:
             db.close()
 
-        # Alert
         try:
             send_alert("New Direct Booking (Grouped)",
                        f"Property {slug}: {start}–{end} Guest: {name} ({email}) on {len(unit_ids)} OTA listings")
@@ -614,7 +614,6 @@ def public_book(unit_id):
             db.close()
             return jsonify({"error": "unit not found"}), 404
 
-        # Overlap guard
         if _overlaps(db, unit_id, start, end):
             db.close()
             return jsonify({"error": "Dates not available"}), 409
@@ -644,7 +643,8 @@ def admin_groups():
 
 @app.route("/admin/calendar/<slug>")
 def admin_calendar(slug):
-    """Admin visual calendar for a property group."""
+    if "user" not in session:
+        return redirect(url_for("login"))
     info = _group_info(slug)
     if not info:
         return "Property group not found", 404
@@ -654,7 +654,6 @@ def admin_calendar(slug):
 
 @app.route("/api/admin/toggle_day/<slug>", methods=["POST"])
 def api_admin_toggle_day(slug):
-    """Block or unblock ONE day across all units in the property group."""
     if "user" not in session:
         return jsonify({"error": "unauthorized"}), 401
 
@@ -669,7 +668,6 @@ def api_admin_toggle_day(slug):
     date_str = (data.get("date") or "").strip()
     action = (data.get("action") or "block").strip().lower()
 
-    # Expect YYYY-MM-DD
     try:
         dt = datetime.strptime(date_str, "%Y-%m-%d").date()
     except Exception:
@@ -681,7 +679,6 @@ def api_admin_toggle_day(slug):
     db = SessionLocal()
     try:
         if action == "block":
-            # Avoid duplicates: only create if not exists
             for uid in unit_ids:
                 exists = db.query(AvailabilityBlock).filter(
                     AvailabilityBlock.unit_id == uid,
@@ -701,7 +698,6 @@ def api_admin_toggle_day(slug):
             return jsonify({"ok": True})
 
         elif action == "unblock":
-            # remove ONLY single-day manual blocks we created for that date
             for uid in unit_ids:
                 q = db.query(AvailabilityBlock).filter(
                     AvailabilityBlock.unit_id == uid,
@@ -737,7 +733,7 @@ def admin_export_links():
     html.append("</ul>")
     return "".join(html)
 
-# ====== Manual re-import (optional, only when you WANT to refresh CSV) ======
+# ====== Manual re-import (seed DB once after moving to persistent disk) ======
 @app.get("/admin/reimport")
 def admin_reimport():
     if "user" not in session:
