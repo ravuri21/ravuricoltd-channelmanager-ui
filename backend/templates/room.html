@@ -383,6 +383,10 @@
       const j = await res.json();
       if(res.ok && j.ok){
         setMsg("✅ {{ t.booking_confirmed }}", true);
+        // NEW: make it obvious on mobile too
+        alert("✅ {{ t.booking_confirmed }}");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+
         clearSelection();
         if(slug) await loadAvailabilityViaSlug(slug);
       }else{
