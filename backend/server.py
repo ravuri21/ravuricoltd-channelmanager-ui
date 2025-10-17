@@ -30,6 +30,50 @@ STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 # Run background sync thread only once
 SINGLE_WORKER = os.getenv("WEB_CONCURRENCY", "1") == "1"
 
+# ====== Public i18n (EN/TH) ======
+LANGS = {
+    "en": {
+        "brand": "RavuriCo Stays",
+        "our_properties": "Our Properties",
+        "tap_to_check": "Tap a property to check availability and book.",
+        "check_availability": "Check availability",
+        "per_night": "/ night",
+        "currency": "THB",
+        "book_pay": "Book & Pay",
+        "legend_available": "Available",
+        "legend_booked": "Booked",
+        "legend_selected": "Selected",
+        "calendar_hint": "Tap the calendar to choose check-in and check-out. Red = booked, Green = available.",
+        "powered_by": "Powered by RavuriCo Ltd",
+    },
+    "th": {
+        "brand": "RavuriCo Stays",
+        "our_properties": "ที่พักของเรา",
+        "tap_to_check": "แตะเพื่อดูปฏิทินและจองได้เลย",
+        "check_availability": "เช็ควันว่าง",
+        "per_night": "/ คืน",
+        "currency": "THB",
+        "book_pay": "ชำระเงินและจอง",
+        "legend_available": "ว่าง",
+        "legend_booked": "ไม่ว่าง",
+        "legend_selected": "วันที่เลือก",
+        "calendar_hint": "แตะปฏิทินเพื่อเลือกวันเข้าและวันออก ตัวแดง = ถูกจองแล้ว, เขียว = ว่าง",
+        "powered_by": "พัฒนาโดย RavuriCo Ltd",
+    }
+}
+
+def get_public_lang():
+    code = session.get("lang_public") or os.environ.get("APP_LANG_DEFAULT", "en")
+    return "th" if code == "th" else "en"
+
+@app.route("/langpub/<code>")
+def langpub(code):
+    code = code.lower()
+    if code in ("en", "th"):
+        session["lang_public"] = code
+    ref = request.headers.get("Referer")
+    return redirect(ref or url_for("properties_index"))
+
 # ====== Email alerts (optional) ======
 def send_alert(subject, body):
     try:
@@ -220,7 +264,7 @@ def sync_calendars_for_group(slug):
     finally:
         db.close()
 
-@app.route("/api/admin/sync_now", methods=["POST"])
+@app.post("/api/admin/sync_now")
 def api_admin_sync_now():
     if "user" not in session:
         return jsonify({"error": "unauthorized"}), 401
@@ -231,7 +275,7 @@ def api_admin_sync_now():
         traceback.print_exc()
         return jsonify({"ok": False, "error": str(e)}), 500
 
-@app.route("/api/admin/sync_property/<slug>", methods=["POST"])
+@app.post("/api/admin/sync_property/<slug>")
 def api_admin_sync_property(slug):
     if "user" not in session:
         return jsonify({"error": "unauthorized"}), 401
@@ -240,37 +284,18 @@ def api_admin_sync_property(slug):
         return jsonify(res), 400
     return jsonify(res)
 
-# ====== Bootstrap (auto-seed DB if empty) ======
+# ====== Bootstrap ======
 try:
     print("Bootstrap: init_db()")
     init_db()
-
-    # AUTO-SEED: If the DB has zero units, import CSV once.
-    try:
-        from sqlalchemy import func as _func
-        _db = SessionLocal()
-        try:
-            existing = _db.query(_func.count(Unit.id)).scalar() or 0
-        finally:
-            _db.close()
-        if existing == 0:
-            csv_path = Path(__file__).with_name("ota_properties_prefilled.csv")
-            if csv_path.exists():
-                print(f"Bootstrap: DB empty → importing CSV {csv_path}")
-                importer.import_csv(str(csv_path))
-            else:
-                print("Bootstrap: DB empty but CSV missing at backend/ota_properties_prefilled.csv")
-        else:
-            print(f"Bootstrap: DB already has {existing} unit(s); skipping auto-seed")
-    except Exception as se:
-        print("Bootstrap auto-seed error:", se)
+    # ⚠️ IMPORTANT: Do NOT auto-import CSV on every boot (it resets prices).
+    # Seed manually once via /admin/reimport when DB is empty.
 
     if SINGLE_WORKER:
         print("Starting periodic_sync thread (single worker)")
         threading.Thread(target=periodic_sync, daemon=True).start()
     else:
         print("Skipping periodic_sync thread (multiple workers)")
-
 except Exception as e:
     print("Bootstrap error:", e)
     traceback.print_exc()
@@ -339,11 +364,8 @@ def api_update_ical(unit_id):
     db = SessionLocal()
     u = db.query(Unit).filter(Unit.id==unit_id).first()
     if not u:
-        db.close()
-        return jsonify({"error":"not found"}),404
-    u.ical_url = new_url
-    db.commit()
-    db.close()
+        db.close(); return jsonify({"error":"not found"}),404
+    u.ical_url = new_url; db.commit(); db.close()
     return jsonify({"ok":True})
 
 @app.route("/api/check_ical")
@@ -360,6 +382,7 @@ def api_check_ical():
             continue
         try:
             r = requests.get(u.ical_url, timeout=12)
+            ok_text = ""
             try:
                 ok_text = r.text
             except Exception:
@@ -389,13 +412,10 @@ def api_rates():
     db=SessionLocal()
     rp=db.query(RatePlan).filter(RatePlan.unit_id==unit_id).first()
     if not rp:
-        rp=RatePlan(unit_id=unit_id,base_rate=base_rate,currency=currency)
-        db.add(rp)
+        rp=RatePlan(unit_id=unit_id,base_rate=base_rate,currency=currency); db.add(rp)
     else:
-        rp.base_rate=base_rate
-        rp.currency=currency
-    db.commit()
-    db.close()
+        rp.base_rate=base_rate; rp.currency=currency
+    db.commit(); db.close()
     return jsonify({"ok":True})
 
 @app.route("/api/blocks", methods=["GET","POST","DELETE"])
@@ -407,15 +427,9 @@ def api_blocks():
         if request.method=="GET":
             unit_id=request.args.get("unit_id",type=int)
             q=db.query(AvailabilityBlock)
-            if unit_id:
-                q=q.filter(AvailabilityBlock.unit_id==unit_id)
+            if unit_id: q=q.filter(AvailabilityBlock.unit_id==unit_id)
             rows=q.order_by(AvailabilityBlock.start_date.desc()).all()
-            return jsonify([{
-                "id":b.id,"unit_id":b.unit_id,
-                "start_date":b.start_date,"end_date":b.end_date,
-                "source":b.source,"note":b.note
-            } for b in rows])
-
+            return jsonify([{"id":b.id,"unit_id":b.unit_id,"start_date":b.start_date,"end_date":b.end_date,"source":b.source,"note":b.note} for b in rows])
         if request.method=="POST":
             data=request.json or {}
             b=AvailabilityBlock(
@@ -425,19 +439,14 @@ def api_blocks():
                 source=data.get("source","manual"),
                 note=data.get("note","")
             )
-            db.add(b)
-            db.commit()
+            db.add(b); db.commit()
             send_alert("New Manual Block", f"Unit {b.unit_id}: {b.start_date}–{b.end_date} ({b.source}) {b.note}")
             return jsonify({"ok":True,"id":b.id})
-
         if request.method=="DELETE":
             bid=request.args.get("id",type=int)
-            if not bid:
-                return jsonify({"error":"id required"}),400
+            if not bid: return jsonify({"error":"id required"}),400
             b=db.query(AvailabilityBlock).filter(AvailabilityBlock.id==bid).first()
-            if b:
-                db.delete(b)
-                db.commit()
+            if b: db.delete(b); db.commit()
             return jsonify({"ok":True})
     finally:
         db.close()
@@ -449,8 +458,7 @@ def ical_export(unit_id):
     u=db.query(Unit).filter(Unit.id==unit_id).first()
     blocks=db.query(AvailabilityBlock).filter(AvailabilityBlock.unit_id==unit_id).all()
     db.close()
-    if not u:
-        return "Not found",404
+    if not u: return "Not found",404
     lines=[
         "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//ravuricoltd//channel-manager//EN"
     ]
@@ -473,7 +481,6 @@ def ical_export(unit_id):
 def properties_index():
     """
     Public grid of properties with price (uses the first unit's RatePlan).
-    Hides any admin details.
     """
     meta = _load_meta()
     groups = meta.get("groups", {})
@@ -494,8 +501,10 @@ def properties_index():
     finally:
         db.close()
 
-    # We no longer surface "pending iCal" to the public page
-    return render_template("properties.html", groups=groups, group_prices=group_prices)
+    lang = get_public_lang()
+    t = LANGS[lang]
+    return render_template("properties.html", groups=groups, group_prices=group_prices, t=t, lang=lang)
+
 # ====== Public property page ======
 @app.route("/prop/<slug>")
 def property_page(slug):
@@ -517,6 +526,8 @@ def property_page(slug):
             price = rp.base_rate
             currency = rp.currency or "THB"
 
+    lang = get_public_lang()
+    t = LANGS[lang]
     return render_template(
         "room.html",
         title=title,
@@ -524,7 +535,9 @@ def property_page(slug):
         price=price,
         currency=currency,
         publishable_key=STRIPE_PUBLISHABLE_KEY,
-        slug=slug
+        slug=slug,
+        t=t,
+        lang=lang,
     )
 
 # ---- Availability (grouped): DB blocks + iCal events merged ----
@@ -573,8 +586,7 @@ def api_public_availability(slug):
         key = (b["start_date"], b["end_date"], b["unit_id"], b["source"])
         if key in seen:
             continue
-        seen.add(key)
-        unique.append(b)
+        seen.add(key); unique.append(b)
 
     return jsonify(unique)
 
@@ -703,13 +715,17 @@ def room(unit_id):
     price = rp.base_rate if rp else None
     currency = rp.currency if rp else "THB"
 
+    lang = get_public_lang()
+    t = LANGS[lang]
     return render_template(
         "room.html",
         title=display_name,
         image_url=image_url,
         price=price,
         currency=currency,
-        publishable_key=STRIPE_PUBLISHABLE_KEY
+        publishable_key=STRIPE_PUBLISHABLE_KEY,
+        t=t,
+        lang=lang
     )
 
 @app.route("/api/public/book/<int:unit_id>", methods=["POST"])
@@ -735,13 +751,7 @@ def public_book(unit_id):
             db.close()
             return jsonify({"error": "Dates not available"}), 409
 
-        db.add(AvailabilityBlock(
-            unit_id=unit_id,
-            start_date=start,
-            end_date=end,
-            source="direct",
-            note=f"Guest: {name} {email}"
-        ))
+        db.add(AvailabilityBlock(unit_id=unit_id, start_date=start, end_date=end, source="direct", note=f"Guest: {name} {email}"))
         db.commit()
         db.close()
         send_alert("New Direct Booking", f"Unit {unit_id}: {start}–{end} Guest: {name} ({email})")
@@ -856,7 +866,7 @@ def admin_export_links():
     html.append("</ul>")
     return "".join(html)
 
-# ====== Manual re-import (still available if you ever need it) ======
+# ====== Manual re-import (seed DB once after moving to persistent disk) ======
 @app.get("/admin/reimport")
 def admin_reimport():
     if "user" not in session:
