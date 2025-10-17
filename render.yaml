@@ -4,53 +4,57 @@ services:
     env: python
     plan: free
 
+    # Build should ONLY install deps. Do NOT import CSV here (it resets DB on every deploy).
     buildCommand: |
       pip install -r requirements.txt
-      python backend/import_properties.py backend/ota_properties_prefilled.csv
       mkdir -p backend/static/app
 
-    startCommand: gunicorn -w 2 -k gthread --threads 8 --timeout 120 --keep-alive 5 --chdir backend -b 0.0.0.0:$PORT server:app
+    # SQLite works best with ONE gunicorn process; threads are fine.
+    startCommand: gunicorn -w 1 -k gthread --threads 8 --timeout 120 --keep-alive 5 --chdir backend -b 0.0.0.0:$PORT server:app
 
+    # Health check so Render won't time out.
     healthCheckPath: /health
 
     envVars:
-      # --- REQUIRED ---
+      # --- REQUIRED (set REAL values in Render dashboard; keep placeholders in git) ---
       - key: SECRET_KEY
-        value: mysecretkey12345
+        value: ${SECRET_KEY}
       - key: ADMIN_EMAIL
-        value: pradeep@ravuricoltd.com
+        value: ${ADMIN_EMAIL}
       - key: ADMIN_PASSWORD
-        value: Radhika1
+        value: ${ADMIN_PASSWORD}
       - key: APP_LANG_DEFAULT
         value: en
       - key: TZ
         value: Asia/Bangkok
+
+      # Keep a single process for SQLite stability
       - key: WEB_CONCURRENCY
-        value: "2"
+        value: "1"
 
-      # --- STRIPE LIVE KEYS (replace with your real ones from Stripe) ---
+      # --- STRIPE (set your keys in Render env) ---
       - key: STRIPE_SECRET_KEY
-        value: sk_live_xxxxxxxxxxxxxxxxxxxxxxxxx
+        value: ${STRIPE_SECRET_KEY}
       - key: STRIPE_PUBLISHABLE_KEY
-        value: pk_live_xxxxxxxxxxxxxxxxxxxxxxxxx
+        value: ${STRIPE_PUBLISHABLE_KEY}
 
-      # --- EMAIL ALERT SETTINGS ---
+      # --- EMAIL ALERT SETTINGS (optional; set in Render env) ---
       - key: SMTP_SERVER
-        value: smtp.gmail.com
+        value: ${SMTP_SERVER}
       - key: SMTP_PORT
-        value: "587"
+        value: ${SMTP_PORT}
       - key: SMTP_USER
-        value: rppchowdary@gmail.com
+        value: ${SMTP_USER}
       - key: SMTP_PASSWORD
-        value: atcnjjugbspoxzhc
+        value: ${SMTP_PASSWORD}
       - key: ALERT_TO
-        value: pradeep@ravuricoltd.com
+        value: ${ALERT_TO}
 
-      # --- DATABASE ---
+      # --- DATABASE on persistent disk ---
       - key: DATABASE_URL
         value: sqlite:////var/data/channel_manager.db
 
-    # --- PERSISTENT STORAGE ---
+    # Persistent disk so your SQLite DB survives restarts/redeploys.
     disk:
       name: data
       mountPath: /var/data
