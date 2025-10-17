@@ -1,7 +1,5 @@
 # backend/server.py
-import os, threading, time, requests, traceback, smtplib, json
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import os, threading, time, requests, traceback, json
 from pathlib import Path
 from datetime import datetime, date, timedelta
 
@@ -27,6 +25,10 @@ APP_LANG_DEFAULT = os.environ.get("APP_LANG_DEFAULT", "en")
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 
+# Run background sync thread only once (SQLite-safe)
+SINGLE_WORKER = os.getenv("WEB_CONCURRENCY", "1") == "1"
+
+# ====== Small UI context for templates (brand + Stripe mode) ======
 def _ui_ctx():
     """Common UI context for templates (brand + Stripe mode)."""
     pk = (STRIPE_PUBLISHABLE_KEY or "").strip()
@@ -39,8 +41,62 @@ def _ui_ctx():
         }
     }
 
-# One worker recommended on free plan; also ensures single background thread
-SINGLE_WORKER = os.getenv("WEB_CONCURRENCY", "1") == "1"
+# ====== Resend email helpers (no SMTP required) ======
+def send_alert(subject, body):
+    """Admin alert via Resend only (no SMTP)."""
+    try:
+        provider = os.getenv("EMAIL_PROVIDER", "resend").lower()
+        api_key = os.getenv("RESEND_API_KEY", "").strip()
+        email_from = os.getenv("EMAIL_FROM", "RavuriCo <onboarding@resend.dev>")
+        alert_to = os.getenv("ALERT_TO", "").strip()
+
+        if provider != "resend":
+            print("⚠️ EMAIL_PROVIDER is not 'resend' — alert suppressed")
+            return
+        if not (api_key and alert_to):
+            print("⚠️ Resend not configured: missing RESEND_API_KEY or ALERT_TO")
+            return
+
+        r = requests.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "from": email_from,
+                "to": [alert_to],
+                "subject": subject,
+                "text": body,
+            },
+            timeout=12,
+        )
+        r.raise_for_status()
+        print(f"📧 Alert email sent to {alert_to} via Resend")
+    except Exception as e:
+        print(f"❌ Resend alert error: {e}")
+
+def send_mail(to_email: str, subject: str, body: str):
+    """Generic email via Resend only (used for guest confirmations)."""
+    provider = os.getenv("EMAIL_PROVIDER", "resend").lower()
+    api_key = os.getenv("RESEND_API_KEY", "").strip()
+    email_from = os.getenv("EMAIL_FROM", "RavuriCo <onboarding@resend.dev>")
+
+    if provider != "resend":
+        raise RuntimeError("EMAIL_PROVIDER must be 'resend' for send_mail")
+    if not (api_key and to_email):
+        raise RuntimeError("Missing RESEND_API_KEY or recipient email")
+
+    r = requests.post(
+        "https://api.resend.com/emails",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json={
+            "from": email_from,
+            "to": [to_email],
+            "subject": subject,
+            "text": body,
+        },
+        timeout=12,
+    )
+    r.raise_for_status()
+    return True
 
 # ====== Helpers ======
 def _load_meta():
@@ -102,156 +158,6 @@ def fetch_ical(ical_url):
     except Exception as e:
         print("iCal fetch error:", e)
         return []
-
-# ====== Email sending (Resend API first, fallback to SMTP if needed) ======
-def _smtp_send(to_addr: str, subject: str, html_body: str, text_body: str = None):
-    """Try Gmail SMTP (587 STARTTLS, then 465 SSL). Kept for fallback."""
-    import smtplib, ssl
-
-    def _get(name, default=""):
-        v = os.environ.get(name, default)
-        return (v or "").strip()
-
-    smtp_server = _get("SMTP_SERVER")
-    smtp_port_s = _get("SMTP_PORT", "587")
-    smtp_user   = _get("SMTP_USER")
-    smtp_pass   = _get("SMTP_PASSWORD")
-    to_addr     = (to_addr or "").strip()
-
-    if not (smtp_server and smtp_user and smtp_pass and to_addr):
-        print("⚠️ SMTP missing values; skipping SMTP")
-        return False
-
-    msg = MIMEMultipart("alternative")
-    msg["From"] = smtp_user
-    msg["To"] = to_addr
-    msg["Subject"] = subject
-    if text_body:
-        msg.attach(MIMEText(text_body, "plain", "utf-8"))
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
-
-    # try STARTTLS 587 then SSL 465
-    try:
-        with smtplib.SMTP(smtp_server, 587, timeout=20) as s:
-            s.ehlo(); s.starttls(context=ssl.create_default_context()); s.ehlo()
-            s.login(smtp_user, smtp_pass)
-            s.send_message(msg)
-        print(f"📧 SMTP sent via {smtp_server}:587 → {to_addr}")
-        return True
-    except Exception as e:
-        print("❌ SMTP 587 failed:", repr(e))
-
-    try:
-        with smtplib.SMTP_SSL(smtp_server, 465, context=ssl.create_default_context(), timeout=20) as s:
-            s.login(smtp_user, smtp_pass)
-            s.send_message(msg)
-        print(f"📧 SMTP sent via {smtp_server}:465 → {to_addr}")
-        return True
-    except Exception as e:
-        print("❌ SMTP 465 failed:", repr(e))
-        return False
-
-
-def send_mail(to_addr: str, subject: str, html_body: str, text_body: str = None):
-    """
-    Primary: Resend (HTTPS) — works on Render free tier.
-    Fallback: SMTP (if you ever move to a host that allows SMTP ports).
-    """
-    provider = (os.environ.get("EMAIL_PROVIDER", "resend") or "resend").strip().lower()
-    if provider == "resend":
-        api_key = (os.environ.get("RESEND_API_KEY", "") or "").strip()
-        from_email = (os.environ.get("EMAIL_FROM", "") or os.environ.get("SMTP_USER", "") or "").strip()
-        if api_key and from_email and to_addr:
-            try:
-                r = requests.post(
-                    "https://api.resend.com/emails",
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "from": from_email,
-                        "to": [to_addr],
-                        "subject": subject,
-                        "html": html_body,
-                        "text": text_body or "",
-                    },
-                    timeout=20
-                )
-                if r.status_code in (200, 201):
-                    print(f"📧 Resend sent → {to_addr}")
-                    return True
-                print(f"❌ Resend failed: {r.status_code} {r.text[:200]}")
-            except Exception as e:
-                print("❌ Resend exception:", repr(e))
-        else:
-            print("⚠️ Resend missing values; skipping:", {
-                "RESEND_API_KEY": bool(api_key),
-                "EMAIL_FROM": bool(from_email),
-                "TO": bool(to_addr)
-            })
-    # fallback
-    return _smtp_send(to_addr, subject, html_body, text_body)
-
-
-def send_alert(subject, body):
-    """Admin alert via Resend only."""
-    try:
-        provider = os.getenv("EMAIL_PROVIDER", "resend").lower()
-        api_key = os.getenv("RESEND_API_KEY", "").strip()
-        email_from = os.getenv("EMAIL_FROM", "RavuriCo <onboarding@resend.dev>")
-        alert_to = os.getenv("ALERT_TO", "").strip()
-
-        if provider != "resend":
-            print("⚠️ EMAIL_PROVIDER is not 'resend' — alert suppressed")
-            return
-        if not (api_key and alert_to):
-            print("⚠️ Resend not configured: missing RESEND_API_KEY or ALERT_TO")
-            return
-
-        import requests
-        r = requests.post(
-            "https://api.resend.com/emails",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={
-                "from": email_from,
-                "to": [alert_to],
-                "subject": subject,
-                "text": body,
-            },
-            timeout=12,
-        )
-        r.raise_for_status()
-        print(f"📧 Alert email sent to {alert_to} via Resend")
-    except Exception as e:
-        print(f"❌ Resend alert error: {e}")
-
-
-def send_mail(to_email: str, subject: str, body: str):
-    """Generic email via Resend only."""
-    provider = os.getenv("EMAIL_PROVIDER", "resend").lower()
-    api_key = os.getenv("RESEND_API_KEY", "").strip()
-    email_from = os.getenv("EMAIL_FROM", "RavuriCo <onboarding@resend.dev>")
-
-    if provider != "resend":
-        raise RuntimeError("EMAIL_PROVIDER must be 'resend' for send_mail")
-    if not (api_key and to_email):
-        raise RuntimeError("Missing RESEND_API_KEY or recipient email")
-
-    import requests
-    r = requests.post(
-        "https://api.resend.com/emails",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={
-            "from": email_from,
-            "to": [to_email],
-            "subject": subject,
-            "text": body,
-        },
-        timeout=12,
-    )
-    r.raise_for_status()
-    return True
 
 # ====== Background iCal sync → write to DB ======
 def _sync_units(db, units):
@@ -500,7 +406,7 @@ def api_rates():
     data=request.json or {}
     unit_id=data.get("unit_id")
     base_rate=float(data.get("base_rate",0))
-    currency=(data.get("currency") or "THB").upper()
+    currency=data.get("currency","THB")
     db=SessionLocal()
     rp=db.query(RatePlan).filter(RatePlan.unit_id==unit_id).first()
     if not rp:
@@ -568,27 +474,37 @@ def ical_export(unit_id):
     return (ics,200,{"Content-Type":"text/calendar; charset=utf-8",
                      "Content-Disposition":f'attachment; filename=unit-{unit_id}.ics'})
 
-# ====== PUBLIC: Properties page ======
+# ====== PUBLIC: Properties page (public) ======
 @app.route("/properties")
 def properties_index():
     meta = _load_meta()
     groups = meta.get("groups", {})
 
-    # price preview row (uses first unit's rate)
-    price_map = {}
+    # Optional: show "pending iCal" counts + price per property (first unit's rate)
     db = SessionLocal()
+    pending_map = {}
+    price_map = {}
     try:
         for slug, info in groups.items():
             unit_ids = info.get("unit_ids", [])
             if not unit_ids:
                 continue
+            # pending iCal
+            missing = db.query(Unit).filter(
+                Unit.id.in_(unit_ids),
+                (Unit.ical_url == None) | (Unit.ical_url == "")
+            ).count()
+            if missing:
+                pending_map[slug] = missing
+
+            # property price from first unit (if set)
             rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
             if rp:
                 price_map[slug] = {"price": rp.base_rate, "currency": rp.currency or "THB"}
     finally:
         db.close()
 
-    return render_template("properties.html", groups=groups, price_map=price_map)
+    return render_template("properties.html", groups=groups, pending_map=pending_map, price_map=price_map, **_ui_ctx())
 
 # ====== Public property page ======
 @app.route("/prop/<slug>")
@@ -612,15 +528,15 @@ def property_page(slug):
             currency = rp.currency or "THB"
 
     return render_template(
-    "room.html",
-    title=title,
-    image_url=image_url,
-    price=price,
-    currency=currency,
-    publishable_key=STRIPE_PUBLISHABLE_KEY,
-    slug=slug,
-    **_ui_ctx()
-)
+        "room.html",
+        title=title,
+        image_url=image_url,
+        price=price,
+        currency=currency,
+        publishable_key=STRIPE_PUBLISHABLE_KEY,
+        slug=slug,
+        **_ui_ctx()
+    )
 
 # ---- Availability (grouped): DB blocks + iCal events merged ----
 @app.route("/api/public/availability/<slug>", methods=["GET"])
@@ -719,7 +635,7 @@ def api_public_create_intent(slug):
 # ---- Public booking: grouped + per-unit ----
 @app.route("/api/public/book_group/<slug>", methods=["POST"])
 def public_book_group(slug):
-    """Block dates across ALL unit_ids in the group (Airbnb+Booking+Agoda) and email guest/admin."""
+    """Block dates across ALL unit_ids in the group (Airbnb+Booking+Agoda)."""
     try:
         info = _group_info(slug)
         if not info:
@@ -760,19 +676,24 @@ def public_book_group(slug):
         finally:
             db.close()
 
-        # email guest
-        guest_subject = f"Booking confirmed — {info.get('title', slug)}"
-        guest_html = f"""
-          <h2>Booking confirmed ✅</h2>
-          <p><b>Property:</b> {info.get('title', slug)}</p>
-          <p><b>Dates:</b> {start} → {end}</p>
-          <p>Thank you {name}! We look forward to hosting you.</p>
-        """
-        send_mail(email, guest_subject, guest_html, f"Booking confirmed: {slug} {start}→{end}")
+        # Send emails (guest + admin)
+        try:
+            send_mail(
+                email,
+                f"Booking confirmed — {info.get('title', slug)}",
+                f"Hi {name},\n\nYour booking is confirmed for {info.get('title', slug)}.\n"
+                f"Check-in: {start}\nCheck-out: {end}\n\nThank you!\nRavuriCo"
+            )
+        except Exception as e:
+            print("guest email error:", e)
 
-        # email admin
-        send_alert("New Direct Booking (Grouped)",
-                   f"Property {slug}: {start}–{end} Guest: {name} ({email}) on {len(unit_ids)} OTA listings")
+        try:
+            send_alert(
+                "New Direct Booking (Grouped)",
+                f"Property {slug}: {start}–{end} Guest: {name} ({email}) on {len(unit_ids)} OTA listings"
+            )
+        except Exception as e:
+            print("alert error:", e)
 
         return jsonify({"ok": True})
     except Exception as e:
@@ -781,7 +702,6 @@ def public_book_group(slug):
 
 @app.route("/api/public/book/<int:unit_id>", methods=["POST"])
 def public_book(unit_id):
-    """Legacy single-unit booking (kept for /r/<id> tests); also emails guest/admin."""
     try:
         data = request.json or {}
         start = (data.get("start_date") or "").strip()
@@ -803,21 +723,25 @@ def public_book(unit_id):
             db.close()
             return jsonify({"error": "Dates not available"}), 409
 
-        db.add(AvailabilityBlock(unit_id=unit_id, start_date=start, end_date=end, source="direct", note=f"Guest: {name} {email}"))
+        db.add(AvailabilityBlock(
+            unit_id=unit_id, start_date=start, end_date=end,
+            source="direct", note=f"Guest: {name} {email}"
+        ))
         db.commit()
         db.close()
 
-        # email guest
-        guest_subject = f"Booking confirmed — Unit {unit_id}"
-        guest_html = f"""
-          <h2>Booking confirmed ✅</h2>
-          <p><b>Unit:</b> {unit_id}</p>
-          <p><b>Dates:</b> {start} → {end}</p>
-          <p>Thank you {name}! We look forward to hosting you.</p>
-        """
-        send_mail(email, guest_subject, guest_html, f"Booking confirmed: unit {unit_id} {start}→{end}")
+        # Emails (guest + admin)
+        display = f"{u.ota} — {u.property_id}" if u else f"Unit {unit_id}"
+        try:
+            send_mail(
+                email,
+                f"Booking confirmed — {display}",
+                f"Hi {name},\n\nYour booking is confirmed.\n"
+                f"Check-in: {start}\nCheck-out: {end}\n\nThank you!\nRavuriCo"
+            )
+        except Exception as e:
+            print("guest email error:", e)
 
-        # email admin
         send_alert("New Direct Booking", f"Unit {unit_id}: {start}–{end} Guest: {name} ({email})")
         return jsonify({"ok": True})
     except Exception as e:
@@ -930,7 +854,7 @@ def admin_export_links():
     html.append("</ul>")
     return "".join(html)
 
-# ====== Manual re-import (seed DB once after moving to ephemeral disk) ======
+# ====== Manual re-import (seed DB once if needed) ======
 @app.get("/admin/reimport")
 def admin_reimport():
     if "user" not in session:
@@ -944,7 +868,7 @@ def admin_reimport():
     except Exception as e:
         return f"Error: {e}", 500
 
-# ====== Admin: test email ======
+# ====== Admin: Test email via Resend ======
 @app.get("/admin/test_email")
 def admin_test_email():
     if "user" not in session:
@@ -957,39 +881,3 @@ def admin_test_email():
         return f"OK: sent to {to_addr}", 200
     except Exception as e:
         return f"Failed: {e}", 500
-
-# ---------- Legacy public pages (for admin/testing) ----------
-@app.route("/r")
-def list_public_links():
-    db = SessionLocal()
-    rows = db.query(Unit).all()
-    db.close()
-    html = ["<h2>Public Links</h2><ul>"]
-    for u in rows:
-        html.append(f'<li><a href="/r/{u.id}" target="_blank">/r/{u.id}</a> — {u.ota} / {u.property_id}</li>')
-    html.append("</ul>")
-    return "".join(html)
-
-@app.route("/r/<int:unit_id>")
-def room(unit_id):
-    db = SessionLocal()
-    u = db.query(Unit).filter(Unit.id == unit_id).first()
-    rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_id).first()
-    db.close()
-    if not u:
-        return "Not found", 404
-
-    display_name = f"{u.ota} — {u.property_id}"
-    image_url = "https://source.unsplash.com/featured/?pattaya,villa"
-    price = rp.base_rate if rp else None
-    currency = (rp.currency if rp else "THB") or "THB"
-
-    return render_template(
-    "room.html",
-    title=display_name,
-    image_url=image_url,
-    price=price,
-    currency=currency,
-    publishable_key=STRIPE_PUBLISHABLE_KEY,
-    **_ui_ctx()
-)
