@@ -27,6 +27,18 @@ APP_LANG_DEFAULT = os.environ.get("APP_LANG_DEFAULT", "en")
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 
+def _ui_ctx():
+    """Common UI context for templates (brand + Stripe mode)."""
+    pk = (STRIPE_PUBLISHABLE_KEY or "").strip()
+    mode = "Test" if pk.startswith("pk_test_") else ("Live" if pk.startswith("pk_live_") else "Off")
+    return {
+        "t": {
+            "brand": "RavuriCo",
+            "stripe_mode": mode,
+            "stripe_pk": pk,
+        }
+    }
+
 # One worker recommended on free plan; also ensures single background thread
 SINGLE_WORKER = os.getenv("WEB_CONCURRENCY", "1") == "1"
 
@@ -600,14 +612,15 @@ def property_page(slug):
             currency = rp.currency or "THB"
 
     return render_template(
-        "room.html",
-        title=title,
-        image_url=image_url,
-        price=price,
-        currency=currency,
-        publishable_key=STRIPE_PUBLISHABLE_KEY,
-        slug=slug
-    )
+    "room.html",
+    title=title,
+    image_url=image_url,
+    price=price,
+    currency=currency,
+    publishable_key=STRIPE_PUBLISHABLE_KEY,
+    slug=slug,
+    **_ui_ctx()
+)
 
 # ---- Availability (grouped): DB blocks + iCal events merged ----
 @app.route("/api/public/availability/<slug>", methods=["GET"])
@@ -972,10 +985,11 @@ def room(unit_id):
     currency = (rp.currency if rp else "THB") or "THB"
 
     return render_template(
-        "room.html",
-        title=display_name,
-        image_url=image_url,
-        price=price,
-        currency=currency,
-        publishable_key=STRIPE_PUBLISHABLE_KEY
-    )
+    "room.html",
+    title=display_name,
+    image_url=image_url,
+    price=price,
+    currency=currency,
+    publishable_key=STRIPE_PUBLISHABLE_KEY,
+    **_ui_ctx()
+)
