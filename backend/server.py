@@ -3,11 +3,11 @@ import os, threading, time, requests, traceback, smtplib, json
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pathlib import Path
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 
 from flask import (
     Flask, request, session, redirect, url_for,
-    render_template, jsonify
+    render_template, jsonify, Response
 )
 from icalendar import Calendar as ICal
 import stripe
@@ -208,10 +208,7 @@ def _overlaps(db, unit_id: int, start: str, end: str) -> bool:
     return db.query(q.exists()).scalar()
 
 def fetch_ical(ical_url):
-    """
-    Lightweight fetch for public availability merge endpoint.
-    Background sync uses a more robust parser below.
-    """
+    """Lightweight fetch for public availability merge endpoint."""
     try:
         resp = requests.get(ical_url, timeout=12)
         resp.raise_for_status()
@@ -228,6 +225,55 @@ def fetch_ical(ical_url):
     except Exception as e:
         print("iCal fetch error:", e)
         return []
+
+def _group_last_synced(unit_ids):
+    """Return the most recent last_sync across the group's units (string Bangkok time)."""
+    if not unit_ids:
+        return None
+    db = SessionLocal()
+    try:
+        rows = db.query(Unit).filter(Unit.id.in_(unit_ids)).all()
+        latest = None
+        for u in rows:
+            if u.last_sync:
+                if latest is None or u.last_sync > latest:
+                    latest = u.last_sync
+        if not latest:
+            return None
+        # Render as Asia/Bangkok local string
+        try:
+            # last_sync from DB is naive or UTC; show yyyy-mm-dd hh:mm
+            return latest.strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            return str(latest)
+    finally:
+        db.close()
+
+def _inject_badges(html: str, show_test: bool, last_synced_text: str | None):
+    """
+    Injects small floating badges just before </body> so we don't need to edit templates.
+    - show_test: True -> show 'Stripe: TEST mode' badge
+    - last_synced_text: string like 'Last synced: 2025-10-17 12:31'
+    """
+    snippets = []
+    style = (
+        "<style>"
+        ".cm-badge{position:fixed;right:10px;z-index:99999;"
+        "background:#111;color:#fff;padding:6px 10px;border-radius:999px;"
+        "font-family:system-ui,Arial,sans-serif;font-size:12px;opacity:.9;box-shadow:0 2px 8px rgba(0,0,0,.25)}"
+        ".cm-test{bottom:10px;background:#b91c1c} .cm-sync{bottom:44px;background:#1f2937}"
+        "</style>"
+    )
+    if show_test:
+        snippets.append('<div class="cm-badge cm-test">Stripe: TEST mode</div>')
+    if last_synced_text:
+        snippets.append(f'<div class="cm-badge cm-sync">⟳ {last_synced_text}</div>')
+    if not snippets:
+        return html
+    inj = style + "".join(snippets)
+    if "</body>" in html:
+        return html.replace("</body>", inj + "</body>")
+    return html + inj
 
 # =========================================================
 # Background iCal sync → write to DB
@@ -402,7 +448,6 @@ def lang(code):
 def langpub(code):
     if code in ("en","th"):
         session["lang_pub"] = code
-    # fall back to properties page
     ref = request.headers.get("Referer")
     return redirect(ref or url_for("properties_index"))
 
@@ -644,8 +689,8 @@ def property_page(slug):
     meta_title = f"{title} — Pattaya Villas"
     meta_desc = f"Book {title}. Easy calendar selection. Secure payment."
 
-    # last_synced: not tracked; leave None (template handles)
-    return render_template(
+    # Render template first
+    html = render_template(
         "room.html",
         title=title,
         image_url=image_url,
@@ -659,8 +704,18 @@ def property_page(slug):
         meta_desc=meta_desc,
         og_image=image_url,
         is_admin=("user" in session),
-        last_synced=None
+        last_synced=None  # (we inject a nicer badge below)
     )
+
+    # Inject floating badges (no template changes needed)
+    test_mode = (STRIPE_PUBLISHABLE_KEY or "").startswith("pk_test_")
+    last_syn = _group_last_synced(unit_ids)
+    html = _inject_badges(
+        html,
+        show_test=test_mode,
+        last_synced_text=(f"{t['last_synced']}: {last_syn}" if last_syn else None)
+    )
+    return Response(html)
 
 # ---- Availability (grouped): DB blocks + iCal events merged ----
 @app.route("/api/public/availability/<slug>", methods=["GET"])
@@ -871,7 +926,7 @@ def room(unit_id):
     lang = _public_lang()
     t = _t(lang)
 
-    return render_template(
+    html = render_template(
         "room.html",
         title=display_name,
         image_url=image_url,
@@ -884,6 +939,10 @@ def room(unit_id):
         is_admin=("user" in session),
         last_synced=None
     )
+    # Inject badge(s)
+    test_mode = (STRIPE_PUBLISHABLE_KEY or "").startswith("pk_test_")
+    html = _inject_badges(html, show_test=test_mode, last_synced_text=None)
+    return Response(html)
 
 @app.route("/api/public/book/<int:unit_id>", methods=["POST"])
 def public_book(unit_id):
@@ -1034,9 +1093,8 @@ def api_admin_toggle_day(slug):
                     AvailabilityBlock.end_date == end,
                     AvailabilityBlock.source == "manual"
                 )
-            # delete after loop to avoid iterator invalidation
-            for row in q.all():
-                db.delete(row)
+                for row in q.all():
+                    db.delete(row)
             db.commit()
             return jsonify({"ok": True})
 
