@@ -569,7 +569,7 @@ def properties_index():
     meta = _load_meta()
     groups = meta.get("groups", {})
 
-    # Optional: show "pending iCal" counts for admin only
+    # Build "pending iCal" only for logged-in admin
     pending_map = {}
     if "user" in session:
         db = SessionLocal()
@@ -587,8 +587,35 @@ def properties_index():
         finally:
             db.close()
 
-    # Hide low-level unit IDs and legacy /r/ links from public template
-    return render_template("properties.html", groups=groups, pending_map=pending_map)
+    # Compute "From" price per group = MIN(base_rate) across that group's unit_ids
+    prices_map = {}
+    curr_map = {}
+    if groups:
+        db = SessionLocal()
+        try:
+            for slug, info in groups.items():
+                unit_ids = info.get("unit_ids", [])
+                if not unit_ids:
+                    continue
+                rates = db.query(RatePlan).filter(RatePlan.unit_id.in_(unit_ids)).all()
+                if rates:
+                    min_rate = min(r.base_rate for r in rates if r.base_rate is not None)
+                    prices_map[slug] = float(min_rate)
+                    try:
+                        match = next((r for r in rates if r.base_rate == min_rate), None)
+                        curr_map[slug] = (match.currency if match and match.currency else (rates[0].currency or "THB"))
+                    except Exception:
+                        curr_map[slug] = "THB"
+        finally:
+            db.close()
+
+    return render_template(
+        "properties.html",
+        groups=groups,
+        pending_map=pending_map,
+        prices_map=prices_map,
+        curr_map=curr_map
+    )
 
 @app.route("/prop/<slug>")
 def property_page(slug):
