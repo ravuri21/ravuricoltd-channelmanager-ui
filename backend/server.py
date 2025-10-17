@@ -144,6 +144,76 @@ def send_alert(subject, body):
     except Exception as e:
         print("❌ Error sending alert:", e)
 
+def _smtp_send(to_addr: str, subject: str, html_body: str, text_body: str = None):
+    """
+    Low-level mailer used by both admin+guest emails.
+    """
+    smtp_server = os.environ.get("SMTP_SERVER", "")
+    smtp_port = int(os.environ.get("SMTP_PORT", 587))
+    smtp_user = os.environ.get("SMTP_USER", "")
+    smtp_pass = os.environ.get("SMTP_PASSWORD", "")
+
+    if not all([smtp_server, smtp_user, smtp_pass, to_addr]):
+        print("⚠️ SMTP not fully configured, skipping email to", to_addr)
+        return False
+
+    msg = MIMEMultipart("alternative")
+    msg["From"] = smtp_user
+    msg["To"] = to_addr
+    msg["Subject"] = subject
+
+    if text_body:
+        msg.attach(MIMEText(text_body, "plain", "utf-8"))
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+    try:
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+        print(f"📧 Sent email to {to_addr}: {subject}")
+        return True
+    except Exception as e:
+        print("❌ SMTP send error:", e)
+        return False
+
+
+def send_guest_confirmation(name: str, email: str, title: str, start: str, end: str, price_per_night: float = None, currency: str = "THB"):
+    """
+    Send a simple booking confirmation to the guest.
+    """
+    nights = 0
+    try:
+        from datetime import datetime as _dt
+        nights = (_dt.strptime(end, "%Y-%m-%d") - _dt.strptime(start, "%Y-%m-%d")).days
+    except Exception:
+        pass
+
+    total_text = ""
+    if price_per_night and nights > 0:
+        try:
+            total_amt = int(round(price_per_night * nights))
+            total_text = f"<p><b>Total (approx):</b> {total_amt:,} {currency}</p>"
+        except Exception:
+            pass
+
+    html = f"""
+    <div style="font-family: system-ui, Arial, sans-serif; line-height:1.5; color:#111;">
+      <h2 style="margin:0 0 10px;">Booking Confirmed ✅</h2>
+      <p>Hi {name},</p>
+      <p>Thank you for your booking with <b>{title}</b>.</p>
+      <p><b>Check-in:</b> {start}<br/>
+         <b>Check-out:</b> {end}{f"<br/><b>Nights:</b> {nights}" if nights else ""}</p>
+      {total_text}
+      <p>We’ll contact you shortly with next steps. If you have questions, just reply to this email.</p>
+      <p>— RavuriCo Ltd</p>
+    </div>
+    """
+
+    text = f"Booking Confirmed\n\n{name}\nProperty: {title}\nCheck-in: {start}\nCheck-out: {end}\nThank you for your booking."
+
+    return _smtp_send(email, "Booking confirmed ✅", html, text)
+    
 # ====== Helpers ======
 def _load_meta():
     """Read backend/unit_meta.json to get grouped properties."""
@@ -398,6 +468,19 @@ def health():
 @app.route("/hello")
 def hello():
     return "hello", 200
+
+@app.get("/admin/test_email")
+def admin_test_email():
+    if "user" not in session:
+        return redirect(url_for("login"))
+    to = os.environ.get("ALERT_TO") or os.environ.get("SMTP_USER")
+    ok = _smtp_send(
+        to,
+        "Test email from Channel Manager",
+        "<p>This is a <b>test</b> email from your Channel Manager.</p><p>If you received this, SMTP is working ✅</p>",
+        "This is a TEST email from your Channel Manager. If you received this, SMTP works."
+    )
+    return ("OK: sent to " + to) if ok else ("Failed: check SMTP env vars"), (200 if ok else 500)
 
 # ====== Admin APIs ======
 @app.route("/api/unit/<int:unit_id>/ical", methods=["POST"])
