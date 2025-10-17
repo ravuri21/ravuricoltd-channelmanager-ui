@@ -7,52 +7,50 @@ services:
     buildCommand: |
       pip install -r requirements.txt
       python backend/import_properties.py backend/ota_properties_prefilled.csv
-      npm ci --prefix frontend
-      npm run build --prefix frontend
-      mkdir -p backend/static/app && cp -r frontend/dist/* backend/static/app/
+      mkdir -p backend/static/app
 
-    startCommand: gunicorn -w 1 -k gthread --threads 8 --timeout 120 --keep-alive 5 --chdir backend server:app
+    startCommand: gunicorn -w 2 -k gthread --threads 8 --timeout 120 --keep-alive 5 --chdir backend -b 0.0.0.0:$PORT server:app
+
+    healthCheckPath: /health
 
     envVars:
-      # --- REQUIRED (set values in Render dashboard, not in git) ---
+      # --- REQUIRED ---
       - key: SECRET_KEY
-        value: change_me_in_dashboard
+        value: mysecretkey12345
       - key: ADMIN_EMAIL
         value: pradeep@ravuricoltd.com
       - key: ADMIN_PASSWORD
-        # set a new strong password in the Render UI after deploy
-        value: change_me_in_dashboard
+        value: Radhika1
       - key: APP_LANG_DEFAULT
         value: en
       - key: TZ
         value: Asia/Bangkok
       - key: WEB_CONCURRENCY
-        value: "1"
+        value: "2"
 
-      # Stripe (TEST keys first)
+      # --- STRIPE LIVE KEYS (replace with your real ones from Stripe) ---
       - key: STRIPE_SECRET_KEY
-        value: sk_test_change_me_in_dashboard
+        value: sk_live_xxxxxxxxxxxxxxxxxxxxxxxxx
       - key: STRIPE_PUBLISHABLE_KEY
-        value: pk_test_change_me_in_dashboard
+        value: pk_live_xxxxxxxxxxxxxxxxxxxxxxxxx
 
-      # SQLite on persistent disk (see disk section below)
+      # --- EMAIL ALERT SETTINGS ---
+      - key: SMTP_SERVER
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        value: rppchowdary@gmail.com
+      - key: SMTP_PASSWORD
+        value: atcnjjugbspoxzhc
+      - key: ALERT_TO
+        value: pradeep@ravuricoltd.com
+
+      # --- DATABASE ---
       - key: DATABASE_URL
         value: sqlite:////var/data/channel_manager.db
 
-      # --- OPTIONAL: email alerts (only if you configured SMTP) ---
-      # - key: SMTP_SERVER
-      #   value: smtp.yourhost.com
-      # - key: SMTP_PORT
-      #   value: "587"
-      # - key: SMTP_USER
-      #   value: noreply@yourdomain.com
-      # - key: SMTP_PASSWORD
-      #   value: change_me_in_dashboard
-      # - key: ALERT_TO
-      #   value: you@yourdomain.com
-
-    # Attach a persistent disk so your SQLite DB survives restarts
-    # If your plan doesn't support disks via YAML, create it in the Render UI.
+    # --- PERSISTENT STORAGE ---
     disk:
       name: data
       mountPath: /var/data
