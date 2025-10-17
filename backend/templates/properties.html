@@ -11,9 +11,11 @@
     .wrap{max-width:1040px;margin:20px auto;padding:0 12px}
     h2{margin:10px 0 16px}
     .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
-    .card{background:#fff;border:1px solid #eee;border-radius:10px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.06)}
+    .card{background:#fff;border:1px solid #eee;border-radius:10px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.06);text-decoration:none;color:inherit}
     .card img{width:100%;height:160px;object-fit:cover;display:block}
     .card .b{padding:10px 12px}
+    .title{font-weight:700;margin-bottom:4px}
+    .price{font-weight:700;margin:4px 0 6px}
     .muted{color:#6b7280}
     .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#f1f5f9;color:#334155;font-size:.8rem;margin-left:6px}
     .admin{margin-top:12px;font-size:.9rem}
@@ -44,13 +46,25 @@
         <a class="card" href="/prop/{{ slug }}">
           <img src="{{ info.image_url or 'https://source.unsplash.com/featured/?pattaya,villa' }}" alt="">
           <div class="b">
-            <div style="font-weight:700">{{ info.title or slug }}</div>
+            <div class="title">{{ info.title or slug }}</div>
+
+            {% if prices_map and prices_map.get(slug) %}
+              <div class="price">
+                From ฿ {{ '%.0f'|format(prices_map[slug]) }}
+                <span class="muted">/ night {{ (curr_map.get(slug) or 'THB') }}</span>
+              </div>
+            {% else %}
+              {% if 'user' in session %}
+                <div class="muted">No price yet — set one in Admin</div>
+              {% else %}
+                <div class="muted">Open calendar & book</div>
+              {% endif %}
+            {% endif %}
+
             {% if pending_map and slug in pending_map %}
               <div class="muted" title="Some OTA iCal links not set yet">
                 iCal pending <span class="pill">{{ pending_map[slug] }}</span>
               </div>
-            {% else %}
-              <div class="muted">Open calendar & book</div>
             {% endif %}
           </div>
         </a>
@@ -63,7 +77,7 @@
 
     {% if pending_map %}
       <div class="admin">
-        <span class="muted">Admin tips:</span>
+        <span class="muted">Admin shortcuts:</span>
         <a href="/admin/groups" target="_blank">Grouped Admin</a> ·
         <a href="/admin/export_links" target="_blank">Export iCal</a>
       </div>
