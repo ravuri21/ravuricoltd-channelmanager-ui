@@ -3,10 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <title>Properties</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="/static/style.css" />
   <style>
+    body{font-family:system-ui,Arial,sans-serif;margin:0;background:#f6f8fa;color:#222}
+    .topbar{position:sticky;top:0;background:#111827;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center}
+    .brand{font-weight:700}
     .wrap{max-width:980px;margin:18px auto;background:#fff;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.08);overflow:hidden}
-    .head{padding:12px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between}
+    .head{padding:12px 16px;border-bottom:1px solid #eee}
     .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;padding:16px}
     .card{border:1px solid #eee;border-radius:10px;overflow:hidden;background:#fafafa}
     .card img{width:100%;height:160px;object-fit:cover;display:block}
@@ -14,21 +18,18 @@
     .title{font-weight:700;margin-bottom:6px}
     .muted{color:#6b7280}
     .btn{display:inline-block;margin-top:8px;padding:8px 12px;border:none;border-radius:8px;background:#2563eb;color:#fff;text-decoration:none}
-    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#fff3cd;color:#92400e;border:1px solid #facc15;font-size:.8rem}
   </style>
 </head>
 <body>
   <div class="topbar">
-    <div>Channel Manager — Properties</div>
-    <div>
-      <a href="/">Admin</a> | <a href="/logout">Logout</a>
-    </div>
+    <div class="brand">RavuriCo Stays</div>
+    <!-- Public page: no admin links here -->
   </div>
 
   <div class="wrap">
     <div class="head">
-      <div style="font-weight:700">All Properties</div>
-      <div class="muted">Tap “View / Book” to open the public page with the calendar.</div>
+      <div style="font-weight:700">Our Properties</div>
+      <div class="muted">Tap a property to check availability and book.</div>
     </div>
 
     <div class="grid">
@@ -37,12 +38,7 @@
         <img src="{{ info.image_url or 'https://source.unsplash.com/featured/?pattaya,villa' }}" alt="">
         <div class="body">
           <div class="title">{{ info.title or slug }}</div>
-          {% if pending_map.get(slug) %}
-            <div class="pill">{{ pending_map.get(slug) }} listing(s) missing iCal</div>
-          {% endif %}
-          <div class="muted">Units: {{ info.unit_ids|join(', ') }}</div>
-          <a class="btn" href="/prop/{{ slug }}" target="_blank">View / Book</a>
-          &nbsp; <a class="btn" style="background:#6b7280" href="/admin/calendar/{{ slug }}">Admin Calendar</a>
+          <a class="btn" href="/prop/{{ slug }}">Check availability</a>
         </div>
       </div>
       {% endfor %}
