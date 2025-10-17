@@ -471,28 +471,31 @@ def ical_export(unit_id):
 # ====== PUBLIC: Properties page (public) ======
 @app.route("/properties")
 def properties_index():
+    """
+    Public grid of properties with price (uses the first unit's RatePlan).
+    Hides any admin details.
+    """
     meta = _load_meta()
     groups = meta.get("groups", {})
 
-    # Optional: show "pending iCal" counts
     db = SessionLocal()
-    pending_map = {}
+    group_prices = {}   # slug -> {"price": float|None, "currency": "THB"}
     try:
         for slug, info in groups.items():
-            unit_ids = info.get("unit_ids", [])
-            if not unit_ids:
-                continue
-            missing = db.query(Unit).filter(
-                Unit.id.in_(unit_ids),
-                (Unit.ical_url == None) | (Unit.ical_url == "")
-            ).count()
-            if missing:
-                pending_map[slug] = missing
+            unit_ids = info.get("unit_ids", []) or []
+            price = None
+            currency = "THB"
+            if unit_ids:
+                rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
+                if rp:
+                    price = rp.base_rate
+                    currency = rp.currency or "THB"
+            group_prices[slug] = {"price": price, "currency": currency}
     finally:
         db.close()
 
-    return render_template("properties.html", groups=groups, pending_map=pending_map)
-
+    # We no longer surface "pending iCal" to the public page
+    return render_template("properties.html", groups=groups, group_prices=group_prices)
 # ====== Public property page ======
 @app.route("/prop/<slug>")
 def property_page(slug):
