@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Properties</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    body{font-family:system-ui,Arial,sans-serif;background:#f6f8fa;margin:0;color:#111}
+    .topbar{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#111;color:#fff}
+    .topbar a{color:#fff;text-decoration:none;margin-left:10px}
+    .wrap{max-width:980px;margin:20px auto;background:#fff;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.08);overflow:hidden}
+    .head{padding:14px 16px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;padding:16px}
+    .card{border:1px solid #eee;border-radius:10px;overflow:hidden;background:#fafafa}
+    .card img{width:100%;height:140px;object-fit:cover;display:block}
+    .card .b{padding:10px}
+    .muted{color:#6b7280}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#fff4e5;color:#92400e;border:1px solid #f59e0b;font-size:.8rem}
+    .btn{display:inline-block;padding:8px 12px;border-radius:8px;background:#2563eb;color:#fff;text-decoration:none}
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div>Channel Manager — Public</div>
+    <div>
+      <a href="/login">Admin</a>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="head">
+      <h2 style="margin:0">Properties</h2>
+      <div class="muted">Tap a property to view calendar & book</div>
+    </div>
+
+    <div class="grid">
+      {% for slug, info in groups.items() %}
+        <a class="card" href="/prop/{{ slug }}">
+          <img src="{{ info.get('image_url') or 'https://source.unsplash.com/featured/?pattaya,villa' }}" alt="">
+          <div class="b">
+            <div style="font-weight:700">{{ info.get('title', slug) }}</div>
+            <div class="muted">Slug: {{ slug }}</div>
+            {% if pending_map.get(slug) %}
+              <div style="margin-top:6px;"><span class="pill">{{ pending_map.get(slug) }} listing(s) missing iCal</span></div>
+            {% endif %}
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+</body>
+</html>
