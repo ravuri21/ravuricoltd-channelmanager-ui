@@ -23,4 +23,4 @@ ics==0.7
 # Typing helpers
 typing_extensions>=4.12.2
 
-psycopg2-binary==2.9.9
+psycopg[binary]==3.1.19
