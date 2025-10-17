@@ -183,14 +183,63 @@ def send_mail(to_addr: str, subject: str, html_body: str, text_body: str = None)
 
 
 def send_alert(subject, body):
-    """Admin alert helper (uses ALERT_TO or SMTP_USER)."""
-    to = (os.environ.get("ALERT_TO") or os.environ.get("SMTP_USER") or "").strip()
-    if not to:
-        print("⚠️ ALERT_TO/SMTP_USER not set; alert skipped")
-        return
-    ok = send_mail(to, subject, f"<pre>{body}</pre>", body)
-    print("📧 Alert email sent" if ok else "❌ Alert email failed")
+    """Admin alert via Resend only."""
+    try:
+        provider = os.getenv("EMAIL_PROVIDER", "resend").lower()
+        api_key = os.getenv("RESEND_API_KEY", "").strip()
+        email_from = os.getenv("EMAIL_FROM", "RavuriCo <onboarding@resend.dev>")
+        alert_to = os.getenv("ALERT_TO", "").strip()
 
+        if provider != "resend":
+            print("⚠️ EMAIL_PROVIDER is not 'resend' — alert suppressed")
+            return
+        if not (api_key and alert_to):
+            print("⚠️ Resend not configured: missing RESEND_API_KEY or ALERT_TO")
+            return
+
+        import requests
+        r = requests.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "from": email_from,
+                "to": [alert_to],
+                "subject": subject,
+                "text": body,
+            },
+            timeout=12,
+        )
+        r.raise_for_status()
+        print(f"📧 Alert email sent to {alert_to} via Resend")
+    except Exception as e:
+        print(f"❌ Resend alert error: {e}")
+
+
+def send_mail(to_email: str, subject: str, body: str):
+    """Generic email via Resend only."""
+    provider = os.getenv("EMAIL_PROVIDER", "resend").lower()
+    api_key = os.getenv("RESEND_API_KEY", "").strip()
+    email_from = os.getenv("EMAIL_FROM", "RavuriCo <onboarding@resend.dev>")
+
+    if provider != "resend":
+        raise RuntimeError("EMAIL_PROVIDER must be 'resend' for send_mail")
+    if not (api_key and to_email):
+        raise RuntimeError("Missing RESEND_API_KEY or recipient email")
+
+    import requests
+    r = requests.post(
+        "https://api.resend.com/emails",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json={
+            "from": email_from,
+            "to": [to_email],
+            "subject": subject,
+            "text": body,
+        },
+        timeout=12,
+    )
+    r.raise_for_status()
+    return True
 
 # ====== Background iCal sync → write to DB ======
 def _sync_units(db, units):
@@ -886,17 +935,15 @@ def admin_reimport():
 @app.get("/admin/test_email")
 def admin_test_email():
     if "user" not in session:
-        return redirect(url_for("login"))
-    to = (os.environ.get("ALERT_TO") or os.environ.get("SMTP_USER") or "").strip()
-    if not to:
-        return "Failed: ALERT_TO/SMTP_USER missing", 500
-    ok = send_mail(
-        to,
-        "Test email from Channel Manager",
-        "<h3>Test OK ✅</h3><p>If you see this, email is configured and working.</p>",
-        "Test OK"
-    )
-    return (f"OK: sent to {to}", 200) if ok else ("Failed: email provider error", 500)
+        return "Login required", 401
+    try:
+        to_addr = os.getenv("ALERT_TO", "").strip()
+        if not to_addr:
+            return "Failed: set ALERT_TO env var", 500
+        send_mail(to_addr, "Test email from Channel Manager (Resend)", "Hello! This is a Resend test.")
+        return f"OK: sent to {to_addr}", 200
+    except Exception as e:
+        return f"Failed: {e}", 500
 
 # ---------- Legacy public pages (for admin/testing) ----------
 @app.route("/r")
