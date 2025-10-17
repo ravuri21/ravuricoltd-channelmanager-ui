@@ -3,11 +3,11 @@ import os, threading, time, requests, traceback, smtplib, json
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pathlib import Path
-from datetime import datetime, date, timedelta, timezone
+from datetime import datetime, date, timedelta
 
 from flask import (
     Flask, request, session, redirect, url_for,
-    render_template, jsonify, Response
+    render_template, jsonify
 )
 from icalendar import Calendar as ICal
 import stripe
@@ -27,148 +27,10 @@ APP_LANG_DEFAULT = os.environ.get("APP_LANG_DEFAULT", "en")
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 
-# Run background sync thread only once (important on free hosts)
+# One worker recommended on free plan; also ensures single background thread
 SINGLE_WORKER = os.getenv("WEB_CONCURRENCY", "1") == "1"
 
-# =========================================================
-# I18N (small dictionary for public page)
-# =========================================================
-def _t(lang: str):
-    en = {
-        "brand": "Channel Manager",
-        "per_night": "/ night",
-        "calendar_hint": "Tap the calendar to choose check-in and check-out. Red = booked, Green = available.",
-        "legend_available": "Available",
-        "legend_booked": "Booked",
-        "legend_selected": "Selected",
-        "powered_by": "Powered by RavuriCo Ltd",
-        "admin_label": "Admin",
-        "sync_btn": "Sync this property",
-        "last_synced": "Last synced",
-        "book_pay": "Book & Pay",
-        "pick_dates": "Please select dates from the calendar.",
-        "invalid_dates": "Check-out must be after check-in.",
-        "need_name_email": "Please enter your name and email.",
-        "booking_confirmed": "Booking confirmed — dates blocked.",
-    }
-    th = {
-        "brand": "ตัวจัดการช่องทาง",
-        "per_night": "/ คืน",
-        "calendar_hint": "แตะที่ปฏิทินเพื่อเลือกเช็คอินและเช็คเอาท์ สีแดง = ไม่ว่าง, สีเขียว = ว่าง",
-        "legend_available": "ว่าง",
-        "legend_booked": "ไม่ว่าง",
-        "legend_selected": "วันที่ที่เลือก",
-        "powered_by": "พัฒนาโดย RavuriCo Ltd",
-        "admin_label": "ผู้ดูแล",
-        "sync_btn": "ซิงก์ที่พักนี้",
-        "last_synced": "ซิงก์ล่าสุด",
-        "book_pay": "จองและชำระเงิน",
-        "pick_dates": "โปรดเลือกวันที่จากปฏิทิน",
-        "invalid_dates": "วันเช็คเอาท์ต้องอยู่หลังวันเช็คอิน",
-        "need_name_email": "กรุณากรอกชื่อและอีเมล",
-        "booking_confirmed": "ยืนยันการจองแล้ว — ปิดวันที่เรียบร้อย",
-    }
-    return th if lang == "th" else en
-
-def _public_lang():
-    return session.get("lang_pub", APP_LANG_DEFAULT or "en")
-
-# =========================================================
-# Email helpers
-# =========================================================
-def send_alert(subject, body):
-    """Simple admin alert (plain text)."""
-    try:
-        smtp_server = os.environ.get("SMTP_SERVER", "")
-        smtp_port = int(os.environ.get("SMTP_PORT", 587))
-        smtp_user = os.environ.get("SMTP_USER", "")
-        smtp_pass = os.environ.get("SMTP_PASSWORD", "")
-        alert_to = os.environ.get("ALERT_TO", "")
-
-        if not all([smtp_server, smtp_user, smtp_pass, alert_to]):
-            print("⚠️ Email not configured; skipping admin alert")
-            return
-
-        msg = MIMEMultipart()
-        msg["From"] = smtp_user
-        msg["To"] = alert_to
-        msg["Subject"] = subject
-        msg.attach(MIMEText(body, "plain", "utf-8"))
-
-        with smtplib.SMTP(smtp_server, smtp_port) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
-        print(f"📧 Alert email sent to {alert_to}")
-    except Exception as e:
-        print("❌ Error sending admin alert:", e)
-
-def _smtp_send(to_addr: str, subject: str, html_body: str, text_body: str = None):
-    """Low-level mailer used by both admin+guest emails."""
-    smtp_server = os.environ.get("SMTP_SERVER", "")
-    smtp_port = int(os.environ.get("SMTP_PORT", 587))
-    smtp_user = os.environ.get("SMTP_USER", "")
-    smtp_pass = os.environ.get("SMTP_PASSWORD", "")
-
-    if not all([smtp_server, smtp_user, smtp_pass, to_addr]):
-        print("⚠️ SMTP not fully configured, skipping email to", to_addr)
-        return False
-
-    msg = MIMEMultipart("alternative")
-    msg["From"] = smtp_user
-    msg["To"] = to_addr
-    msg["Subject"] = subject
-
-    if text_body:
-        msg.attach(MIMEText(text_body, "plain", "utf-8"))
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
-
-    try:
-        with smtplib.SMTP(smtp_server, smtp_port) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
-        print(f"📧 Sent email to {to_addr}: {subject}")
-        return True
-    except Exception as e:
-        print("❌ SMTP send error:", e)
-        return False
-
-def send_guest_confirmation(name: str, email: str, title: str, start: str, end: str,
-                            price_per_night: float = None, currency: str = "THB"):
-    """Send a simple booking confirmation to the guest."""
-    nights = 0
-    try:
-        nights = (datetime.strptime(end, "%Y-%m-%d") - datetime.strptime(start, "%Y-%m-%d")).days
-    except Exception:
-        pass
-
-    total_text = ""
-    if price_per_night and nights > 0:
-        try:
-            total_amt = int(round(price_per_night * nights))
-            total_text = f"<p><b>Total (approx):</b> {total_amt:,} {currency}</p>"
-        except Exception:
-            pass
-
-    html = f"""
-    <div style="font-family: system-ui, Arial, sans-serif; line-height:1.5; color:#111;">
-      <h2 style="margin:0 0 10px;">Booking Confirmed ✅</h2>
-      <p>Hi {name},</p>
-      <p>Thank you for your booking with <b>{title}</b>.</p>
-      <p><b>Check-in:</b> {start}<br/>
-         <b>Check-out:</b> {end}{f"<br/><b>Nights:</b> {nights}" if nights else ""}</p>
-      {total_text}
-      <p>We’ll contact you shortly with next steps. If you have questions, just reply to this email.</p>
-      <p>— RavuriCo Ltd</p>
-    </div>
-    """
-    text = f"Booking Confirmed\n\n{name}\nProperty: {title}\nCheck-in: {start}\nCheck-out: {end}\nThank you for your booking."
-    return _smtp_send(email, "Booking confirmed ✅", html, text)
-
-# =========================================================
-# Helpers
-# =========================================================
+# ====== Helpers ======
 def _load_meta():
     """Read backend/unit_meta.json to get grouped properties."""
     try:
@@ -208,7 +70,10 @@ def _overlaps(db, unit_id: int, start: str, end: str) -> bool:
     return db.query(q.exists()).scalar()
 
 def fetch_ical(ical_url):
-    """Lightweight fetch for public availability merge endpoint."""
+    """
+    Lightweight fetch for public availability merge endpoint.
+    Background sync uses a more robust parser below.
+    """
     try:
         resp = requests.get(ical_url, timeout=12)
         resp.raise_for_status()
@@ -226,58 +91,108 @@ def fetch_ical(ical_url):
         print("iCal fetch error:", e)
         return []
 
-def _group_last_synced(unit_ids):
-    """Return the most recent last_sync across the group's units (string Bangkok time)."""
-    if not unit_ids:
-        return None
-    db = SessionLocal()
+# ====== Email sending (Resend API first, fallback to SMTP if needed) ======
+def _smtp_send(to_addr: str, subject: str, html_body: str, text_body: str = None):
+    """Try Gmail SMTP (587 STARTTLS, then 465 SSL). Kept for fallback."""
+    import smtplib, ssl
+
+    def _get(name, default=""):
+        v = os.environ.get(name, default)
+        return (v or "").strip()
+
+    smtp_server = _get("SMTP_SERVER")
+    smtp_port_s = _get("SMTP_PORT", "587")
+    smtp_user   = _get("SMTP_USER")
+    smtp_pass   = _get("SMTP_PASSWORD")
+    to_addr     = (to_addr or "").strip()
+
+    if not (smtp_server and smtp_user and smtp_pass and to_addr):
+        print("⚠️ SMTP missing values; skipping SMTP")
+        return False
+
+    msg = MIMEMultipart("alternative")
+    msg["From"] = smtp_user
+    msg["To"] = to_addr
+    msg["Subject"] = subject
+    if text_body:
+        msg.attach(MIMEText(text_body, "plain", "utf-8"))
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+    # try STARTTLS 587 then SSL 465
     try:
-        rows = db.query(Unit).filter(Unit.id.in_(unit_ids)).all()
-        latest = None
-        for u in rows:
-            if u.last_sync:
-                if latest is None or u.last_sync > latest:
-                    latest = u.last_sync
-        if not latest:
-            return None
-        # Render as Asia/Bangkok local string
-        try:
-            # last_sync from DB is naive or UTC; show yyyy-mm-dd hh:mm
-            return latest.strftime("%Y-%m-%d %H:%M")
-        except Exception:
-            return str(latest)
-    finally:
-        db.close()
+        with smtplib.SMTP(smtp_server, 587, timeout=20) as s:
+            s.ehlo(); s.starttls(context=ssl.create_default_context()); s.ehlo()
+            s.login(smtp_user, smtp_pass)
+            s.send_message(msg)
+        print(f"📧 SMTP sent via {smtp_server}:587 → {to_addr}")
+        return True
+    except Exception as e:
+        print("❌ SMTP 587 failed:", repr(e))
 
-def _inject_badges(html: str, show_test: bool, last_synced_text: str | None):
-    """
-    Injects small floating badges just before </body> so we don't need to edit templates.
-    - show_test: True -> show 'Stripe: TEST mode' badge
-    - last_synced_text: string like 'Last synced: 2025-10-17 12:31'
-    """
-    snippets = []
-    style = (
-        "<style>"
-        ".cm-badge{position:fixed;right:10px;z-index:99999;"
-        "background:#111;color:#fff;padding:6px 10px;border-radius:999px;"
-        "font-family:system-ui,Arial,sans-serif;font-size:12px;opacity:.9;box-shadow:0 2px 8px rgba(0,0,0,.25)}"
-        ".cm-test{bottom:10px;background:#b91c1c} .cm-sync{bottom:44px;background:#1f2937}"
-        "</style>"
-    )
-    if show_test:
-        snippets.append('<div class="cm-badge cm-test">Stripe: TEST mode</div>')
-    if last_synced_text:
-        snippets.append(f'<div class="cm-badge cm-sync">⟳ {last_synced_text}</div>')
-    if not snippets:
-        return html
-    inj = style + "".join(snippets)
-    if "</body>" in html:
-        return html.replace("</body>", inj + "</body>")
-    return html + inj
+    try:
+        with smtplib.SMTP_SSL(smtp_server, 465, context=ssl.create_default_context(), timeout=20) as s:
+            s.login(smtp_user, smtp_pass)
+            s.send_message(msg)
+        print(f"📧 SMTP sent via {smtp_server}:465 → {to_addr}")
+        return True
+    except Exception as e:
+        print("❌ SMTP 465 failed:", repr(e))
+        return False
 
-# =========================================================
-# Background iCal sync → write to DB
-# =========================================================
+
+def send_mail(to_addr: str, subject: str, html_body: str, text_body: str = None):
+    """
+    Primary: Resend (HTTPS) — works on Render free tier.
+    Fallback: SMTP (if you ever move to a host that allows SMTP ports).
+    """
+    provider = (os.environ.get("EMAIL_PROVIDER", "resend") or "resend").strip().lower()
+    if provider == "resend":
+        api_key = (os.environ.get("RESEND_API_KEY", "") or "").strip()
+        from_email = (os.environ.get("EMAIL_FROM", "") or os.environ.get("SMTP_USER", "") or "").strip()
+        if api_key and from_email and to_addr:
+            try:
+                r = requests.post(
+                    "https://api.resend.com/emails",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "from": from_email,
+                        "to": [to_addr],
+                        "subject": subject,
+                        "html": html_body,
+                        "text": text_body or "",
+                    },
+                    timeout=20
+                )
+                if r.status_code in (200, 201):
+                    print(f"📧 Resend sent → {to_addr}")
+                    return True
+                print(f"❌ Resend failed: {r.status_code} {r.text[:200]}")
+            except Exception as e:
+                print("❌ Resend exception:", repr(e))
+        else:
+            print("⚠️ Resend missing values; skipping:", {
+                "RESEND_API_KEY": bool(api_key),
+                "EMAIL_FROM": bool(from_email),
+                "TO": bool(to_addr)
+            })
+    # fallback
+    return _smtp_send(to_addr, subject, html_body, text_body)
+
+
+def send_alert(subject, body):
+    """Admin alert helper (uses ALERT_TO or SMTP_USER)."""
+    to = (os.environ.get("ALERT_TO") or os.environ.get("SMTP_USER") or "").strip()
+    if not to:
+        print("⚠️ ALERT_TO/SMTP_USER not set; alert skipped")
+        return
+    ok = send_mail(to, subject, f"<pre>{body}</pre>", body)
+    print("📧 Alert email sent" if ok else "❌ Alert email failed")
+
+
+# ====== Background iCal sync → write to DB ======
 def _sync_units(db, units):
     """
     Shared sync core used by background, global button, and per-property button.
@@ -356,6 +271,7 @@ def periodic_sync():
             traceback.print_exc()
         time.sleep(600)  # 10 minutes
 
+# ====== One-shot sync helpers & APIs ======
 def sync_calendars_once():
     db = SessionLocal()
     try:
@@ -378,15 +294,33 @@ def sync_calendars_for_group(slug):
     finally:
         db.close()
 
-# =========================================================
-# Bootstrap
-# =========================================================
+@app.post("/api/admin/sync_now")
+def api_admin_sync_now():
+    if "user" not in session:
+        return jsonify({"error": "unauthorized"}), 401
+    try:
+        summary = sync_calendars_once()
+        return jsonify({"ok": True, "summary": summary})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.post("/api/admin/sync_property/<slug>")
+def api_admin_sync_property(slug):
+    if "user" not in session:
+        return jsonify({"error": "unauthorized"}), 401
+    res = sync_calendars_for_group(slug)
+    if "error" in res:
+        return jsonify(res), 400
+    return jsonify(res)
+
+# ====== Bootstrap ======
 try:
     print("Bootstrap: init_db()")
     init_db()
 
-    # Do NOT auto-import CSV on every boot (avoids resetting prices).
-    # Import manually via /admin/reimport if DB is empty.
+    # ⚠️ IMPORTANT: Do NOT auto-import CSV on every boot (it resets prices).
+    # Seed manually once via /admin/reimport when DB is empty.
 
     if SINGLE_WORKER:
         print("Starting periodic_sync thread (single worker)")
@@ -397,9 +331,7 @@ except Exception as e:
     print("Bootstrap error:", e)
     traceback.print_exc()
 
-# =========================================================
-# Auth & Basic
-# =========================================================
+# ====== Auth & Basic ======
 @app.route("/")
 def index():
     if "user" not in session:
@@ -444,13 +376,6 @@ def lang(code):
         session["lang"] = code
     return redirect(url_for("index"))
 
-@app.route("/langpub/<code>")
-def langpub(code):
-    if code in ("en","th"):
-        session["lang_pub"] = code
-    ref = request.headers.get("Referer")
-    return redirect(ref or url_for("properties_index"))
-
 @app.route("/health")
 def health():
     return "ok", 200
@@ -459,29 +384,7 @@ def health():
 def hello():
     return "hello", 200
 
-# =========================================================
-# Admin APIs
-# =========================================================
-@app.post("/api/admin/sync_now")
-def api_admin_sync_now():
-    if "user" not in session:
-        return jsonify({"error": "unauthorized"}), 401
-    try:
-        summary = sync_calendars_once()
-        return jsonify({"ok": True, "summary": summary})
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-@app.post("/api/admin/sync_property/<slug>")
-def api_admin_sync_property(slug):
-    if "user" not in session:
-        return jsonify({"error": "unauthorized"}), 401
-    res = sync_calendars_for_group(slug)
-    if "error" in res:
-        return jsonify(res), 400
-    return jsonify(res)
-
+# ====== Admin APIs ======
 @app.route("/api/unit/<int:unit_id>/ical", methods=["POST"])
 def api_update_ical(unit_id):
     if "user" not in session:
@@ -493,8 +396,7 @@ def api_update_ical(unit_id):
     u = db.query(Unit).filter(Unit.id==unit_id).first()
     if not u:
         db.close(); return jsonify({"error":"not found"}),404
-    u.ical_url = new_url
-    db.commit(); db.close()
+    u.ical_url = new_url; db.commit(); db.close()
     return jsonify({"ok":True})
 
 @app.route("/api/check_ical")
@@ -511,6 +413,7 @@ def api_check_ical():
             continue
         try:
             r = requests.get(u.ical_url, timeout=12)
+            ok_text = ""
             try:
                 ok_text = r.text
             except Exception:
@@ -536,7 +439,7 @@ def api_rates():
     data=request.json or {}
     unit_id=data.get("unit_id")
     base_rate=float(data.get("base_rate",0))
-    currency=data.get("currency","THB")
+    currency=(data.get("currency") or "THB").upper()
     db=SessionLocal()
     rp=db.query(RatePlan).filter(RatePlan.unit_id==unit_id).first()
     if not rp:
@@ -579,9 +482,7 @@ def api_blocks():
     finally:
         db.close()
 
-# =========================================================
-# iCal export (per-unit)
-# =========================================================
+# ====== iCal export (per-unit) ======
 @app.route("/ical/export/<int:unit_id>.ics")
 def ical_export(unit_id):
     db=SessionLocal()
@@ -606,62 +507,29 @@ def ical_export(unit_id):
     return (ics,200,{"Content-Type":"text/calendar; charset=utf-8",
                      "Content-Disposition":f'attachment; filename=unit-{unit_id}.ics'})
 
-# =========================================================
-# PUBLIC PAGES
-# =========================================================
+# ====== PUBLIC: Properties page ======
 @app.route("/properties")
 def properties_index():
     meta = _load_meta()
     groups = meta.get("groups", {})
 
-    # Build "pending iCal" only for logged-in admin
-    pending_map = {}
-    if "user" in session:
-        db = SessionLocal()
-        try:
-            for slug, info in groups.items():
-                unit_ids = info.get("unit_ids", [])
-                if not unit_ids:
-                    continue
-                missing = db.query(Unit).filter(
-                    Unit.id.in_(unit_ids),
-                    (Unit.ical_url == None) | (Unit.ical_url == "")
-                ).count()
-                if missing:
-                    pending_map[slug] = missing
-        finally:
-            db.close()
+    # price preview row (uses first unit's rate)
+    price_map = {}
+    db = SessionLocal()
+    try:
+        for slug, info in groups.items():
+            unit_ids = info.get("unit_ids", [])
+            if not unit_ids:
+                continue
+            rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
+            if rp:
+                price_map[slug] = {"price": rp.base_rate, "currency": rp.currency or "THB"}
+    finally:
+        db.close()
 
-    # Compute "From" price per group = MIN(base_rate) across that group's unit_ids
-    prices_map = {}
-    curr_map = {}
-    if groups:
-        db = SessionLocal()
-        try:
-            for slug, info in groups.items():
-                unit_ids = info.get("unit_ids", [])
-                if not unit_ids:
-                    continue
-                rates = db.query(RatePlan).filter(RatePlan.unit_id.in_(unit_ids)).all()
-                if rates:
-                    min_rate = min(r.base_rate for r in rates if r.base_rate is not None)
-                    prices_map[slug] = float(min_rate)
-                    try:
-                        match = next((r for r in rates if r.base_rate == min_rate), None)
-                        curr_map[slug] = (match.currency if match and match.currency else (rates[0].currency or "THB"))
-                    except Exception:
-                        curr_map[slug] = "THB"
-        finally:
-            db.close()
+    return render_template("properties.html", groups=groups, price_map=price_map)
 
-    return render_template(
-        "properties.html",
-        groups=groups,
-        pending_map=pending_map,
-        prices_map=prices_map,
-        curr_map=curr_map
-    )
-
+# ====== Public property page ======
 @app.route("/prop/<slug>")
 def property_page(slug):
     info = _group_info(slug)
@@ -682,40 +550,15 @@ def property_page(slug):
             price = rp.base_rate
             currency = rp.currency or "THB"
 
-    lang = _public_lang()
-    t = _t(lang)
-
-    # Tiny SEO fields
-    meta_title = f"{title} — Pattaya Villas"
-    meta_desc = f"Book {title}. Easy calendar selection. Secure payment."
-
-    # Render template first
-    html = render_template(
+    return render_template(
         "room.html",
         title=title,
         image_url=image_url,
         price=price,
         currency=currency,
         publishable_key=STRIPE_PUBLISHABLE_KEY,
-        slug=slug,
-        lang=lang,
-        t=t,
-        meta_title=meta_title,
-        meta_desc=meta_desc,
-        og_image=image_url,
-        is_admin=("user" in session),
-        last_synced=None  # (we inject a nicer badge below)
+        slug=slug
     )
-
-    # Inject floating badges (no template changes needed)
-    test_mode = (STRIPE_PUBLISHABLE_KEY or "").startswith("pk_test_")
-    last_syn = _group_last_synced(unit_ids)
-    html = _inject_badges(
-        html,
-        show_test=test_mode,
-        last_synced_text=(f"{t['last_synced']}: {last_syn}" if last_syn else None)
-    )
-    return Response(html)
 
 # ---- Availability (grouped): DB blocks + iCal events merged ----
 @app.route("/api/public/availability/<slug>", methods=["GET"])
@@ -811,10 +654,10 @@ def api_public_create_intent(slug):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-# ---- Public booking: grouped + per-unit (with guest email) ----
+# ---- Public booking: grouped + per-unit ----
 @app.route("/api/public/book_group/<slug>", methods=["POST"])
 def public_book_group(slug):
-    """Block dates across ALL unit_ids in the group (Airbnb+Booking+Agoda) and email admin + guest."""
+    """Block dates across ALL unit_ids in the group (Airbnb+Booking+Agoda) and email guest/admin."""
     try:
         info = _group_info(slug)
         if not info:
@@ -855,98 +698,28 @@ def public_book_group(slug):
         finally:
             db.close()
 
-        # Admin alert
-        try:
-            send_alert(
-                "New Direct Booking (Grouped)",
-                f"Property {slug}: {start}–{end} Guest: {name} ({email}) on {len(unit_ids)} OTA listings"
-            )
-        except Exception as e:
-            print("alert error:", e)
+        # email guest
+        guest_subject = f"Booking confirmed — {info.get('title', slug)}"
+        guest_html = f"""
+          <h2>Booking confirmed ✅</h2>
+          <p><b>Property:</b> {info.get('title', slug)}</p>
+          <p><b>Dates:</b> {start} → {end}</p>
+          <p>Thank you {name}! We look forward to hosting you.</p>
+        """
+        send_mail(email, guest_subject, guest_html, f"Booking confirmed: {slug} {start}→{end}")
 
-        # Guest confirmation
-        try:
-            db2 = SessionLocal()
-            price_per_night = None
-            currency = "THB"
-            try:
-                uids = info.get("unit_ids", [])
-                if uids:
-                    rp = db2.query(RatePlan).filter(RatePlan.unit_id == uids[0]).first()
-                    if rp:
-                        price_per_night = rp.base_rate
-                        currency = rp.currency or "THB"
-            finally:
-                db2.close()
-
-            send_guest_confirmation(
-                name=name,
-                email=email,
-                title=info.get("title", slug),
-                start=start,
-                end=end,
-                price_per_night=price_per_night,
-                currency=currency
-            )
-        except Exception as e:
-            print("guest email error:", e)
+        # email admin
+        send_alert("New Direct Booking (Grouped)",
+                   f"Property {slug}: {start}–{end} Guest: {name} ({email}) on {len(unit_ids)} OTA listings")
 
         return jsonify({"ok": True})
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-@app.route("/r")
-def list_public_links():
-    # Admin/testing helper only (no links shown publicly)
-    db = SessionLocal()
-    rows = db.query(Unit).all()
-    db.close()
-    html = ["<h2>Public Links</h2><ul>"]
-    for u in rows:
-        html.append(f'<li><a href="/r/{u.id}" target="_blank">/r/{u.id}</a> — {u.ota} / {u.property_id}</li>')
-    html.append("</ul>")
-    return "".join(html)
-
-@app.route("/r/<int:unit_id>")
-def room(unit_id):
-    # Legacy single-unit public page (kept for admin/testing)
-    db = SessionLocal()
-    u = db.query(Unit).filter(Unit.id == unit_id).first()
-    rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_id).first()
-    db.close()
-    if not u:
-        return "Not found", 404
-
-    display_name = f"{u.ota} — {u.property_id}"
-    image_url = "https://source.unsplash.com/featured/?pattaya,villa"
-    price = rp.base_rate if rp else None
-    currency = rp.currency if rp else "THB"
-
-    lang = _public_lang()
-    t = _t(lang)
-
-    html = render_template(
-        "room.html",
-        title=display_name,
-        image_url=image_url,
-        price=price,
-        currency=currency,
-        publishable_key=STRIPE_PUBLISHABLE_KEY,
-        slug=None,
-        lang=lang,
-        t=t,
-        is_admin=("user" in session),
-        last_synced=None
-    )
-    # Inject badge(s)
-    test_mode = (STRIPE_PUBLISHABLE_KEY or "").startswith("pk_test_")
-    html = _inject_badges(html, show_test=test_mode, last_synced_text=None)
-    return Response(html)
-
 @app.route("/api/public/book/<int:unit_id>", methods=["POST"])
 def public_book(unit_id):
-    """Block dates for ONE unit (legacy route) and email admin + guest."""
+    """Legacy single-unit booking (kept for /r/<id> tests); also emails guest/admin."""
     try:
         data = request.json or {}
         start = (data.get("start_date") or "").strip()
@@ -959,63 +732,37 @@ def public_book(unit_id):
             return jsonify({"error": "check-out must be after check-in"}), 400
 
         db = SessionLocal()
-        try:
-            u = db.query(Unit).filter(Unit.id == unit_id).first()
-            if not u:
-                return jsonify({"error": "unit not found"}), 404
-
-            if _overlaps(db, unit_id, start, end):
-                return jsonify({"error": "Dates not available"}), 409
-
-            db.add(AvailabilityBlock(
-                unit_id=unit_id,
-                start_date=start,
-                end_date=end,
-                source="direct",
-                note=f"Guest: {name} {email}"
-            ))
-            db.commit()
-        finally:
+        u = db.query(Unit).filter(Unit.id == unit_id).first()
+        if not u:
             db.close()
+            return jsonify({"error": "unit not found"}), 404
 
-        # Admin alert
-        try:
-            send_alert("New Direct Booking", f"Unit {unit_id}: {start}–{end} Guest: {name} ({email})")
-        except Exception as e:
-            print("alert error:", e)
+        if _overlaps(db, unit_id, start, end):
+            db.close()
+            return jsonify({"error": "Dates not available"}), 409
 
-        # Guest confirmation
-        try:
-            db2 = SessionLocal()
-            try:
-                u2 = db2.query(Unit).filter(Unit.id == unit_id).first()
-                rp2 = db2.query(RatePlan).filter(RatePlan.unit_id == unit_id).first()
-                title = f"{u2.ota} — {u2.property_id}" if u2 else f"Unit {unit_id}"
-                price_per_night = rp2.base_rate if rp2 else None
-                currency = (rp2.currency if rp2 else "THB") or "THB"
-            finally:
-                db2.close()
+        db.add(AvailabilityBlock(unit_id=unit_id, start_date=start, end_date=end, source="direct", note=f"Guest: {name} {email}"))
+        db.commit()
+        db.close()
 
-            send_guest_confirmation(
-                name=name,
-                email=email,
-                title=title,
-                start=start,
-                end=end,
-                price_per_night=price_per_night,
-                currency=currency
-            )
-        except Exception as e:
-            print("guest email error:", e)
+        # email guest
+        guest_subject = f"Booking confirmed — Unit {unit_id}"
+        guest_html = f"""
+          <h2>Booking confirmed ✅</h2>
+          <p><b>Unit:</b> {unit_id}</p>
+          <p><b>Dates:</b> {start} → {end}</p>
+          <p>Thank you {name}! We look forward to hosting you.</p>
+        """
+        send_mail(email, guest_subject, guest_html, f"Booking confirmed: unit {unit_id} {start}→{end}")
 
+        # email admin
+        send_alert("New Direct Booking", f"Unit {unit_id}: {start}–{end} Guest: {name} ({email})")
         return jsonify({"ok": True})
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-# =========================================================
-# Grouped Admin UI
-# =========================================================
+# ====== Grouped Admin UI ======
 @app.route("/admin/groups")
 def admin_groups():
     if "user" not in session:
@@ -1104,7 +851,7 @@ def api_admin_toggle_day(slug):
     finally:
         db.close()
 
-# Export links for OTA import
+# ====== Helper: list export links ======
 @app.get("/admin/export_links")
 def admin_export_links():
     if "user" not in session:
@@ -1121,7 +868,7 @@ def admin_export_links():
     html.append("</ul>")
     return "".join(html)
 
-# Manual re-import (seed DB once)
+# ====== Manual re-import (seed DB once after moving to ephemeral disk) ======
 @app.get("/admin/reimport")
 def admin_reimport():
     if "user" not in session:
@@ -1135,16 +882,53 @@ def admin_reimport():
     except Exception as e:
         return f"Error: {e}", 500
 
-# SMTP quick test
+# ====== Admin: test email ======
 @app.get("/admin/test_email")
 def admin_test_email():
     if "user" not in session:
         return redirect(url_for("login"))
-    to = os.environ.get("ALERT_TO") or os.environ.get("SMTP_USER")
-    ok = _smtp_send(
+    to = (os.environ.get("ALERT_TO") or os.environ.get("SMTP_USER") or "").strip()
+    if not to:
+        return "Failed: ALERT_TO/SMTP_USER missing", 500
+    ok = send_mail(
         to,
         "Test email from Channel Manager",
-        "<p>This is a <b>test</b> email from your Channel Manager.</p><p>If you received this, SMTP is working ✅</p>",
-        "This is a TEST email from your Channel Manager. If you received this, SMTP works."
+        "<h3>Test OK ✅</h3><p>If you see this, email is configured and working.</p>",
+        "Test OK"
     )
-    return ("OK: sent to " + to) if ok else ("Failed: check SMTP env vars"), (200 if ok else 500)
+    return (f"OK: sent to {to}", 200) if ok else ("Failed: email provider error", 500)
+
+# ---------- Legacy public pages (for admin/testing) ----------
+@app.route("/r")
+def list_public_links():
+    db = SessionLocal()
+    rows = db.query(Unit).all()
+    db.close()
+    html = ["<h2>Public Links</h2><ul>"]
+    for u in rows:
+        html.append(f'<li><a href="/r/{u.id}" target="_blank">/r/{u.id}</a> — {u.ota} / {u.property_id}</li>')
+    html.append("</ul>")
+    return "".join(html)
+
+@app.route("/r/<int:unit_id>")
+def room(unit_id):
+    db = SessionLocal()
+    u = db.query(Unit).filter(Unit.id == unit_id).first()
+    rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_id).first()
+    db.close()
+    if not u:
+        return "Not found", 404
+
+    display_name = f"{u.ota} — {u.property_id}"
+    image_url = "https://source.unsplash.com/featured/?pattaya,villa"
+    price = rp.base_rate if rp else None
+    currency = (rp.currency if rp else "THB") or "THB"
+
+    return render_template(
+        "room.html",
+        title=display_name,
+        image_url=image_url,
+        price=price,
+        currency=currency,
+        publishable_key=STRIPE_PUBLISHABLE_KEY
+    )
