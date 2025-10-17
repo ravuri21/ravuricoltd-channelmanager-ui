@@ -2,8 +2,13 @@
 <html lang="{{ lang }}">
 <head>
   <meta charset="UTF-8" />
-  <title>{{ title }}</title>
+  <title>{{ meta_title or title }}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="{{ meta_desc or '' }}">
+  <meta property="og:title" content="{{ meta_title or title }}">
+  <meta property="og:description" content="{{ meta_desc or '' }}">
+  <meta property="og:image" content="{{ og_image or image_url }}">
+  <meta property="og:type" content="website">
   <style>
     :root { --bg:#f6f8fa; --text:#222; --muted:#666; --ok:#ecfdf5; --okb:#a7f3d0; --bad:#fef2f2; --badb:#fecaca; --sel:#e0f2fe; --selb:#93c5fd; --blue:#0070f3; --blue-d:#005ad1; }
     * { box-sizing: border-box; }
@@ -12,6 +17,7 @@
     .brand{font-weight:700}
     .lang a{color:#cbd5e1;text-decoration:none;margin-left:10px}
     .lang a.active{color:#fff;font-weight:700}
+    .badge{display:inline-block;margin-left:8px;padding:3px 6px;border-radius:6px;font-size:.78rem;background:#fde68a;color:#7c2d12}
 
     .container { max-width: 980px; margin: 24px auto; background:#fff; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,.08); overflow:hidden; }
     .hero img { width:100%; height:300px; object-fit:cover; display:block; }
@@ -54,12 +60,19 @@
     .ok { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
     .err { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
     .footer { text-align:center; font-size:.8rem; color:#777; margin:16px 0 10px; }
+
+    .adminbar{display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .btn{padding:8px 12px;border:none;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer}
   </style>
   <script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
   <div class="topbar">
-    <div class="brand">{{ t.brand }}</div>
+    <div class="brand">{{ t.brand }}
+      {% if publishable_key and publishable_key.startswith('pk_test_') %}
+      <span class="badge">Test mode</span>
+      {% endif %}
+    </div>
     <div class="lang">
       <a href="/langpub/en" class="{{ 'active' if lang == 'en' else '' }}">EN</a> |
       <a href="/langpub/th" class="{{ 'active' if lang == 'th' else '' }}">ไทย</a>
@@ -73,10 +86,24 @@
 
     <div class="content">
       <div>
-        <h1>{{ title }}</h1>
+        <h1 style="display:flex;align-items:center;gap:10px">{{ title }}</h1>
         {% if price %}
-          <div class="price">฿ {{ '%.0f'|format(price) }} <span class="muted">/ night {{ currency or 'THB' }}</span></div>
+          <div class="price">฿ {{ '%.0f'|format(price) }} <span class="muted">{{ t.per_night }} {{ currency or 'THB' }}</span></div>
         {% endif %}
+
+        {% if is_admin and slug %}
+          <div class="panel" style="margin:10px 0">
+            <div class="adminbar">
+              <div><b>{{ t.admin_label }}:</b> {{ t.sync_btn }}</div>
+              <button id="syncBtn" class="btn" type="button">{{ t.sync_btn }}</button>
+            </div>
+            {% if last_synced %}
+              <div class="muted" style="margin-top:8px">✅ {{ t.last_synced }}: <span id="ls">{{ last_synced }}</span></div>
+            {% endif %}
+            <div id="syncMsg" class="msg" style="display:none;margin-top:10px;"></div>
+          </div>
+        {% endif %}
+
         <p class="muted">{{ t.calendar_hint }}</p>
 
         <div class="panel">
@@ -118,22 +145,13 @@
   </div>
 
   <script>
-  // --------- Context (works for /prop/<slug> and /r/<id>) ----------
   const path = location.pathname;
   const isGroup = path.startsWith("/prop/");
-  const isUnit  = path.startsWith("/r/");
-  const slug    = isGroup ? path.split("/").pop() : null;
-  const unitId  = isUnit  ? parseInt(path.split("/").pop(), 10) : null;
+  const slug = isGroup ? path.split("/").pop() : null;
 
-  // For /r/<id>, we’ll find the property group (slug) then use group availability/booking
-  let groupSlug = slug;   // will be filled for /r/<id> after lookup
-  let groupUnitIds = [];
-
-  // Stripe (only if publishable key provided)
   const STRIPE_PK = "{{ publishable_key or '' }}".trim();
   let stripe, card;
 
-  // --------- Helpers ----------
   function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}` }
   function addDays(dt, n){ const d=new Date(dt); d.setDate(d.getDate()+n); return d; }
 
@@ -154,7 +172,6 @@
     m.style.display = text ? "block" : "none";
   }
 
-  // --------- Calendar state ----------
   let blocked = new Set();
   const monthsToShow = 2;
   let selStart = null;
@@ -169,7 +186,6 @@
     document.getElementById("bookBtn").disabled = true;
   }
 
-  // --------- Build calendar ----------
   function buildMonth(year, month){
     const wrap = document.createElement("div");
     wrap.className = "cal";
@@ -204,7 +220,6 @@
       if(cls !== "bad"){
         el.addEventListener("click", () => onPick(dateStr));
       }
-
       grid.appendChild(el);
     }
     return wrap;
@@ -220,7 +235,6 @@
     }
   }
 
-  // --------- Selection logic ----------
   function isAllAvailable(startStr, endStr){
     let d = new Date(startStr);
     const end = new Date(endStr);
@@ -263,7 +277,6 @@
     document.getElementById("bookBtn").disabled = false;
   }
 
-  // --------- Availability loading ----------
   async function loadAvailabilityViaSlug(theSlug){
     try{
       const r = await fetch(`/api/public/availability/${theSlug}`);
@@ -278,23 +291,55 @@
   }
 
   async function initPage(){
-    if("{{ publishable_key or '' }}".trim()){
-      stripe = Stripe("{{ publishable_key or '' }}".trim());
+    if(STRIPE_PK){
+      stripe = Stripe(STRIPE_PK);
       const elements = stripe.elements();
       card = elements.create('card');
       card.mount('#card-element');
       document.getElementById("cardWrap").style.display = "block";
     }
 
-    if("{{ slug or '' }}"){
-      await loadAvailabilityViaSlug("{{ slug }}");
-      return;
+    if(slug){ await loadAvailabilityViaSlug(slug); }
+
+    // Format last_synced ISO → local readable
+    const ls = document.getElementById("ls");
+    if(ls && ls.textContent){
+      const dt = new Date(ls.textContent);
+      if(!isNaN(dt)) ls.textContent = dt.toLocaleString();
     }
 
-    if("{{ title }}".startsWith("Airbnb") || location.pathname.startsWith("/r/")){
-      try{
-        const id = {{ (unitId if unitId is defined) or 'null' }};
-      }catch(_){}
+    // Admin quick-sync
+    const btn = document.getElementById('syncBtn');
+    const msg = document.getElementById('syncMsg');
+    function showSync(text, ok){
+      if(!msg) return;
+      msg.textContent = text || '';
+      msg.className = 'msg ' + (ok ? 'ok' : 'err');
+      msg.style.display = text ? 'block' : 'none';
+    }
+    if(btn){
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        const original = btn.textContent;
+        btn.textContent = 'Syncing…';
+        showSync('', true);
+        try{
+          const res = await fetch('/api/admin/sync_property/'+slug, { method: 'POST' });
+          const j = await res.json();
+          if(!(res.ok && j.ok)) throw new Error(j.error || 'Failed');
+          showSync('✅ Synced. Reloading calendar…', true);
+          await loadAvailabilityViaSlug(slug);
+          // Update last synced label to now
+          const lse = document.getElementById("ls");
+          if(lse){ lse.textContent = (new Date()).toLocaleString(); }
+          setTimeout(()=>showSync('', true), 1200);
+        }catch(e){
+          showSync('❌ ' + (e.message || e), false);
+        }finally{
+          btn.disabled = false;
+          btn.textContent = original;
+        }
+      });
     }
   }
 
@@ -305,17 +350,17 @@
     const name      = document.getElementById("name").value.trim();
     const email     = document.getElementById("email").value.trim();
 
-    if(!startDate || !endDate){ setMsg("❌ Please select dates from the calendar."); return; }
-    if(endDate <= startDate){ setMsg("❌ Check-out must be after check-in."); return; }
-    if(!name || !email){ setMsg("❌ Please enter your name and email."); return; }
+    if(!startDate || !endDate){ setMsg("❌ {{ t.pick_dates }}"); return; }
+    if(endDate <= startDate){ setMsg("❌ {{ t.invalid_dates }}"); return; }
+    if(!name || !email){ setMsg("❌ {{ t.need_name_email }}"); return; }
 
     const btn = document.getElementById("bookBtn");
     const original = btn.textContent;
     btn.disabled = true; btn.textContent = "Processing…"; setMsg("");
 
     try{
-      if("{{ publishable_key or '' }}".trim()){
-        const piRes = await fetch("/api/public/create_intent/" + "{{ slug or '' }}", {
+      if(STRIPE_PK && slug){
+        const piRes = await fetch("/api/public/create_intent/" + slug, {
           method:"POST",
           headers:{"Content-Type":"application/json"},
           body: JSON.stringify({ start_date: startDate, end_date: endDate })
@@ -329,7 +374,7 @@
         if(paymentIntent.status !== "succeeded") throw new Error("Payment not completed");
       }
 
-      const postUrl = "{{ slug }}" ? `/api/public/book_group/{{ slug }}` : location.pathname.replace('/prop/','/api/public/book_group/');
+      const postUrl = slug ? `/api/public/book_group/${slug}` : "/api/public/book";
       const res = await fetch(postUrl, {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
@@ -337,9 +382,9 @@
       });
       const j = await res.json();
       if(res.ok && j.ok){
-        setMsg("✅ Booking confirmed — dates blocked.", true);
+        setMsg("✅ {{ t.booking_confirmed }}", true);
         clearSelection();
-        if("{{ slug }}"){ await loadAvailabilityViaSlug("{{ slug }}"); }
+        if(slug) await loadAvailabilityViaSlug(slug);
       }else{
         throw new Error(j.error || "Unknown error");
       }
