@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
   <meta charset="UTF-8" />
   <title>{{ title }}</title>
@@ -8,6 +8,11 @@
     :root { --bg:#f6f8fa; --text:#222; --muted:#666; --ok:#ecfdf5; --okb:#a7f3d0; --bad:#fef2f2; --badb:#fecaca; --sel:#e0f2fe; --selb:#93c5fd; --blue:#0070f3; --blue-d:#005ad1; }
     * { box-sizing: border-box; }
     body { font-family: system-ui, Arial, sans-serif; margin:0; background:var(--bg); color:var(--text); }
+    .topbar{position:sticky;top:0;background:#111827;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center}
+    .brand{font-weight:700}
+    .lang a{color:#cbd5e1;text-decoration:none;margin-left:10px}
+    .lang a.active{color:#fff;font-weight:700}
+
     .container { max-width: 980px; margin: 24px auto; background:#fff; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,.08); overflow:hidden; }
     .hero img { width:100%; height:300px; object-fit:cover; display:block; }
     .content { padding:20px; display:grid; grid-template-columns: 1.15fr 0.85fr; gap:24px; }
@@ -53,6 +58,14 @@
   <script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
+  <div class="topbar">
+    <div class="brand">{{ t.brand }}</div>
+    <div class="lang">
+      <a href="/langpub/en" class="{{ 'active' if lang == 'en' else '' }}">EN</a> |
+      <a href="/langpub/th" class="{{ 'active' if lang == 'th' else '' }}">ไทย</a>
+    </div>
+  </div>
+
   <div class="container">
     <div class="hero">
       <img src="{{ image_url or 'https://source.unsplash.com/featured/?pattaya,villa' }}" alt="Property photo">
@@ -64,18 +77,18 @@
         {% if price %}
           <div class="price">฿ {{ '%.0f'|format(price) }} <span class="muted">/ night {{ currency or 'THB' }}</span></div>
         {% endif %}
-        <p class="muted">Tap the calendar to choose check-in and check-out. <b>Red</b> = booked, <b>Green</b> = available.</p>
+        <p class="muted">{{ t.calendar_hint }}</p>
 
         <div class="panel">
           <div id="calwrap" class="calwrap"></div>
           <div class="legend">
-            <span class="dot d-ok"></span> Available
-            <span class="dot d-bad"></span> Booked
-            <span class="dot d-sel"></span> Selected
+            <span class="dot d-ok"></span> {{ t.legend_available }}
+            <span class="dot d-bad"></span> {{ t.legend_booked }}
+            <span class="dot d-sel"></span> {{ t.legend_selected }}
           </div>
         </div>
 
-        <div class="footer">Powered by RavuriCo Ltd</div>
+        <div class="footer">{{ t.powered_by }}</div>
       </div>
 
       <div>
@@ -95,7 +108,7 @@
           </div>
 
           <div class="actions">
-            <button id="bookBtn" type="submit" disabled>Book & Pay</button>
+            <button id="bookBtn" type="submit" disabled>{{ t.book_pay }}</button>
             <button type="button" class="secondary" onclick="clearSelection()">Clear</button>
           </div>
           <div id="msg" class="msg"></div>
@@ -125,7 +138,6 @@
   function addDays(dt, n){ const d=new Date(dt); d.setDate(d.getDate()+n); return d; }
 
   function expandRanges(ranges){
-    // ranges: [{start_date, end_date}] (end = checkout, exclusive)
     const set = new Set();
     for(const r of ranges){
       let d = new Date(r.start_date);
@@ -143,9 +155,9 @@
   }
 
   // --------- Calendar state ----------
-  let blocked = new Set();   // booked days
-  const monthsToShow = 2;    // show 2 months
-  let selStart = null;       // "YYYY-MM-DD"
+  let blocked = new Set();
+  const monthsToShow = 2;
+  let selStart = null;
   let selEnd   = null;
 
   function clearSelection(){
@@ -158,7 +170,7 @@
   }
 
   // --------- Build calendar ----------
-  function buildMonth(year, month){ // month = 0..11
+  function buildMonth(year, month){
     const wrap = document.createElement("div");
     wrap.className = "cal";
     const title = new Date(year, month, 1).toLocaleString('default', { month:'long', year:'numeric' });
@@ -173,12 +185,10 @@
     const startDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month+1, 0).getDate();
 
-    // leading blanks
     for(let i=0;i<startDay;i++){
       const el=document.createElement("div"); el.className="cell dis"; el.textContent=""; grid.appendChild(el);
     }
 
-    // actual days
     for(let day=1; day<=daysInMonth; day++){
       const el = document.createElement("div");
       const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
@@ -186,12 +196,12 @@
       let cls = "ok";
       if(blocked.has(dateStr)) cls = "bad";
       if(selStart && !selEnd && dateStr===selStart) cls = "sel";
-      if(selStart && selEnd && dateStr>=selStart && dateStr<selEnd) cls = "sel"; // highlight nights
+      if(selStart && selEnd && dateStr>=selStart && dateStr<selEnd) cls = "sel";
 
       el.className = "cell " + cls;
       el.textContent = day;
 
-      if(cls !== "bad"){ // clickable only if available
+      if(cls !== "bad"){
         el.addEventListener("click", () => onPick(dateStr));
       }
 
@@ -212,7 +222,6 @@
 
   // --------- Selection logic ----------
   function isAllAvailable(startStr, endStr){
-    // endStr is checkout (exclusive)
     let d = new Date(startStr);
     const end = new Date(endStr);
     while(d < end){
@@ -223,7 +232,6 @@
   }
 
   function onPick(dateStr){
-    // 1st click: set start if available
     if(!selStart){
       if(blocked.has(dateStr)) return;
       selStart = dateStr; selEnd = null;
@@ -234,7 +242,6 @@
       document.getElementById("bookBtn").disabled = true;
       return;
     }
-    // if click before/equal start → reset start
     if(dateStr <= selStart){
       if(blocked.has(dateStr)) return;
       selStart = dateStr; selEnd = null;
@@ -245,7 +252,6 @@
       document.getElementById("bookBtn").disabled = true;
       return;
     }
-    // treat as end (checkout), ensure whole range is available
     if(!isAllAvailable(selStart, dateStr)){
       setMsg("❌ Some dates in between are already booked (red). Please pick different dates.");
       return;
@@ -272,37 +278,26 @@
   }
 
   async function initPage(){
-    // Initialize Stripe if publishable key present
-    if(STRIPE_PK){
-      stripe = Stripe(STRIPE_PK);
+    if("{{ publishable_key or '' }}".trim()){
+      stripe = Stripe("{{ publishable_key or '' }}".trim());
       const elements = stripe.elements();
       card = elements.create('card');
       card.mount('#card-element');
       document.getElementById("cardWrap").style.display = "block";
     }
 
-    // For /prop/<slug>, slug already known
-    if(isGroup){ await loadAvailabilityViaSlug(groupSlug); return; }
+    if("{{ slug or '' }}"){
+      await loadAvailabilityViaSlug("{{ slug }}");
+      return;
+    }
 
-    // For /r/<id>, find its group, then use group availability + group booking
-    if(isUnit){
+    if("{{ title }}".startsWith("Airbnb") || location.pathname.startsWith("/r/")){
       try{
-        const r = await fetch(`/api/admin/find_group?unit_id=${unitId}`);
-        const j = await r.json();
-        if(j.ok && j.slug){
-          groupSlug = j.slug;
-          groupUnitIds = j.unit_ids || [];
-          await loadAvailabilityViaSlug(groupSlug);
-          return;
-        }
+        const id = {{ (unitId if unitId is defined) or 'null' }};
       }catch(_){}
-      // fallback: no group found -> show empty (all green)
-      blocked = new Set();
-      renderCalendars();
     }
   }
 
-  // --------- Booking with payment ----------
   document.getElementById("bookForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const startDate = document.getElementById("start").value;
@@ -319,9 +314,8 @@
     btn.disabled = true; btn.textContent = "Processing…"; setMsg("");
 
     try{
-      // If Stripe is configured (pk provided), create + confirm a PaymentIntent first
-      if(STRIPE_PK){
-        const piRes = await fetch("/api/public/create_intent/" + groupSlug, {
+      if("{{ publishable_key or '' }}".trim()){
+        const piRes = await fetch("/api/public/create_intent/" + "{{ slug or '' }}", {
           method:"POST",
           headers:{"Content-Type":"application/json"},
           body: JSON.stringify({ start_date: startDate, end_date: endDate })
@@ -335,11 +329,7 @@
         if(paymentIntent.status !== "succeeded") throw new Error("Payment not completed");
       }
 
-      // Always block at property-group level so all 3 OTAs close together
-      const postUrl = groupSlug
-        ? `/api/public/book_group/${groupSlug}`
-        : (isUnit ? `/api/public/book/${unitId}` : "/api/public/book"); // safety fallback
-
+      const postUrl = "{{ slug }}" ? `/api/public/book_group/{{ slug }}` : location.pathname.replace('/prop/','/api/public/book_group/');
       const res = await fetch(postUrl, {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
@@ -348,11 +338,9 @@
       const j = await res.json();
       if(res.ok && j.ok){
         setMsg("✅ Booking confirmed — dates blocked.", true);
-        try { alert("✅ Booking confirmed — dates blocked."); } catch(_) {}
-        try { document.getElementById("msg")?.scrollIntoView({behavior:"smooth", block:"center"}); } catch(_) {}
         clearSelection();
-        if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
-      } else {
+        if("{{ slug }}"){ await loadAvailabilityViaSlug("{{ slug }}"); }
+      }else{
         throw new Error(j.error || "Unknown error");
       }
     }catch(err){
@@ -362,7 +350,6 @@
     }
   });
 
-  // init
   initPage();
   </script>
 </body>
