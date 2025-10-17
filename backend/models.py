@@ -3,16 +3,37 @@ import os
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, func, ForeignKey, Float
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
-# Use persistent DB path from env (Render persistent disk is /var/data)
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///channel_manager.db")
+# Prefer env var; fall back to a safe temp path on Render Free
+DEFAULT_SQLITE = "sqlite:////tmp/channel_manager.db"
+DATABASE_URL = os.environ.get("DATABASE_URL", DEFAULT_SQLITE)
 
-# Create engine (SQLite needs special connect args)
-if DATABASE_URL.startswith("sqlite"):
-    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-else:
-    engine = create_engine(DATABASE_URL)
+# If using sqlite with an absolute filesystem path, make sure the directory exists
+def _ensure_sqlite_dir(url: str):
+    # Formats we expect:
+    #  - sqlite:////absolute/path.db
+    #  - sqlite:///relative.db
+    #  - sqlite:// (memory)  -> ignore
+    if not url.startswith("sqlite"):
+        return
+    # absolute path form
+    prefix = "sqlite:////"
+    if url.startswith(prefix):
+        path = url[len(prefix):]
+        d = os.path.dirname(path)
+        if d and not os.path.exists(d):
+            try:
+                os.makedirs(d, exist_ok=True)
+            except Exception:
+                pass
 
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+_ensure_sqlite_dir(DATABASE_URL)
+
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
+    future=True,
+)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 Base = declarative_base()
 
 class Unit(Base):
@@ -31,7 +52,7 @@ class AvailabilityBlock(Base):
     unit_id = Column(Integer, ForeignKey("units.id"))
     start_date = Column(String(20))  # YYYY-MM-DD
     end_date = Column(String(20))    # YYYY-MM-DD (checkout, exclusive)
-    source = Column(String(50), default="manual")  # manual, direct, ical, booking, airbnb, agoda...
+    source = Column(String(50), default="manual")  # manual, direct, hold, ota name
     note = Column(Text, default="")
     unit = relationship("Unit", back_populates="blocks")
 
