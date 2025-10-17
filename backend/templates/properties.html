@@ -1,62 +1,73 @@
 <!doctype html>
-<html lang="{{ lang }}">
+<html>
 <head>
   <meta charset="utf-8" />
-  <title>{{ meta_title or 'Properties' }}</title>
+  <title>Properties</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="{{ meta_desc or '' }}">
-  <meta property="og:title" content="{{ meta_title or 'Properties' }}">
-  <meta property="og:description" content="{{ meta_desc or '' }}">
-  <meta property="og:type" content="website">
-  <link rel="stylesheet" href="/static/style.css" />
   <style>
     body{font-family:system-ui,Arial,sans-serif;margin:0;background:#f6f8fa;color:#222}
-    .topbar{position:sticky;top:0;background:#111827;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center}
-    .brand{font-weight:700}
-    .lang a{color:#cbd5e1;text-decoration:none;margin-left:10px}
-    .lang a.active{color:#fff;font-weight:700}
-    .wrap{max-width:980px;margin:18px auto;background:#fff;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.08);overflow:hidden}
-    .head{padding:12px 16px;border-bottom:1px solid #eee}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;padding:16px}
-    .card{border:1px solid #eee;border-radius:10px;overflow:hidden;background:#fafafa}
+    .topbar{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#111;color:#fff}
+    .topbar a{color:#fff;text-decoration:none;margin-left:10px}
+    .wrap{max-width:1040px;margin:20px auto;padding:0 12px}
+    h2{margin:10px 0 16px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+    .card{background:#fff;border:1px solid #eee;border-radius:10px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.06)}
     .card img{width:100%;height:160px;object-fit:cover;display:block}
-    .body{padding:10px}
-    .title{font-weight:700;margin-bottom:6px}
+    .card .b{padding:10px 12px}
     .muted{color:#6b7280}
-    .price{font-weight:700;margin:6px 0}
-    .btn{display:inline-block;margin-top:8px;padding:8px 12px;border:none;border-radius:8px;background:#2563eb;color:#fff;text-decoration:none}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#f1f5f9;color:#334155;font-size:.8rem;margin-left:6px}
+    .admin{margin-top:12px;font-size:.9rem}
+    .admin a{color:#2563eb;text-decoration:none}
+    .lang{margin-left:8px;opacity:.9}
   </style>
 </head>
 <body>
   <div class="topbar">
-    <div class="brand">{{ t.brand }}</div>
-    <div class="lang">
-      <a href="/langpub/en" class="{{ 'active' if lang == 'en' else '' }}">EN</a> |
-      <a href="/langpub/th" class="{{ 'active' if lang == 'th' else '' }}">ไทย</a>
+    <div>
+      <b>Channel Manager</b>
+      <span class="lang">
+        <a href="/langpub/en">EN</a> | <a href="/langpub/th">ไทย</a>
+      </span>
+    </div>
+    <div>
+      <a href="/properties">Public</a>
+      <a href="/">Admin</a>
+      <a href="/logout">Logout</a>
     </div>
   </div>
 
   <div class="wrap">
-    <div class="head">
-      <div style="font-weight:700">{{ t.our_properties }}</div>
-      <div class="muted">{{ t.tap_to_check }}</div>
-    </div>
+    <h2>Properties</h2>
 
     <div class="grid">
       {% for slug, info in groups.items() %}
-      {% set gp = group_prices.get(slug) %}
-      <div class="card">
-        <img src="{{ info.image_url or 'https://source.unsplash.com/featured/?pattaya,villa' }}" alt="">
-        <div class="body">
-          <div class="title">{{ info.title or slug }}</div>
-          {% if gp and gp.price %}
-            <div class="price">฿ {{ '%.0f'|format(gp.price) }} <span class="muted">{{ t.per_night }} {{ gp.currency or t.currency }}</span></div>
-          {% endif %}
-          <a class="btn" href="/prop/{{ slug }}">{{ t.check_availability }}</a>
-        </div>
-      </div>
+        <a class="card" href="/prop/{{ slug }}">
+          <img src="{{ info.image_url or 'https://source.unsplash.com/featured/?pattaya,villa' }}" alt="">
+          <div class="b">
+            <div style="font-weight:700">{{ info.title or slug }}</div>
+            {% if pending_map and slug in pending_map %}
+              <div class="muted" title="Some OTA iCal links not set yet">
+                iCal pending <span class="pill">{{ pending_map[slug] }}</span>
+              </div>
+            {% else %}
+              <div class="muted">Open calendar & book</div>
+            {% endif %}
+          </div>
+        </a>
       {% endfor %}
     </div>
+
+    {% if not groups %}
+      <p class="muted">No properties found. Make sure <code>backend/unit_meta.json</code> has your groups.</p>
+    {% endif %}
+
+    {% if pending_map %}
+      <div class="admin">
+        <span class="muted">Admin tips:</span>
+        <a href="/admin/groups" target="_blank">Grouped Admin</a> ·
+        <a href="/admin/export_links" target="_blank">Export iCal</a>
+      </div>
+    {% endif %}
   </div>
 </body>
 </html>
