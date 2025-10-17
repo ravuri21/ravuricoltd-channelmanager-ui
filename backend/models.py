@@ -1,8 +1,17 @@
+# backend/models.py
+import os
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, func, ForeignKey, Float
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
-DATABASE_URL = "sqlite:///channel_manager.db"
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# Use persistent DB path from env (Render persistent disk is /var/data)
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///channel_manager.db")
+
+# Create engine (SQLite needs special connect args)
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(DATABASE_URL)
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
 
@@ -22,7 +31,7 @@ class AvailabilityBlock(Base):
     unit_id = Column(Integer, ForeignKey("units.id"))
     start_date = Column(String(20))  # YYYY-MM-DD
     end_date = Column(String(20))    # YYYY-MM-DD (checkout, exclusive)
-    source = Column(String(50), default="manual")  # manual, direct, hold, direct
+    source = Column(String(50), default="manual")  # manual, direct, ical, booking, airbnb, agoda...
     note = Column(Text, default="")
     unit = relationship("Unit", back_populates="blocks")
 
