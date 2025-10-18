@@ -71,119 +71,142 @@
   </div>
 
 <script>
+/*
+ Admin calendar script
+ - paste into admin_calendar.html replacing the old <script> block
+ - Uses: /api/public/availability/<slug>  and  /api/admin/toggle_day/<slug>
+*/
+
 const slug = "{{ slug }}";
+const monthsMax = 12;        // allow navigating up to 12 months
+let viewOffset = 0;         // 0 = current month, 1 = next, ...
+let blocked = new Set();    // YYYY-MM-DD strings
+const msgEl = document.getElementById("msg");
+const calwrap = document.getElementById("calwrap");
+
 function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}` }
 function addDays(dt, n){ const d=new Date(dt); d.setDate(d.getDate()+n); return d; }
+function monthStartFromOffset(offset) {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth()+offset, 1);
+}
 
-let blocked = new Set(); // booked days (YYYY-MM-DD)
-const monthsToShow = 2;
-
-function setMsg(t,ok=false){
-  const m=document.getElementById("msg");
-  if(!t){ m.style.display="none"; return; }
-  m.textContent=t; m.className="msg "+(ok?"ok":"err"); m.style.display="block";
+function setMsg(text, ok=true, persistMs=1800){
+  if(!msgEl) return;
+  if(!text){ msgEl.style.display="none"; return; }
+  msgEl.textContent = text;
+  msgEl.className = "msg " + (ok ? "ok" : "err");
+  msgEl.style.display = "block";
+  // big font and stay longer if requested
+  msgEl.style.fontSize = "1.05rem";
+  if(persistMs){
+    setTimeout(()=>{ msgEl.style.display="none"; }, persistMs);
+  }
 }
 
 function expandRanges(ranges){
-  const s=new Set();
+  const s = new Set();
   for(const r of ranges){
-    let d=new Date(r.start_date);
-    const end=new Date(r.end_date);
-    while(d<end){ s.add(ymd(d)); d=addDays(d,1); }
+    let d = new Date(r.start_date);
+    const end = new Date(r.end_date);
+    while(d < end){
+      s.add(ymd(d));
+      d = addDays(d,1);
+    }
   }
   return s;
 }
 
 async function loadAvailability(){
-  setMsg("Loading availability…", true);
+  setMsg("Loading availability…", true, 0);
   try{
-    const r=await fetch(`/api/public/availability/${slug}`);
-    const data=await r.json();
+    const res = await fetch(`/api/public/availability/${slug}`);
+    if(!res.ok){ throw new Error("Failed loading availability"); }
+    const data = await res.json();
     blocked = Array.isArray(data) ? expandRanges(data) : new Set();
+    setMsg("Loaded availability", true, 900);
     renderCalendars();
-    setMsg("Loaded.", true); setTimeout(()=>setMsg(""),800);
-  }catch(e){
-    setMsg("Failed to load availability.");
+  }catch(err){
+    console.error("loadAvailability error:", err);
+    setMsg("Failed to load availability", false, 4000);
   }
 }
 
-function buildMonth(year,month){
-  const wrap=document.createElement("div");
-  wrap.className="cal";
-  wrap.innerHTML=`<h3>${new Date(year,month,1).toLocaleString('default',{month:'long',year:'numeric'})}</h3><div class="grid"></div>`;
-  const grid=wrap.querySelector(".grid");
-  const dows=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  dows.forEach(d=>{ const el=document.createElement("div"); el.className="dow"; el.textContent=d; grid.appendChild(el); });
-  const startDay=new Date(year,month,1).getDay();
-  const daysInMonth=new Date(year,month+1,0).getDate();
-  for(let i=0;i<startDay;i++){ const el=document.createElement("div"); el.className="cell dis"; grid.appendChild(el); }
+function buildMonth(year, month){
+  const wrap = document.createElement("div");
+  wrap.className = "cal";
+  const title = new Date(year, month, 1).toLocaleString('default', { month:'long', year:'numeric' });
+  wrap.innerHTML = `<h3>${title}</h3><div class="grid"></div>`;
+  const grid = wrap.querySelector(".grid");
+
+  const dows = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  dows.forEach(d => { const el=document.createElement("div"); el.className="dow"; el.textContent=d; grid.appendChild(el); });
+
+  const startDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+
+  for(let i=0;i<startDay;i++){
+    const el=document.createElement("div"); el.className="cell dis"; el.textContent=""; grid.appendChild(el);
+  }
+
   for(let day=1; day<=daysInMonth; day++){
-    const el=document.createElement("div");
-    const dateStr=`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    const isBlocked=blocked.has(dateStr);
-    el.className="cell "+(isBlocked?"bad":"ok");
-    el.textContent=day;
-    el.title = isBlocked ? "Click to UNBLOCK" : "Click to BLOCK";
-    el.addEventListener("click",()=>toggleDay(dateStr,isBlocked));
+    const el = document.createElement("div");
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const isBlocked = blocked.has(dateStr);
+    el.className = "cell " + (isBlocked ? "bad" : "ok");
+    el.textContent = day;
+    el.title = isBlocked ? "Click to UNBLOCK this date" : "Click to BLOCK this date";
+    el.style.cursor = "pointer";
+    el.addEventListener("click", () => toggleDay(dateStr, isBlocked));
     grid.appendChild(el);
   }
   return wrap;
 }
 
 function renderCalendars(){
-  const holder=document.getElementById("calwrap");
-  holder.innerHTML="";
-  const now=new Date();
-  for(let m=0;m<monthsToShow;m++){
-    const dt=new Date(now.getFullYear(),now.getMonth()+m,1);
-    holder.appendChild(buildMonth(dt.getFullYear(),dt.getMonth()));
+  calwrap.innerHTML = "";
+  const base = monthStartFromOffset(viewOffset);
+  for(let m=0;m<2;m++){  // show two months at a time: offset, offset+1
+    const dt = new Date(base.getFullYear(), base.getMonth()+m, 1);
+    calwrap.appendChild(buildMonth(dt.getFullYear(), dt.getMonth()));
   }
 }
 
-async function toggleDay(dateStr,isCurrentlyBlocked){
+async function toggleDay(dateStr, currentlyBlocked){
+  // prevent double clicks
+  setMsg("Working…", true, 0);
+
+  const action = currentlyBlocked ? "unblock" : "block";
   try{
-    const r=await fetch(`/api/admin/toggle_day/${slug}`,{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ date: dateStr, action: isCurrentlyBlocked ? "unblock" : "block" })
+    const res = await fetch(`/api/admin/toggle_day/${slug}`, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ date: dateStr, action })
     });
-    const j=await r.json();
-    if(!(r.ok && j.ok)) throw new Error(j.error||"Error");
-    if(isCurrentlyBlocked) blocked.delete(dateStr); else blocked.add(dateStr);
+    const j = await res.json();
+    if(!res.ok || !j.ok){ throw new Error(j.error || "Server failed"); }
+    if(currentlyBlocked) blocked.delete(dateStr); else blocked.add(dateStr);
     renderCalendars();
-    setMsg(isCurrentlyBlocked?"Opened that date ✅":"Blocked that date ✅", true);
-    setTimeout(()=>setMsg(""),1000);
-  }catch(e){
-    setMsg("Failed: "+(e.message||e));
+    setMsg(currentlyBlocked ? `Opened ${dateStr} ✅` : `Blocked ${dateStr} ✅`, true, 2200);
+  }catch(err){
+    console.error("toggleDay error:", err);
+    setMsg("Action failed: " + (err.message || err), false, 5000);
   }
 }
 
-// ---- Sync all OTAs button logic ----
-document.getElementById("syncAllBtn").addEventListener("click", async function(){
-  const btn = this;
-  btn.disabled = true;
-  btn.textContent = "Syncing…";
-  document.getElementById("syncStatus").textContent = "Working…";
-  try{
-    const r = await fetch("/api/admin/sync_now", { method: "POST" });
-    const j = await r.json();
-    if(!r.ok || !j.ok){ throw new Error(j.error || "Sync failed"); }
-    // show quick summary in message and in syncStatus
-    const summary = (j.summary || []).map(s => `${s.unit_id}:${s.status}`).slice(0,6).join(" | ");
-    setMsg("Sync complete — " + (summary || "no changes"), true);
-    document.getElementById("syncStatus").textContent = "Last sync: now";
-    // reload availability to refresh calendar colors
-    await loadAvailability();
-  }catch(err){
-    setMsg("Sync failed: " + (err.message || err));
-    document.getElementById("syncStatus").textContent = "Last sync: error";
-  }finally{
-    btn.disabled = false;
-    btn.textContent = "🔄 Sync All OTAs Now";
-    setTimeout(()=>setMsg(""),4000);
-  }
+/* Navigation buttons (Prev/Next) */
+document.getElementById("prevMonth").addEventListener("click", () => {
+  if(viewOffset <= 0) { setMsg("Cannot go earlier than current month", false, 1200); return; }
+  viewOffset = Math.max(0, viewOffset - 1);
+  renderCalendars();
+});
+document.getElementById("nextMonth").addEventListener("click", () => {
+  if(viewOffset >= (monthsMax - 2)) { setMsg("Max forward months reached", false, 1200); return; }
+  viewOffset = Math.min(monthsMax - 2, viewOffset + 1);
+  renderCalendars();
 });
 
+/* Init */
 loadAvailability();
 </script>
 </body>
