@@ -1,397 +1,113 @@
-<!DOCTYPE html>
-<html lang="en">
+{# backend/templates/properties.html #}
+<!doctype html>
+<html lang="{{ 'th' if lang == 'th' else 'en' }}">
 <head>
-  <meta charset="UTF-8" />
-  <title>{{ title }}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Properties — {{ t.brand }}</title>
+  <link rel="stylesheet" href="/static/style.css" />
   <style>
-    :root { --bg:#f6f8fa; --text:#222; --muted:#666; --ok:#ecfdf5; --okb:#a7f3d0; --bad:#fef2f2; --badb:#fecaca; --sel:#e0f2fe; --selb:#93c5fd; --blue:#0070f3; --blue-d:#005ad1; }
-    * { box-sizing: border-box; }
-    body { font-family: system-ui, Arial, sans-serif; margin:0; background:var(--bg); color:var(--text); }
-    .container { max-width: 980px; margin: 24px auto; background:#fff; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,.08); overflow:hidden; }
-    .hero img { width:100%; height:300px; object-fit:cover; display:block; }
-    .content { padding:20px; display:grid; grid-template-columns: 1.15fr 0.85fr; gap:24px; }
-    @media (max-width: 960px){ .content { grid-template-columns: 1fr; } }
-    h1 { font-size:1.3rem; margin:0 0 6px; }
-    .price { font-weight:700; margin:0 0 10px; }
-    .muted { color:var(--muted); }
+    :root {
+      --bg: #f6f8fa;
+      --card: #ffffff;
+      --muted: #6b7280;
+      --blue: #2563eb;
+      --green: #16a34a;
+      --pink: #ef4444;
+      --radius: 12px;
+    }
+    body{font-family:system-ui,Arial,sans-serif;background:var(--bg);margin:0;color:#111}
+    .wrap{max-width:1100px;margin:28px auto;padding:18px}
+    header.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    header.top h1{margin:0;font-size:1.4rem}
+    .muted{color:var(--muted);font-size:.95rem}
 
-    /* Calendar */
-    .panel { background:#fafafa; border:1px solid #eee; border-radius:10px; padding:14px; }
-    .calwrap { display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:16px; }
-    .cal { border:1px solid #eee; border-radius:10px; overflow:hidden; }
-    .cal h3 { margin:0; padding:8px 10px; background:#f3f4f6; border-bottom:1px solid #eee; font-size:.95rem; }
-    .grid { display:grid; grid-template-columns: repeat(7, 1fr); }
-    .dow, .cell { padding:10px; text-align:center; border-bottom:1px solid #f1f1f1; border-right:1px solid #f1f1f1; user-select:none; }
-    .grid > *:nth-child(7n){ border-right:none; }
-    .dow { background:#fafafa; font-weight:600; font-size:.85rem; }
-    .cell.dis { color:#bbb; background:#fafafa; cursor:not-allowed; }
-    .cell.ok { background:var(--ok); border-bottom-color:var(--okb); cursor:pointer; }
-    .cell.bad { background:var(--bad); border-bottom-color:var(--badb); color:#991b1b; cursor:not-allowed; }
-    .cell.sel { background:var(--sel); border-bottom-color:var(--selb); outline:2px solid var(--selb); }
-    .legend{display:flex; gap:10px; align-items:center; font-size:.9rem; margin-top:10px;}
-    .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
-    .d-ok{background:var(--ok);border:1px solid var(--okb)}
-    .d-bad{background:var(--bad);border:1px solid var(--badb)}
-    .d-sel{background:var(--sel);border:1px solid var(--selb)}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+    .card{background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:0 6px 18px rgba(15,23,42,0.06);display:flex;flex-direction:column}
+    .card .media{height:170px;background:#eee}
+    .card .media img{width:100%;height:100%;object-fit:cover;display:block}
+    .card .body{padding:12px 14px;flex:1;display:flex;flex-direction:column}
+    .card .title{font-weight:700;margin:0 0 6px;font-size:1.02rem}
+    .card .sub{color:var(--muted);font-size:.92rem;margin-bottom:8px}
+    .pricebar{display:flex;align-items:center;justify-content:space-between;margin-top:auto}
+    .price{font-weight:800;font-size:1.05rem}
+    .note{font-size:.86rem;color:var(--muted)}
 
-    /* Form */
-    label { display:block; font-size:.9rem; margin:10px 0 4px; color:#333; }
-    input, button { width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; font-size:1rem; }
-    input[readonly]{ background:#f9fafb }
-    input:focus { outline:none; border-color: var(--blue); }
-    .actions { display:flex; gap:10px; align-items:center; margin-top:10px; }
-    button { background:var(--blue); color:#fff; border:none; font-weight:600; cursor:pointer; }
-    button:hover { background:var(--blue-d); }
-    button.secondary { background:#6b7280; }
-    button[disabled] { opacity:.65; cursor:not-allowed; }
-    .msg { margin-top:10px; padding:14px; border-radius:10px; font-size:1.05rem; display:none; text-align:center; }
-    .ok { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-weight:700; font-size:1.15rem; }
-    .err { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
-    .footer { text-align:center; font-size:.8rem; color:#777; margin:16px 0 10px; }
+    .actions{display:flex;gap:8px;margin-top:10px}
+    .btn{padding:8px 12px;border-radius:8px;border:none;font-weight:700;cursor:pointer;text-decoration:none;color:#fff;display:inline-flex;align-items:center;gap:8px}
+    .btn.view{background:#0ea5a4}
+    .btn.book{background:var(--blue)}
+    .btn.secondary{background:#6b7280}
+    .stripe-badge{font-size:.8rem;padding:4px 8px;border-radius:8px;border:1px solid #e6eefc;background:#f8fbff;color:#0b4fdb}
+    @media (max-width:640px){
+      .card .media{height:150px}
+      header.top{flex-direction:column;align-items:flex-start;gap:10px}
+    }
   </style>
-  <script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
-  <div class="container">
-    <div class="hero">
-      <img src="{{ image_url or 'https://source.unsplash.com/featured/?pattaya,villa' }}" alt="Property photo">
-    </div>
-
-    <div class="content">
+  <div class="wrap">
+    <header class="top">
       <div>
-        <h1>{{ title }}</h1>
-        {% if price %}
-          <div class="price">฿ {{ '%.0f'|format(price) }} <span class="muted">/ night {{ currency or 'THB' }}</span></div>
-        {% endif %}
-        <p class="muted">Tap the calendar to choose check-in and check-out. <b>Red</b> = booked, <b>Green</b> = available.</p>
-
-        <div class="panel">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-    <div style="font-weight:600">Availability (click green days to select)</div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button id="prevMonth" class="btn secondary small" type="button">← Prev</button>
-      <button id="nextMonth" class="btn small" type="button">Next →</button>
-    </div>
-  </div>
-
-  <div id="calwrap" class="calwrap"></div>
-  <div class="legend">
-    <span class="dot d-ok"></span> Available
-    <span class="dot d-bad"></span> Booked
-    <span class="dot d-sel"></span> Selected
-  </div>
-
-</div>
-        <div class="footer">Powered by RavuriCo Ltd</div>
+        <h1>Our properties</h1>
+        <div class="muted">Browse available properties — prices shown in THB</div>
       </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <a class="stripe-badge" href="https://stripe.com" target="_blank" rel="noopener">Stripe powered</a>
+        <a class="muted" href="/login">Admin</a>
+      </div>
+    </header>
 
-      <div>
-        <form id="bookForm" class="panel" novalidate>
-          <label>Check-in</label>
-          <input id="start" type="date" required>
-          <label>Check-out</label>
-          <input id="end" type="date" required>
-          <label>Your Name</label>
-          <input id="name" type="text" placeholder="Full name" required>
-          <label>Your Email</label>
-          <input id="email" type="email" placeholder="Email address" required>
-
-          <div id="cardWrap" style="display:none;">
-            <label>Card</label>
-            <div id="card-element" style="padding:10px;border:1px solid #ddd;border-radius:8px;"></div>
+    <main>
+      {% if not groups %}
+        <div class="card" style="padding:18px">
+          <div class="muted">No properties available right now.</div>
+        </div>
+      {% else %}
+      <div class="grid" role="list">
+        {% for slug, info in groups.items() %}
+        <article class="card" role="listitem" aria-labelledby="t-{{ slug }}">
+          <div class="media">
+            <a href="/prop/{{ slug }}" title="View {{ info.title|e }}">
+              <img src="{{ info.image_url|e }}" alt="{{ info.title|e }}" loading="lazy">
+            </a>
           </div>
 
-          <div id="priceCalc" style="margin-top:10px;font-weight:700;"></div>
+          <div class="body">
+            <h2 id="t-{{ slug }}" class="title">{{ info.title }}</h2>
+            <div class="sub">
+              {% if info.unit_ids and info.unit_ids|length > 1 %}
+                Units: {{ info.unit_ids|join(', ') }}
+              {% elif info.unit_ids %}
+                Unit: {{ info.unit_ids[0] }}
+              {% endif %}
+            </div>
 
-          <div class="actions">
-            <button id="bookBtn" type="submit" disabled>Book & Pay</button>
-            <button type="button" class="secondary" onclick="clearSelection()">Clear</button>
+            <div class="note">
+              {% if info.price is not none %}
+                <span class="price">฿ {{ '%.0f'|format(info.price) }}</span>
+                <span class="muted"> / night</span>
+              {% else %}
+                <span class="muted">Price on request — contact us</span>
+              {% endif %}
+            </div>
+
+            <div class="actions" aria-hidden="false">
+              <a class="btn view" href="/prop/{{ slug }}" title="View {{ info.title|e }}">View</a>
+              <a class="btn book" href="/prop/{{ slug }}" title="Book {{ info.title|e }}">Book</a>
+            </div>
+
+            <div style="margin-top:10px" class="muted">Show calendar & book on the property page.</div>
           </div>
-          <div id="msg" class="msg"></div>
-        </form>
+        </article>
+        {% endfor %}
       </div>
-    </div>
+      {% endif %}
+    </main>
+
+    <footer style="margin-top:20px;text-align:center;color:var(--muted);font-size:.9rem">
+      &copy; {{ t.brand }} — <span class="muted">Pattaya, Thailand</span>
+    </footer>
   </div>
-
-  <script>
-  // --------- Context ----------
-  const path = location.pathname;
-  const isGroup = path.startsWith("/prop/");
-  const isUnit  = path.startsWith("/r/");
-  const slug    = isGroup ? path.split("/").pop() : null;
-  const unitId  = isUnit  ? parseInt(path.split("/").pop(), 10) : null;
-
-  let groupSlug = slug;
-  let groupUnitIds = [];
-
-  const STRIPE_PK = "{{ publishable_key or '' }}".trim();
-  let stripe, card;
-
-  function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}` }
-  function addDays(dt, n){ const d=new Date(dt); d.setDate(d.getDate()+n); return d; }
-
-  function expandRanges(ranges){
-    const set = new Set();
-    for(const r of ranges){
-      let d = new Date(r.start_date);
-      const end = new Date(r.end_date);
-      while(d < end){ set.add(ymd(d)); d = addDays(d,1); }
-    }
-    return set;
-  }
-
-  function setMsg(text, ok=false, persistMs=6000){
-    const m = document.getElementById("msg");
-    if(!text){ m.style.display = "none"; return; }
-    m.textContent = text;
-    m.className = "msg " + (ok ? "ok" : "err");
-    m.style.display = "block";
-    if(persistMs && persistMs > 0){
-      clearTimeout(window.__msgTimeout);
-      window.__msgTimeout = setTimeout(()=>{ m.style.display="none"; }, persistMs);
-    }
-  }
-
-  let blocked = new Set();
-  let monthsToShow = 2;
-  let selStart = null;
-  let selEnd   = null;
-  // track current base month index for navigation (0 = this month)
-  let baseMonthOffset = 0;
-
-  function clearSelection(){
-    selStart = selEnd = null;
-    document.getElementById("start").value = "";
-    document.getElementById("end").value = "";
-    setMsg("");
-    renderCalendars();
-    document.getElementById("bookBtn").disabled = true;
-    updatePriceCalc();
-  }
-
-  function buildMonthForOffset(offset){
-    const now = new Date();
-    const dt = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-    return buildMonth(dt.getFullYear(), dt.getMonth());
-  }
-
-  function buildMonth(year, month){
-    const wrap = document.createElement("div");
-    wrap.className = "cal";
-    const title = new Date(year, month, 1).toLocaleString('default', { month:'long', year:'numeric' });
-    wrap.innerHTML = `<h3>${title}</h3><div class="grid"></div>`;
-    const grid = wrap.querySelector(".grid");
-
-    const dows = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-    dows.forEach(d => {
-      const el=document.createElement("div"); el.className="dow"; el.textContent=d; grid.appendChild(el);
-    });
-
-    const startDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month+1, 0).getDate();
-
-    for(let i=0;i<startDay;i++){
-      const el=document.createElement("div"); el.className="cell dis"; el.textContent=""; grid.appendChild(el);
-    }
-
-    for(let day=1; day<=daysInMonth; day++){
-      const el = document.createElement("div");
-      const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-
-      let cls = "ok";
-      if(blocked.has(dateStr)) cls = "bad";
-      if(selStart && !selEnd && dateStr===selStart) cls = "sel";
-      if(selStart && selEnd && dateStr>=selStart && dateStr<selEnd) cls = "sel";
-
-      el.className = "cell " + cls;
-      el.textContent = day;
-
-      if(cls !== "bad"){
-        el.addEventListener("click", () => onPick(dateStr));
-      }
-
-      grid.appendChild(el);
-    }
-    return wrap;
-  }
-
-  function renderCalendars(){
-    const holder = document.getElementById("calwrap");
-    holder.innerHTML = "";
-    for(let m=0; m<monthsToShow; m++){
-      const offset = baseMonthOffset + m;
-      holder.appendChild(buildMonthForOffset(offset));
-    }
-  }
-
-  function isAllAvailable(startStr, endStr){
-    let d = new Date(startStr);
-    const end = new Date(endStr);
-    while(d < end){
-      if(blocked.has(ymd(d))) return false;
-      d = addDays(d,1);
-    }
-    return true;
-  }
-
-  function onPick(dateStr){
-    if(!selStart){
-      if(blocked.has(dateStr)) return;
-      selStart = dateStr; selEnd = null;
-      document.getElementById("start").value = selStart;
-      document.getElementById("end").value = "";
-      setMsg("");
-      renderCalendars();
-      document.getElementById("bookBtn").disabled = true;
-      updatePriceCalc();
-      return;
-    }
-    if(dateStr <= selStart){
-      if(blocked.has(dateStr)) return;
-      selStart = dateStr; selEnd = null;
-      document.getElementById("start").value = selStart;
-      document.getElementById("end").value = "";
-      setMsg("");
-      renderCalendars();
-      document.getElementById("bookBtn").disabled = true;
-      updatePriceCalc();
-      return;
-    }
-    if(!isAllAvailable(selStart, dateStr)){
-      setMsg("❌ Some dates in between are already booked (red). Please pick different dates.", false, 5000);
-      return;
-    }
-    selEnd = dateStr;
-    document.getElementById("end").value = selEnd;
-    setMsg("");
-    renderCalendars();
-    document.getElementById("bookBtn").disabled = false;
-    updatePriceCalc();
-  }
-
-  async function loadAvailabilityViaSlug(theSlug){
-    try{
-      const r = await fetch(`/api/public/availability/${theSlug}`);
-      const data = await r.json();
-      if(Array.isArray(data)){
-        blocked = expandRanges(data);
-      }else{
-        blocked = new Set();
-      }
-    }catch(_){ blocked = new Set(); }
-    renderCalendars();
-  }
-
-  function updatePriceCalc(){
-    const s = document.getElementById('start').value;
-    const e = document.getElementById('end').value;
-    if(!s || !e || e <= s){ document.getElementById('priceCalc').textContent = ''; return; }
-    const pricePerNight = {{ price or 0 }};
-    const days = (new Date(e) - new Date(s)) / (1000*60*60*24);
-    const total = Math.round(pricePerNight * days);
-    document.getElementById('priceCalc').textContent = `฿${pricePerNight} × ${days} night(s) = ฿${total}`;
-  }
-
-  async function initPage(){
-    if(STRIPE_PK){
-      stripe = Stripe(STRIPE_PK);
-      const elements = stripe.elements();
-      card = elements.create('card');
-      card.mount('#card-element');
-      document.getElementById("cardWrap").style.display = "block";
-    }
-
-    // default to showing 2 columns but allow user to increase months easily:
-    monthsToShow = 2;
-
-    // For /prop/<slug>, slug already known
-    if(isGroup){ await loadAvailabilityViaSlug(groupSlug); return; }
-
-    // For /r/<id>, find its group, then use group availability + group booking
-    if(isUnit){
-      try{
-        const r = await fetch(`/api/admin/find_group?unit_id=${unitId}`);
-        const j = await r.json();
-        if(j.ok && j.slug){
-          groupSlug = j.slug;
-          groupUnitIds = j.unit_ids || [];
-          await loadAvailabilityViaSlug(groupSlug);
-          return;
-        }
-      }catch(_){}
-      blocked = new Set();
-      renderCalendars();
-    }
-  }
-
-  // Calendar navigation handlers (Prev / Next)
-  document.getElementById("prevMonth").addEventListener("click", ()=>{
-    baseMonthOffset = Math.max(baseMonthOffset - 1, 0);
-    renderCalendars();
-  });
-  document.getElementById("nextMonth").addEventListener("click", ()=>{
-    baseMonthOffset = baseMonthOffset + 1;
-    // allow unlimited forward navigation — user can move forward up to 12 months visually by clicking repeatedly
-    renderCalendars();
-  });
-
-  document.getElementById("bookForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const startDate = document.getElementById("start").value;
-    const endDate   = document.getElementById("end").value;
-    const name      = document.getElementById("name").value.trim();
-    const email     = document.getElementById("email").value.trim();
-
-    if(!startDate || !endDate){ setMsg("❌ Please select dates from the calendar.", false, 5000); return; }
-    if(endDate <= startDate){ setMsg("❌ Check-out must be after check-in.", false, 5000); return; }
-    if(!name || !email){ setMsg("❌ Please enter your name and email.", false, 5000); return; }
-
-    const btn = document.getElementById("bookBtn");
-    const original = btn.textContent;
-    btn.disabled = true; btn.textContent = "Processing…"; setMsg("", false);
-
-    try{
-      if(STRIPE_PK){
-        const piRes = await fetch("/api/public/create_intent/" + groupSlug, {
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({ start_date: startDate, end_date: endDate })
-        });
-        const pi = await piRes.json();
-        if(!piRes.ok || !pi.ok){ throw new Error(pi.error || "Failed to create payment"); }
-        const {error, paymentIntent} = await stripe.confirmCardPayment(pi.client_secret, {
-          payment_method: { card, billing_details: { name, email } }
-        });
-        if(error) throw error;
-        if(paymentIntent.status !== "succeeded") throw new Error("Payment not completed");
-      }
-
-      const postUrl = groupSlug ? `/api/public/book_group/${groupSlug}` : (isUnit ? `/api/public/book/${unitId}` : "/api/public/book");
-
-      const res = await fetch(postUrl, {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ start_date:startDate, end_date:endDate, name, email })
-      });
-      const j = await res.json();
-      if(res.ok && j.ok){
-        // show larger confirmation and persist for 6 seconds
-        setMsg("✅ Booking confirmed — dates blocked. Thank you!", true, 6000);
-        clearSelection();
-        if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
-      }else{
-        throw new Error(j.error || "Unknown error");
-      }
-    }catch(err){
-      setMsg("❌ " + (err.message || err), false, 6000);
-    }finally{
-      btn.disabled = false; btn.textContent = original;
-    }
-  });
-
-  // init
-  initPage();
-  </script>
 </body>
 </html>
