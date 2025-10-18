@@ -5,7 +5,7 @@
   <title>{{ title }}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root { --bg:#f6f8fa; --text:#222; --muted:#666; --ok:#ecfdf5; --okb:#a7f3d0; --bad:#fef2f2; --badb:#fecaca; --sel:#e0f2fe; --selb:#93c5fd; --blue:#0070f3; --blue-d:#005ad1; }
+    :root { --bg:#f6f8fa; --text:#222; --muted:#666; --ok:#ecfdf5; --okb:#a7f3d0; --bad:#fef2f2; --badb:#fecaca; --sel:#e0f2fe; --selb:#93c5fd; --blue:#0070f3; --green:#16a34a; }
     * { box-sizing: border-box; }
     body { font-family: system-ui, Arial, sans-serif; margin:0; background:var(--bg); color:var(--text); }
     .container { max-width: 980px; margin: 24px auto; background:#fff; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,.08); overflow:hidden; }
@@ -42,13 +42,17 @@
     input:focus { outline:none; border-color: var(--blue); }
     .actions { display:flex; gap:10px; align-items:center; margin-top:10px; }
     button { background:var(--blue); color:#fff; border:none; font-weight:600; cursor:pointer; }
-    button:hover { background:var(--blue-d); }
+    button.book { background:var(--green); }
     button.secondary { background:#6b7280; }
     button[disabled] { opacity:.65; cursor:not-allowed; }
-    .msg { margin-top:10px; padding:14px; border-radius:10px; font-size:1.05rem; display:none; text-align:center; }
-    .ok { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-weight:700; font-size:1.15rem; }
-    .err { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
+    .msg { margin-top:10px; padding:12px; border-radius:10px; font-size:1rem; display:none; }
+    .msg.ok { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-weight:700; font-size:1.1rem; text-align:center; }
+    .msg.err { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
     .footer { text-align:center; font-size:.8rem; color:#777; margin:16px 0 10px; }
+
+    /* Stripe badge near booking form */
+    .stripe-small { display:flex; gap:8px; align-items:center; font-size:.85rem; color:#6b7280; margin-top:8px; }
+    .stripe-small svg{ display:block }
   </style>
   <script src="https://js.stripe.com/v3/"></script>
 </head>
@@ -67,22 +71,21 @@
         <p class="muted">Tap the calendar to choose check-in and check-out. <b>Red</b> = booked, <b>Green</b> = available.</p>
 
         <div class="panel">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-    <div style="font-weight:600">Availability (click green days to select)</div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button id="prevMonth" class="btn secondary small" type="button">← Prev</button>
-      <button id="nextMonth" class="btn small" type="button">Next →</button>
-    </div>
-  </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div style="font-weight:600">Availability (click green days to select)</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button id="prevMonth" class="btn secondary small" type="button">← Prev</button>
+              <button id="nextMonth" class="btn small" type="button">Next →</button>
+            </div>
+          </div>
 
-  <div id="calwrap" class="calwrap"></div>
-  <div class="legend">
-    <span class="dot d-ok"></span> Available
-    <span class="dot d-bad"></span> Booked
-    <span class="dot d-sel"></span> Selected
-  </div>
-
-</div>
+          <div id="calwrap" class="calwrap"></div>
+          <div class="legend">
+            <span class="dot d-ok"></span> Available
+            <span class="dot d-bad"></span> Booked
+            <span class="dot d-sel"></span> Selected
+          </div>
+        </div>
         <div class="footer">Powered by RavuriCo Ltd</div>
       </div>
 
@@ -104,11 +107,16 @@
 
           <div id="priceCalc" style="margin-top:10px;font-weight:700;"></div>
 
+          <div class="stripe-small" id="stripeBadge" style="display:none;">
+            <svg width="24" height="16" viewBox="0 0 64 32" aria-hidden><rect width="64" height="32" rx="4" fill="#6772e5"></rect><text x="8" y="21" font-size="14" fill="#fff" font-family="Arial,Helvetica,sans-serif">S</text></svg>
+            <div>Payments powered by <strong>Stripe</strong></div>
+          </div>
+
           <div class="actions">
-            <button id="bookBtn" type="submit" disabled>Book & Pay</button>
+            <button id="bookBtn" class="book" type="submit" disabled>Book & Pay</button>
             <button type="button" class="secondary" onclick="clearSelection()">Clear</button>
           </div>
-          <div id="msg" class="msg"></div>
+          <div id="msg" class="msg" role="status"></div>
         </form>
       </div>
     </div>
@@ -141,24 +149,31 @@
     return set;
   }
 
-  function setMsg(text, ok=false, persistMs=6000){
-    const m = document.getElementById("msg");
-    if(!text){ m.style.display = "none"; return; }
-    m.textContent = text;
-    m.className = "msg " + (ok ? "ok" : "err");
-    m.style.display = "block";
-    if(persistMs && persistMs > 0){
-      clearTimeout(window.__msgTimeout);
-      window.__msgTimeout = setTimeout(()=>{ m.style.display="none"; }, persistMs);
+  // --------- Message helper (bigger + persistent) ----------
+  let msgTimeout = null;
+  function setMsg(text, ok=false, durationMs=6000){
+    const el = document.getElementById("msg");
+    if(!text){
+      if(msgTimeout) { clearTimeout(msgTimeout); msgTimeout = null; }
+      el.style.display = "none"; el.textContent = ""; el.className = "msg";
+      return;
+    }
+    el.textContent = text;
+    el.className = "msg " + (ok ? "ok" : "err");
+    el.style.display = "block";
+    // keep longer for confirmations; durationMs controls it (default 6000ms)
+    if(msgTimeout) { clearTimeout(msgTimeout); msgTimeout = null; }
+    if(durationMs > 0){
+      msgTimeout = setTimeout(()=>{ el.style.display="none"; el.className="msg"; el.textContent=""; msgTimeout=null; }, durationMs);
     }
   }
 
+  // --------- Calendar & selection (kept mostly same as before) ----------
   let blocked = new Set();
-  let monthsToShow = 2;
+  let monthsToShow = 2;  // you'll keep multi-month; navigation adjusts monthsToShow by sliding window
+  let calendarOffset = 0; // months ahead relative to current month
   let selStart = null;
-  let selEnd   = null;
-  // track current base month index for navigation (0 = this month)
-  let baseMonthOffset = 0;
+  let selEnd = null;
 
   function clearSelection(){
     selStart = selEnd = null;
@@ -170,12 +185,6 @@
     updatePriceCalc();
   }
 
-  function buildMonthForOffset(offset){
-    const now = new Date();
-    const dt = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-    return buildMonth(dt.getFullYear(), dt.getMonth());
-  }
-
   function buildMonth(year, month){
     const wrap = document.createElement("div");
     wrap.className = "cal";
@@ -184,16 +193,12 @@
     const grid = wrap.querySelector(".grid");
 
     const dows = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-    dows.forEach(d => {
-      const el=document.createElement("div"); el.className="dow"; el.textContent=d; grid.appendChild(el);
-    });
+    dows.forEach(d => { const el=document.createElement("div"); el.className="dow"; el.textContent=d; grid.appendChild(el); });
 
     const startDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month+1, 0).getDate();
 
-    for(let i=0;i<startDay;i++){
-      const el=document.createElement("div"); el.className="cell dis"; el.textContent=""; grid.appendChild(el);
-    }
+    for(let i=0;i<startDay;i++){ const el=document.createElement("div"); el.className="cell dis"; el.textContent=""; grid.appendChild(el); }
 
     for(let day=1; day<=daysInMonth; day++){
       const el = document.createElement("div");
@@ -207,9 +212,7 @@
       el.className = "cell " + cls;
       el.textContent = day;
 
-      if(cls !== "bad"){
-        el.addEventListener("click", () => onPick(dateStr));
-      }
+      if(cls !== "bad"){ el.addEventListener("click", () => onPick(dateStr)); }
 
       grid.appendChild(el);
     }
@@ -219,9 +222,10 @@
   function renderCalendars(){
     const holder = document.getElementById("calwrap");
     holder.innerHTML = "";
+    const now = new Date();
     for(let m=0; m<monthsToShow; m++){
-      const offset = baseMonthOffset + m;
-      holder.appendChild(buildMonthForOffset(offset));
+      const dt = new Date(now.getFullYear(), now.getMonth()+m+calendarOffset, 1);
+      holder.appendChild(buildMonth(dt.getFullYear(), dt.getMonth()));
     }
   }
 
@@ -259,7 +263,7 @@
       return;
     }
     if(!isAllAvailable(selStart, dateStr)){
-      setMsg("❌ Some dates in between are already booked (red). Please pick different dates.", false, 5000);
+      setMsg("❌ Some dates in between are already booked (red). Please pick different dates.", false, 4000);
       return;
     }
     selEnd = dateStr;
@@ -270,15 +274,12 @@
     updatePriceCalc();
   }
 
+  // --------- Availability load ----------
   async function loadAvailabilityViaSlug(theSlug){
     try{
       const r = await fetch(`/api/public/availability/${theSlug}`);
       const data = await r.json();
-      if(Array.isArray(data)){
-        blocked = expandRanges(data);
-      }else{
-        blocked = new Set();
-      }
+      if(Array.isArray(data)){ blocked = expandRanges(data); } else blocked = new Set();
     }catch(_){ blocked = new Set(); }
     renderCalendars();
   }
@@ -293,105 +294,44 @@
     document.getElementById('priceCalc').textContent = `฿${pricePerNight} × ${days} night(s) = ฿${total}`;
   }
 
+  // --------- Init & Stripe ---------
   async function initPage(){
+    // Stripe init (card) if publishable key present
     if(STRIPE_PK){
-      stripe = Stripe(STRIPE_PK);
-      const elements = stripe.elements();
-      card = elements.create('card');
-      card.mount('#card-element');
-      document.getElementById("cardWrap").style.display = "block";
+      try{
+        stripe = Stripe(STRIPE_PK);
+        const elements = stripe.elements();
+        card = elements.create('card');
+        card.mount('#card-element');
+        document.getElementById("cardWrap").style.display = "block";
+        document.getElementById("stripeBadge").style.display = "flex";
+      }catch(e){
+        console.log("Stripe init error:", e);
+      }
     }
 
-    // default to showing 2 columns but allow user to increase months easily:
-    monthsToShow = 2;
-
-    // For /prop/<slug>, slug already known
-    if(isGroup){ await loadAvailabilityViaSlug(groupSlug); return; }
-
-    // For /r/<id>, find its group, then use group availability + group booking
-    if(isUnit){
+    // load availability
+    if(isGroup){ await loadAvailabilityViaSlug(groupSlug); } else if(isUnit){
       try{
         const r = await fetch(`/api/admin/find_group?unit_id=${unitId}`);
         const j = await r.json();
-        if(j.ok && j.slug){
-          groupSlug = j.slug;
-          groupUnitIds = j.unit_ids || [];
-          await loadAvailabilityViaSlug(groupSlug);
-          return;
-        }
-      }catch(_){}
-      blocked = new Set();
+        if(j.ok && j.slug){ groupSlug = j.slug; groupUnitIds = j.unit_ids || []; await loadAvailabilityViaSlug(groupSlug); } else { blocked = new Set(); renderCalendars(); }
+      }catch(_){ blocked = new Set(); renderCalendars(); }
+    }
+
+    // handle #book auto-open
+    if(location.hash === "#book"){
+      // wait a little for calendar to render then scroll
+      setTimeout(()=> {
+        const form = document.getElementById("bookForm");
+        if(form){ form.scrollIntoView({behavior:"smooth", block:"center"}); form.querySelector("input,button")?.focus(); }
+      }, 450);
+    }
+
+    // wire prev/next buttons to slide months
+    document.getElementById("prevMonth").addEventListener("click", ()=>{
+      calendarOffset = Math.max(calendarOffset - 1, -0); // prevent going into past months < current month
       renderCalendars();
-    }
-  }
-
-  // Calendar navigation handlers (Prev / Next)
-  document.getElementById("prevMonth").addEventListener("click", ()=>{
-    baseMonthOffset = Math.max(baseMonthOffset - 1, 0);
-    renderCalendars();
-  });
-  document.getElementById("nextMonth").addEventListener("click", ()=>{
-    baseMonthOffset = baseMonthOffset + 1;
-    // allow unlimited forward navigation — user can move forward up to 12 months visually by clicking repeatedly
-    renderCalendars();
-  });
-
-  document.getElementById("bookForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const startDate = document.getElementById("start").value;
-    const endDate   = document.getElementById("end").value;
-    const name      = document.getElementById("name").value.trim();
-    const email     = document.getElementById("email").value.trim();
-
-    if(!startDate || !endDate){ setMsg("❌ Please select dates from the calendar.", false, 5000); return; }
-    if(endDate <= startDate){ setMsg("❌ Check-out must be after check-in.", false, 5000); return; }
-    if(!name || !email){ setMsg("❌ Please enter your name and email.", false, 5000); return; }
-
-    const btn = document.getElementById("bookBtn");
-    const original = btn.textContent;
-    btn.disabled = true; btn.textContent = "Processing…"; setMsg("", false);
-
-    try{
-      if(STRIPE_PK){
-        const piRes = await fetch("/api/public/create_intent/" + groupSlug, {
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({ start_date: startDate, end_date: endDate })
-        });
-        const pi = await piRes.json();
-        if(!piRes.ok || !pi.ok){ throw new Error(pi.error || "Failed to create payment"); }
-        const {error, paymentIntent} = await stripe.confirmCardPayment(pi.client_secret, {
-          payment_method: { card, billing_details: { name, email } }
-        });
-        if(error) throw error;
-        if(paymentIntent.status !== "succeeded") throw new Error("Payment not completed");
-      }
-
-      const postUrl = groupSlug ? `/api/public/book_group/${groupSlug}` : (isUnit ? `/api/public/book/${unitId}` : "/api/public/book");
-
-      const res = await fetch(postUrl, {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ start_date:startDate, end_date:endDate, name, email })
-      });
-      const j = await res.json();
-      if(res.ok && j.ok){
-        // show larger confirmation and persist for 6 seconds
-        setMsg("✅ Booking confirmed — dates blocked. Thank you!", true, 6000);
-        clearSelection();
-        if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
-      }else{
-        throw new Error(j.error || "Unknown error");
-      }
-    }catch(err){
-      setMsg("❌ " + (err.message || err), false, 6000);
-    }finally{
-      btn.disabled = false; btn.textContent = original;
-    }
-  });
-
-  // init
-  initPage();
-  </script>
-</body>
-</html>
+    });
+    document.getElementById("nextMonth").addEventListener("click", ()=>{
+      calendarOffset
