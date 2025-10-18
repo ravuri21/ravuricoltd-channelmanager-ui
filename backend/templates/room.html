@@ -1,405 +1,176 @@
-<!DOCTYPE html>
-<html lang="{{ lang }}">
+<!doctype html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>{{ meta_title or title }}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="{{ meta_desc or '' }}">
-  <meta property="og:title" content="{{ meta_title or title }}">
-  <meta property="og:description" content="{{ meta_desc or '' }}">
-  <meta property="og:image" content="{{ og_image or image_url }}">
-  <meta property="og:type" content="website">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{{ title or "Property" }} — RavuriCo</title>
+
+  <!-- Tiny SEO -->
+  <meta name="description" content="{{ title or '' }} — Book directly with RavuriCo" />
+  <meta property="og:title" content="{{ title or '' }}" />
+  <meta property="og:description" content="Book {{ title or '' }} directly" />
+  <meta property="og:image" content="{{ image_url }}" />
+
+  <link rel="stylesheet" href="/static/style.css" />
   <style>
-    :root { --bg:#f6f8fa; --text:#222; --muted:#666; --ok:#ecfdf5; --okb:#a7f3d0; --bad:#fef2f2; --badb:#fecaca; --sel:#e0f2fe; --selb:#93c5fd; --blue:#0070f3; --blue-d:#005ad1; }
-    * { box-sizing: border-box; }
-    body { font-family: system-ui, Arial, sans-serif; margin:0; background:var(--bg); color:var(--text); }
-    .topbar{position:sticky;top:0;background:#111827;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center}
-    .brand{font-weight:700}
-    .lang a{color:#cbd5e1;text-decoration:none;margin-left:10px}
-    .lang a.active{color:#fff;font-weight:700}
-    .badge{display:inline-block;margin-left:8px;padding:3px 6px;border-radius:6px;font-size:.78rem;background:#fde68a;color:#7c2d12}
-
-    .container { max-width: 980px; margin: 24px auto; background:#fff; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,.08); overflow:hidden; }
-    .hero img { width:100%; height:300px; object-fit:cover; display:block; }
-    .content { padding:20px; display:grid; grid-template-columns: 1.15fr 0.85fr; gap:24px; }
-    @media (max-width: 960px){ .content { grid-template-columns: 1fr; } }
-    h1 { font-size:1.3rem; margin:0 0 6px; }
-    .price { font-weight:700; margin:0 0 10px; }
-    .muted { color:var(--muted); }
-
-    /* Calendar */
-    .panel { background:#fafafa; border:1px solid #eee; border-radius:10px; padding:14px; }
-    .calwrap { display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:16px; }
-    .cal { border:1px solid #eee; border-radius:10px; overflow:hidden; }
-    .cal h3 { margin:0; padding:8px 10px; background:#f3f4f6; border-bottom:1px solid #eee; font-size:.95rem; }
-    .grid { display:grid; grid-template-columns: repeat(7, 1fr); }
-    .dow, .cell { padding:10px; text-align:center; border-bottom:1px solid #f1f1f1; border-right:1px solid #f1f1f1; user-select:none; }
-    .grid > *:nth-child(7n){ border-right:none; }
-    .dow { background:#fafafa; font-weight:600; font-size:.85rem; }
-    .cell.dis { color:#bbb; background:#fafafa; cursor:not-allowed; }
-    .cell.ok { background:var(--ok); border-bottom-color:var(--okb); cursor:pointer; }
-    .cell.bad { background:var(--bad); border-bottom-color:var(--badb); color:#991b1b; cursor:not-allowed; }
-    .cell.sel { background:var(--sel); border-bottom-color:var(--selb); outline:2px solid var(--selb); }
-    .legend{display:flex; gap:10px; align-items:center; font-size:.9rem; margin-top:10px;}
-    .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
-    .d-ok{background:var(--ok);border:1px solid var(--okb)}
-    .d-bad{background:var(--bad);border:1px solid var(--badb)}
-    .d-sel{background:var(--sel);border:1px solid var(--selb)}
-
-    /* Form */
-    label { display:block; font-size:.9rem; margin:10px 0 4px; color:#333; }
-    input, button { width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; font-size:1rem; }
-    input[readonly]{ background:#f9fafb }
-    input:focus { outline:none; border-color: var(--blue); }
-    .actions { display:flex; gap:10px; align-items:center; margin-top:10px; }
-    button { background:var(--blue); color:#fff; border:none; font-weight:600; cursor:pointer; }
-    button:hover { background:var(--blue-d); }
-    button.secondary { background:#6b7280; }
-    button[disabled] { opacity:.65; cursor:not-allowed; }
-    .msg { margin-top:10px; padding:10px; border-radius:8px; font-size:.95rem; display:none; }
-    .ok { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
-    .err { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
-    .footer { text-align:center; font-size:.8rem; color:#777; margin:16px 0 10px; }
-
-    .adminbar{display:flex;justify-content:space-between;align-items:center;gap:8px}
-    .btn{padding:8px 12px;border:none;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer}
+    /* Minimal helpful styles so messages appear clearly */
+    .price { font-size: 1.2rem; margin: 0.6rem 0; }
+    .price .amount { font-weight: 700; font-size: 1.4rem; }
+    .badge-test { display:inline-block; padding:3px 6px; font-size:0.75rem; border-radius:4px; background:#f0ad4e; color:#fff; margin-left:6px; }
+    .booking-area { margin-top: 18px; }
+    .btn-primary { background:#0b78e3; color:white; padding:10px 18px; border:none; border-radius:6px; cursor:pointer; }
+    .btn-primary:disabled { opacity:0.6; cursor:not-allowed; }
+    .success { margin-top:12px; padding:12px; border-radius:6px; background:#e6ffed; color:#006a2e; display:none; }
+    .success .tick { display:inline-block; width:22px; height:22px; background: #00a651; color:#fff; border-radius:50%; text-align:center; line-height:22px; margin-right:8px; }
+    .hidden { display:none; }
+    label.small { display:block; font-size:0.85rem; color:#444; margin:6px 0 2px; }
+    input[type="text"], input[type="email"], input[type="date"] { padding:8px; width:100%; max-width:320px; border:1px solid #ddd; border-radius:4px; margin-bottom:8px; }
   </style>
-  <script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
-  <div class="topbar">
-    <div class="brand">{{ t.brand }}
-      {% if publishable_key and publishable_key.startswith('pk_test_') %}
-      <span class="badge">Test mode</span>
+  <header style="padding:12px 18px; border-bottom:1px solid #eee;">
+    <a href="/properties">← Back to properties</a>
+    <div style="float:right;">{{ t.brand if t and t.brand else "RavuriCo" }}</div>
+  </header>
+
+  <main style="padding:18px; max-width:960px; margin:auto;">
+    <h1>{{ title }}</h1>
+    <img src="{{ image_url }}" alt="{{ title }}" style="width:100%; max-height:380px; object-fit:cover; border-radius:8px;">
+
+    <!-- Price row -->
+    <div class="price" id="price-row">
+      {% if price_display %}
+        <span class="amount" id="price-amount">{{ price_display }}</span>
+      {% elif price %}
+        <span class="amount" id="price-amount">{{ price }} {{ currency }}</span>
+      {% else %}
+        <span id="price-na">No price yet - set one in admin.</span>
+      {% endif %}
+      {% if test_mode %}
+        <span class="badge-test" id="test-badge">{{ t.test_mode_badge if t and t.test_mode_badge else "Test mode" }}</span>
       {% endif %}
     </div>
-    <div class="lang">
-      <a href="/langpub/en" class="{{ 'active' if lang == 'en' else '' }}">EN</a> |
-      <a href="/langpub/th" class="{{ 'active' if lang == 'th' else '' }}">ไทย</a>
-    </div>
-  </div>
 
-  <div class="container">
-    <div class="hero">
-      <img src="{{ image_url or 'https://source.unsplash.com/featured/?pattaya,villa' }}" alt="Property photo">
-    </div>
+    <!-- Booking form -->
+    <div class="booking-area">
+      <form id="booking-form" onsubmit="return false;">
+        <label class="small">Check-in</label>
+        <input type="date" id="start_date" name="start_date" required>
 
-    <div class="content">
-      <div>
-        <h1 style="display:flex;align-items:center;gap:10px">{{ title }}</h1>
-        {% if price %}
-          <div class="price">฿ {{ '%.0f'|format(price) }} <span class="muted">{{ t.per_night }} {{ currency or 'THB' }}</span></div>
-        {% endif %}
+        <label class="small">Check-out</label>
+        <input type="date" id="end_date" name="end_date" required>
 
-        {% if is_admin and slug %}
-          <div class="panel" style="margin:10px 0">
-            <div class="adminbar">
-              <div><b>{{ t.admin_label }}:</b> {{ t.sync_btn }}</div>
-              <button id="syncBtn" class="btn" type="button">{{ t.sync_btn }}</button>
-            </div>
-            {% if last_synced %}
-              <div class="muted" style="margin-top:8px">✅ {{ t.last_synced }}: <span id="ls">{{ last_synced }}</span></div>
-            {% endif %}
-            <div id="syncMsg" class="msg" style="display:none;margin-top:10px;"></div>
-          </div>
-        {% endif %}
+        <label class="small">Your name</label>
+        <input type="text" id="guest_name" name="name" placeholder="Full name" required>
 
-        <p class="muted">{{ t.calendar_hint }}</p>
+        <label class="small">Email</label>
+        <input type="email" id="guest_email" name="email" placeholder="you@example.com" required>
 
-        <div class="panel">
-          <div id="calwrap" class="calwrap"></div>
-          <div class="legend">
-            <span class="dot d-ok"></span> {{ t.legend_available }}
-            <span class="dot d-bad"></span> {{ t.legend_booked }}
-            <span class="dot d-sel"></span> {{ t.legend_selected }}
-          </div>
+        <div style="margin-top:10px;">
+          <button id="book-btn" class="btn-primary" type="button">
+            {{ t.book_and_pay if t and t.book_and_pay else "Book & Pay" }}
+          </button>
         </div>
+      </form>
 
-        <div class="footer">{{ t.powered_by }}</div>
-      </div>
-
-      <div>
-        <form id="bookForm" class="panel" novalidate>
-          <label>Check-in</label>
-          <input id="start" type="date" required readonly>
-          <label>Check-out</label>
-          <input id="end" type="date" required readonly>
-          <label>Your Name</label>
-          <input id="name" type="text" placeholder="Full name" required>
-          <label>Your Email</label>
-          <input id="email" type="email" placeholder="Email address" required>
-
-          <div id="cardWrap" style="display:none;">
-            <label>Card</label>
-            <div id="card-element" style="padding:10px;border:1px solid #ddd;border-radius:8px;"></div>
-          </div>
-
-          <div class="actions">
-            <button id="bookBtn" type="submit" disabled>{{ t.book_pay }}</button>
-            <button type="button" class="secondary" onclick="clearSelection()">Clear</button>
-          </div>
-          <div id="msg" class="msg"></div>
-        </form>
+      <!-- Booking result area -->
+      <div id="booking-result" class="success" role="status" aria-live="polite">
+        <span class="tick">✓</span>
+        <span id="booking-result-text"></span>
       </div>
     </div>
-  </div>
+
+    <div style="margin-top:28px; font-size:0.95rem; color:#666;">
+      <strong>Note:</strong> This booking will block the dates across listings after confirmation.
+    </div>
+  </main>
 
   <script>
-  const path = location.pathname;
-  const isGroup = path.startsWith("/prop/");
-  const slug = isGroup ? path.split("/").pop() : null;
+    (function(){
+      const slug = "{{ slug or '' }}";
+      const isLegacy = !slug && {{ 'true' if request.path.startswith('/r/') else 'false' }};
+      const publicBookUrl = slug ? `/api/public/book_group/${slug}` : null;
+      const publishableKey = "{{ publishable_key or '' }}";
 
-  const STRIPE_PK = "{{ publishable_key or '' }}".trim();
-  let stripe, card;
-
-  function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}` }
-  function addDays(dt, n){ const d=new Date(dt); d.setDate(d.getDate()+n); return d; }
-
-  function expandRanges(ranges){
-    const set = new Set();
-    for(const r of ranges){
-      let d = new Date(r.start_date);
-      const end = new Date(r.end_date);
-      while(d < end){ set.add(ymd(d)); d = addDays(d,1); }
-    }
-    return set;
-  }
-
-  function setMsg(text, ok=false){
-    const m = document.getElementById("msg");
-    m.textContent = text || "";
-    m.className = "msg " + (ok ? "ok" : "err");
-    m.style.display = text ? "block" : "none";
-  }
-
-  let blocked = new Set();
-  const monthsToShow = 2;
-  let selStart = null;
-  let selEnd   = null;
-
-  function clearSelection(){
-    selStart = selEnd = null;
-    document.getElementById("start").value = "";
-    document.getElementById("end").value = "";
-    setMsg("");
-    renderCalendars();
-    document.getElementById("bookBtn").disabled = true;
-  }
-
-  function buildMonth(year, month){
-    const wrap = document.createElement("div");
-    wrap.className = "cal";
-    const title = new Date(year, month, 1).toLocaleString('default', { month:'long', year:'numeric' });
-    wrap.innerHTML = `<h3>${title}</h3><div class="grid"></div>`;
-    const grid = wrap.querySelector(".grid");
-
-    const dows = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-    dows.forEach(d => {
-      const el=document.createElement("div"); el.className="dow"; el.textContent=d; grid.appendChild(el);
-    });
-
-    const startDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month+1, 0).getDate();
-
-    for(let i=0;i<startDay;i++){
-      const el=document.createElement("div"); el.className="cell dis"; el.textContent=""; grid.appendChild(el);
-    }
-
-    for(let day=1; day<=daysInMonth; day++){
-      const el = document.createElement("div");
-      const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-
-      let cls = "ok";
-      if(blocked.has(dateStr)) cls = "bad";
-      if(selStart && !selEnd && dateStr===selStart) cls = "sel";
-      if(selStart && selEnd && dateStr>=selStart && dateStr<selEnd) cls = "sel";
-
-      el.className = "cell " + cls;
-      el.textContent = day;
-
-      if(cls !== "bad"){
-        el.addEventListener("click", () => onPick(dateStr));
+      function showResult(text) {
+        const resEl = document.getElementById("booking-result");
+        const txt = document.getElementById("booking-result-text");
+        txt.textContent = text;
+        resEl.style.display = "block";
       }
-      grid.appendChild(el);
-    }
-    return wrap;
-  }
 
-  function renderCalendars(){
-    const holder = document.getElementById("calwrap");
-    holder.innerHTML = "";
-    const now = new Date();
-    for(let m=0; m<monthsToShow; m++){
-      const dt = new Date(now.getFullYear(), now.getMonth()+m, 1);
-      holder.appendChild(buildMonth(dt.getFullYear(), dt.getMonth()));
-    }
-  }
-
-  function isAllAvailable(startStr, endStr){
-    let d = new Date(startStr);
-    const end = new Date(endStr);
-    while(d < end){
-      if(blocked.has(ymd(d))) return false;
-      d = addDays(d,1);
-    }
-    return true;
-  }
-
-  function onPick(dateStr){
-    if(!selStart){
-      if(blocked.has(dateStr)) return;
-      selStart = dateStr; selEnd = null;
-      document.getElementById("start").value = selStart;
-      document.getElementById("end").value = "";
-      setMsg("");
-      renderCalendars();
-      document.getElementById("bookBtn").disabled = true;
-      return;
-    }
-    if(dateStr <= selStart){
-      if(blocked.has(dateStr)) return;
-      selStart = dateStr; selEnd = null;
-      document.getElementById("start").value = selStart;
-      document.getElementById("end").value = "";
-      setMsg("");
-      renderCalendars();
-      document.getElementById("bookBtn").disabled = true;
-      return;
-    }
-    if(!isAllAvailable(selStart, dateStr)){
-      setMsg("❌ Some dates in between are already booked (red). Please pick different dates.");
-      return;
-    }
-    selEnd = dateStr;
-    document.getElementById("end").value = selEnd;
-    setMsg("");
-    renderCalendars();
-    document.getElementById("bookBtn").disabled = false;
-  }
-
-  async function loadAvailabilityViaSlug(theSlug){
-    try{
-      const r = await fetch(`/api/public/availability/${theSlug}`);
-      const data = await r.json();
-      if(Array.isArray(data)){
-        blocked = expandRanges(data);
-      }else{
-        blocked = new Set();
+      function setBtnText(text) {
+        const btn = document.getElementById("book-btn");
+        if (btn) btn.textContent = text;
       }
-    }catch(_){ blocked = new Set(); }
-    renderCalendars();
-  }
 
-  async function initPage(){
-    if(STRIPE_PK){
-      stripe = Stripe(STRIPE_PK);
-      const elements = stripe.elements();
-      card = elements.create('card');
-      card.mount('#card-element');
-      document.getElementById("cardWrap").style.display = "block";
-    }
+      // Ensure button label is present immediately
+      const initialBtnText = "{{ t.book_and_pay if t and t.book_and_pay else 'Book & Pay' }}";
+      setBtnText(initialBtnText);
 
-    if(slug){ await loadAvailabilityViaSlug(slug); }
-
-    // Format last_synced ISO → local readable
-    const ls = document.getElementById("ls");
-    if(ls && ls.textContent){
-      const dt = new Date(ls.textContent);
-      if(!isNaN(dt)) ls.textContent = dt.toLocaleString();
-    }
-
-    // Admin quick-sync
-    const btn = document.getElementById('syncBtn');
-    const msg = document.getElementById('syncMsg');
-    function showSync(text, ok){
-      if(!msg) return;
-      msg.textContent = text || '';
-      msg.className = 'msg ' + (ok ? 'ok' : 'err');
-      msg.style.display = text ? 'block' : 'none';
-    }
-    if(btn){
-      btn.addEventListener('click', async () => {
+      document.getElementById("book-btn").addEventListener("click", async function(ev){
+        const btn = ev.currentTarget;
         btn.disabled = true;
-        const original = btn.textContent;
-        btn.textContent = 'Syncing…';
-        showSync('', true);
-        try{
-          const res = await fetch('/api/admin/sync_property/'+slug, { method: 'POST' });
-          const j = await res.json();
-          if(!(res.ok && j.ok)) throw new Error(j.error || 'Failed');
-          showSync('✅ Synced. Reloading calendar…', true);
-          await loadAvailabilityViaSlug(slug);
-          // Update last synced label to now
-          const lse = document.getElementById("ls");
-          if(lse){ lse.textContent = (new Date()).toLocaleString(); }
-          setTimeout(()=>showSync('', true), 1200);
-        }catch(e){
-          showSync('❌ ' + (e.message || e), false);
-        }finally{
+        btn.textContent = "Processing...";
+
+        const start = document.getElementById("start_date").value;
+        const end   = document.getElementById("end_date").value;
+        const name  = document.getElementById("guest_name").value.trim();
+        const email = document.getElementById("guest_email").value.trim();
+
+        if (!start || !end || !name || !email) {
+          alert("Please fill all fields");
           btn.disabled = false;
-          btn.textContent = original;
+          setBtnText(initialBtnText);
+          return;
+        }
+
+        // If publishableKey exists, the app may want to create a Stripe intent first.
+        // Original server supports create_intent; however this minimal flow calls the booking endpoint directly
+        // so the server creates booking blocks (and you can wire Stripe separately later).
+        const payload = { start_date: start, end_date: end, name: name, email: email };
+        const url = publicBookUrl || ("/api/public/book/" + ({{ request.path.split('/')[-1] | tojson }}));
+
+        try {
+          console.log("Booking POST to", url, payload);
+          const resp = await fetch(url, {
+            method: "POST",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify(payload),
+            credentials: "same-origin"
+          });
+          const data = await resp.json();
+          console.log("Booking response:", data);
+
+          if (resp.ok && data.ok) {
+            // show server message if available
+            const message = data.message || "{{ t.booking_confirmed if t and t.booking_confirmed else 'Booking confirmed — dates closed' }}";
+            showResult(message);
+            // keep button disabled briefly then re-enable so user can read
+            setTimeout(()=>{ btn.disabled = false; setBtnText(initialBtnText); }, 2500);
+          } else {
+            let msg = data.error || (data.message) || "Booking failed";
+            alert("Booking error: " + msg);
+            btn.disabled = false;
+            setBtnText(initialBtnText);
+          }
+        } catch (err) {
+          console.error("Booking error", err);
+          alert("Booking failed (network). Check console/logs.");
+          btn.disabled = false;
+          setBtnText(initialBtnText);
         }
       });
-    }
-  }
 
-  document.getElementById("bookForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const startDate = document.getElementById("start").value;
-    const endDate   = document.getElementById("end").value;
-    const name      = document.getElementById("name").value.trim();
-    const email     = document.getElementById("email").value.trim();
-
-    if(!startDate || !endDate){ setMsg("❌ {{ t.pick_dates }}"); return; }
-    if(endDate <= startDate){ setMsg("❌ {{ t.invalid_dates }}"); return; }
-    if(!name || !email){ setMsg("❌ {{ t.need_name_email }}"); return; }
-
-    const btn = document.getElementById("bookBtn");
-    const original = btn.textContent;
-    btn.disabled = true; btn.textContent = "Processing…"; setMsg("");
-
-    try{
-      if(STRIPE_PK && slug){
-        const piRes = await fetch("/api/public/create_intent/" + slug, {
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({ start_date: startDate, end_date: endDate })
-        });
-        const pi = await piRes.json();
-        if(!piRes.ok || !pi.ok){ throw new Error(pi.error || "Failed to create payment"); }
-        const {error, paymentIntent} = await stripe.confirmCardPayment(pi.client_secret, {
-          payment_method: { card, billing_details: { name, email } }
-        });
-        if(error) throw error;
-        if(paymentIntent.status !== "succeeded") throw new Error("Payment not completed");
-      }
-
-      const postUrl = slug ? `/api/public/book_group/${slug}` : "/api/public/book";
-      const res = await fetch(postUrl, {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ start_date:startDate, end_date:endDate, name, email })
+      // If the price was hidden as "No price yet" we leave it; otherwise ensure it's visible.
+      document.addEventListener("DOMContentLoaded", () => {
+        const priceEl = document.getElementById("price-amount");
+        if (!priceEl) {
+          // no explicit price — nothing to do
+        }
       });
-      const j = await res.json();
-      if(res.ok && j.ok){
-        setMsg("✅ {{ t.booking_confirmed }}", true);
-        // NEW: make it obvious on mobile too
-        alert("✅ {{ t.booking_confirmed }}");
-        window.scrollTo({ top: 0, behavior: "smooth" });
 
-        clearSelection();
-        if(slug) await loadAvailabilityViaSlug(slug);
-      }else{
-        throw new Error(j.error || "Unknown error");
-      }
-    }catch(err){
-      setMsg("❌ " + (err.message || err));
-    }finally{
-      btn.disabled = false; btn.textContent = original;
-    }
-  });
-
-  initPage();
+    })();
   </script>
 </body>
 </html>
