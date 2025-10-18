@@ -562,6 +562,11 @@ def properties_index():
 # ====== Public property page ======
 @app.route("/prop/<slug>")
 def property_page(slug):
+    """
+    Public property page.
+    We pass a tiny translation dict `t` so templates can render labels even if frontend i18n is missing.
+    Also compute a price_display string like "999 ฿ / night" when rate exists.
+    """
     info = _group_info(slug)
     if not info:
         return "Not found", 404
@@ -574,23 +579,48 @@ def property_page(slug):
     currency = "THB"
     if unit_ids:
         db = SessionLocal()
-        rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
-        db.close()
-        if rp:
-            price = rp.base_rate
-            currency = rp.currency or "THB"
+        try:
+            rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
+            if rp:
+                price = rp.base_rate
+                currency = rp.currency or "THB"
+        finally:
+            db.close()
 
-    # Pass t for template text (fixes missing 't')
+    # Format price for display (integer or 2-decimal)
+    price_display = None
+    if price is not None:
+        try:
+            if float(price).is_integer():
+                price_display = f"{int(price):,} ฿ / night"
+            else:
+                price_display = f"{price:,.2f} ฿ / night"
+        except Exception:
+            price_display = f"{price} {currency}"
+
+    # Tiny translation/context object used by templates (keeps things robust)
+    t = {
+        "brand": "RavuriCo",
+        "book_and_pay": "Book & Pay",
+        "booking_confirmed": "Booking confirmed — dates closed",
+        "test_mode_badge": "Test mode",
+        "price_na": "Price not set"
+    }
+
+    # Decide test-mode badge (helps user know if Stripe keys are test)
+    test_mode = (STRIPE_PUBLISHABLE_KEY or "").startswith("pk_test_") or (STRIPE_PUBLISHABLE_KEY or "").startswith("pk_")
+
     return render_template(
         "room.html",
         title=title,
         image_url=image_url,
         price=price,
+        price_display=price_display,
         currency=currency,
         publishable_key=STRIPE_PUBLISHABLE_KEY,
         slug=slug,
-        t=_t(session.get("lang", APP_LANG_DEFAULT)),
-        is_admin_logged_in=("user" in session)
+        t=t,
+        test_mode=test_mode
     )
 
 # ---- Availability (grouped): DB blocks + iCal events merged ----
@@ -731,25 +761,17 @@ def public_book_group(slug):
         finally:
             db.close()
 
-        # Send emails (guest + admin alert) — best effort
+        # Try to send email alert to admin/owner (best-effort)
         try:
-            title = f"Booking confirmed — {slug} {start}–{end}"
-            guest_html = f"<p>Hi {name},</p><p>Your booking for <strong>{slug}</strong> from <strong>{start}</strong> to <strong>{end}</strong> is confirmed.</p>"
-            guest_text = f"Hi {name},\nYour booking for {slug} from {start} to {end} is confirmed."
-            try:
-                send_email_best_effort(email, title, guest_html, guest_text)
-            except Exception as e:
-                print("guest email error:", e)
+            send_alert(
+                "New Direct Booking (Grouped)",
+                f"Property {slug}: {start}–{end} Guest: {name} ({email}) on {len(unit_ids)} OTA listings"
+            )
+        except Exception as e:
+            print("alert error:", e)
 
-            alert_body = f"Property {slug}: {start}–{end} Guest: {name} ({email}) on {len(unit_ids)} OTA listings"
-            try:
-                send_alert("New Direct Booking (Grouped)", alert_body)
-            except Exception as e:
-                print("alert error:", e)
-        except Exception as ee:
-            print("email sending error:", ee)
-
-        return jsonify({"ok": True})
+        # Return a message that frontend can display
+        return jsonify({"ok": True, "message": "Booking confirmed — dates closed"})
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
@@ -832,7 +854,7 @@ def public_book(unit_id):
         except Exception as e:
             print("email/alert error:", e)
 
-        return jsonify({"ok": True})
+        return jsonify({"ok": True, "message": "Booking confirmed — dates closed"})
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
