@@ -670,8 +670,9 @@ def property_page(slug):
         "publishable_key": STRIPE_PUBLISHABLE_KEY,
         "slug": slug
     }
+        ctx = {"groups": out, "lang": session.get("lang", APP_LANG_DEFAULT)}
     ctx.update(_template_context_extra())
-    return render_template("room.html", **ctx)
+    return render_template("properties.html", **ctx)
 
 # ---- Availability (grouped): DB blocks + iCal events merged ----
 @app.route("/api/public/availability/<slug>", methods=["GET"])
