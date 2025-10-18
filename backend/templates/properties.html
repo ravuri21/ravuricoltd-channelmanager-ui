@@ -1,113 +1,70 @@
-{# backend/templates/properties.html #}
 <!doctype html>
-<html lang="{{ 'th' if lang == 'th' else 'en' }}">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
+  <title>Properties — {{ t.brand if t else "Properties" }}</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Properties — {{ t.brand }}</title>
   <link rel="stylesheet" href="/static/style.css" />
   <style>
-    :root {
-      --bg: #f6f8fa;
-      --card: #ffffff;
-      --muted: #6b7280;
-      --blue: #2563eb;
-      --green: #16a34a;
-      --pink: #ef4444;
-      --radius: 12px;
-    }
-    body{font-family:system-ui,Arial,sans-serif;background:var(--bg);margin:0;color:#111}
-    .wrap{max-width:1100px;margin:28px auto;padding:18px}
-    header.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
-    header.top h1{margin:0;font-size:1.4rem}
-    .muted{color:var(--muted);font-size:.95rem}
-
+    body{font-family:system-ui,Arial,Helvetica,sans-serif;background:#f6f8fa;margin:0;color:#222}
+    .wrap{max-width:1100px;margin:22px auto;padding:18px}
     .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
-    .card{background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:0 6px 18px rgba(15,23,42,0.06);display:flex;flex-direction:column}
-    .card .media{height:170px;background:#eee}
-    .card .media img{width:100%;height:100%;object-fit:cover;display:block}
-    .card .body{padding:12px 14px;flex:1;display:flex;flex-direction:column}
-    .card .title{font-weight:700;margin:0 0 6px;font-size:1.02rem}
-    .card .sub{color:var(--muted);font-size:.92rem;margin-bottom:8px}
-    .pricebar{display:flex;align-items:center;justify-content:space-between;margin-top:auto}
-    .price{font-weight:800;font-size:1.05rem}
-    .note{font-size:.86rem;color:var(--muted)}
-
-    .actions{display:flex;gap:8px;margin-top:10px}
-    .btn{padding:8px 12px;border-radius:8px;border:none;font-weight:700;cursor:pointer;text-decoration:none;color:#fff;display:inline-flex;align-items:center;gap:8px}
-    .btn.view{background:#0ea5a4}
-    .btn.book{background:var(--blue)}
-    .btn.secondary{background:#6b7280}
-    .stripe-badge{font-size:.8rem;padding:4px 8px;border-radius:8px;border:1px solid #e6eefc;background:#f8fbff;color:#0b4fdb}
-    @media (max-width:640px){
-      .card .media{height:150px}
-      header.top{flex-direction:column;align-items:flex-start;gap:10px}
-    }
+    .card{background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,.06);display:flex;flex-direction:column}
+    .card img{width:100%;height:180px;object-fit:cover;display:block}
+    .pad{padding:12px 14px;flex:1;display:flex;flex-direction:column;justify-content:space-between}
+    .title{font-weight:700;margin-bottom:6px}
+    .meta{color:#6b7280;font-size:.92rem;margin-bottom:8px}
+    .price{font-size:1.05rem;font-weight:800;margin-bottom:10px}
+    .buttons{display:flex;gap:8px}
+    .btn{flex:1;padding:10px;border-radius:10px;border:0;font-weight:700;cursor:pointer}
+    .btn.view{background:#0ea5a4;color:#fff}    /* teal */
+    .btn.book{background:#2563eb;color:#fff}    /* blue */
+    .small{font-size:.92rem;padding:8px;border-radius:8px}
+    .topline{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .muted{color:#6b7280}
+    .stripe-badge{display:inline-block;background:#f8fafc;border-radius:8px;padding:6px 8px;font-size:.82rem;color:#0b5cff;margin-left:8px;border:1px solid #e6eefc}
+    @media (max-width:720px){ .card img{height:140px} }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <header class="top">
-      <div>
-        <h1>Our properties</h1>
-        <div class="muted">Browse available properties — prices shown in THB</div>
+    <div class="topline">
+      <div style="font-weight:800;font-size:1.1rem">{{ t.brand if t else "Properties" }}</div>
+      <div class="muted">
+        <span>English</span> • <a href="/lang/th">ไทย</a>
+        {% if t.publishable_key %}<span class="stripe-badge">Secure payments by Stripe</span>{% endif %}
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <a class="stripe-badge" href="https://stripe.com" target="_blank" rel="noopener">Stripe powered</a>
-        <a class="muted" href="/login">Admin</a>
-      </div>
-    </header>
+    </div>
 
-    <main>
-      {% if not groups %}
-        <div class="card" style="padding:18px">
-          <div class="muted">No properties available right now.</div>
+    <div class="grid">
+      {% for slug, info in groups.items() %}
+      <div class="card">
+        <a href="/prop/{{ slug }}" style="text-decoration:none;color:inherit">
+          <img src="{{ info.image_url }}" alt="{{ info.title }}">
+        </a>
+        <div class="pad">
+          <div>
+            <div class="title">{{ info.title }}</div>
+            <div class="meta">Units: {{ info.unit_ids|length }} &nbsp;•&nbsp; ID: <code>{{ slug }}</code></div>
+            {% if info.price %}
+              <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="muted">/ night ({{ info.currency or 'THB' }})</span></div>
+            {% else %}
+              <div class="price muted">Price: not set</div>
+            {% endif %}
+          </div>
+
+          <div class="buttons">
+            <a class="btn view" href="/prop/{{ slug }}">View</a>
+            <a class="btn book" href="/prop/{{ slug }}#book">Book</a>
+          </div>
         </div>
-      {% else %}
-      <div class="grid" role="list">
-        {% for slug, info in groups.items() %}
-        <article class="card" role="listitem" aria-labelledby="t-{{ slug }}">
-          <div class="media">
-            <a href="/prop/{{ slug }}" title="View {{ info.title|e }}">
-              <img src="{{ info.image_url|e }}" alt="{{ info.title|e }}" loading="lazy">
-            </a>
-          </div>
-
-          <div class="body">
-            <h2 id="t-{{ slug }}" class="title">{{ info.title }}</h2>
-            <div class="sub">
-              {% if info.unit_ids and info.unit_ids|length > 1 %}
-                Units: {{ info.unit_ids|join(', ') }}
-              {% elif info.unit_ids %}
-                Unit: {{ info.unit_ids[0] }}
-              {% endif %}
-            </div>
-
-            <div class="note">
-              {% if info.price is not none %}
-                <span class="price">฿ {{ '%.0f'|format(info.price) }}</span>
-                <span class="muted"> / night</span>
-              {% else %}
-                <span class="muted">Price on request — contact us</span>
-              {% endif %}
-            </div>
-
-            <div class="actions" aria-hidden="false">
-              <a class="btn view" href="/prop/{{ slug }}" title="View {{ info.title|e }}">View</a>
-              <a class="btn book" href="/prop/{{ slug }}" title="Book {{ info.title|e }}">Book</a>
-            </div>
-
-            <div style="margin-top:10px" class="muted">Show calendar & book on the property page.</div>
-          </div>
-        </article>
-        {% endfor %}
       </div>
-      {% endif %}
-    </main>
+      {% endfor %}
+    </div>
 
-    <footer style="margin-top:20px;text-align:center;color:var(--muted);font-size:.9rem">
-      &copy; {{ t.brand }} — <span class="muted">Pattaya, Thailand</span>
-    </footer>
+    <div style="margin-top:20px;color:#666;font-size:.95rem;">
+      <p>Showing public properties. For admin actions (sync, edit iCal), sign in to the admin dashboard.</p>
+    </div>
   </div>
 </body>
 </html>
