@@ -1,46 +1,81 @@
 <!doctype html>
 <html>
 <head>
-  <meta charset="utf-8"/>
-  <title>Properties</title>
-  <link rel="stylesheet" href="/static/style.css" />
+  <meta charset="utf-8" />
+  <title>Properties — RavuriCo Channel Manager</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="/static/style.css" />
   <style>
-    body{font-family:system-ui,Arial;margin:10px;padding:10px;background:#f6f8fa}
-    .card{background:#fff;padding:12px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.06);margin-bottom:12px}
+    body{font-family:system-ui,Arial;background:#f6f8fa;margin:0;padding:18px}
+    .wrap{max-width:1100px;margin:0 auto}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+    .card{background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,.06)}
+    .thumb{height:160px;width:100%;object-fit:cover;display:block}
+    .body{padding:12px}
+    .title{font-weight:700;margin-bottom:6px}
     .muted{color:#666;font-size:.95rem}
-    .slug{color:#444;font-weight:700}
-    .note{color:#b91c1c;font-weight:600;margin-left:8px}
+    .price{font-weight:800;font-size:1.05rem}
+    .actions{display:flex;gap:8px;margin-top:10px}
+    .btn{padding:8px 12px;border-radius:8px;border:none;background:#2563eb;color:#fff;cursor:pointer}
+    .btn.secondary{background:#6b7280}
+    .adminbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .legend{margin-top:8px;font-size:.95rem;color:#444}
   </style>
 </head>
 <body>
-  <h2>Properties</h2>
-  <p class="muted">Open a property to view the calendar or book. Admin only features are under /login.</p>
+<div class="wrap">
+  <div class="adminbar">
+    <div>
+      <strong>Properties</strong>
+      <div class="muted">Browse properties and book directly. Click a card to open the booking page.</div>
+    </div>
+    <div>
+      {% if session.get('user') %}
+        <button class="btn secondary" onclick="checkIcalStatus()">🔁 Sync all OTAs</button>
+      {% endif %}
+    </div>
+  </div>
 
-  {% if groups %}
+  <div class="grid">
     {% for slug, info in groups.items() %}
       <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div>
-            <div class="slug">{{ info.title or slug }}</div>
-            <div class="muted">Slug: <code>{{ slug }}</code> • Units: {{ info.unit_ids | join(', ') }}</div>
+        <img class="thumb" src="{{ info.image_url }}" alt="{{ info.title }}">
+        <div class="body">
+          <div class="title">{{ info.title }}</div>
+          <div class="muted">Units: {{ info.unit_ids|join(', ') }}</div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
+            {% if info.price %}
+              <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="muted">/ night</span></div>
+            {% else %}
+              <div class="muted">Price not set</div>
+            {% endif %}
+
+            <div class="actions">
+              <a class="btn" href="/prop/{{ slug }}">Open / Book</a>
+            </div>
           </div>
-          <div>
-            <a href="/prop/{{ slug }}" style="margin-right:8px;">View public</a>
-            <a href="/admin/calendar/{{ slug }}" target="_blank">Admin calendar</a>
-          </div>
+
+          <div class="legend">Green = available • Red = booked</div>
         </div>
-        {% if pending_map and slug in pending_map %}
-          <div style="margin-top:8px">
-            <span class="note">⚠️ {{ pending_map[slug] }} unit(s) currently have no iCal URL</span>
-          </div>
-        {% endif %}
       </div>
     {% endfor %}
-  {% else %}
-    <div class="card">No properties found.</div>
-  {% endif %}
+  </div>
+</div>
 
-  <div style="margin-top:14px" class="muted">If you see any errors, open /debug/templates and /debug/groups for diagnostics (admin only).</div>
+<script>
+async function checkIcalStatus(){
+  try{
+    const r = await fetch('/api/check_ical');
+    const j = await r.json();
+    if(!r.ok || j.error){ alert('Error: ' + (j.error || 'Unauthorized')); return; }
+    let bad = j.filter(x => !x.status || !x.status.includes('✅'));
+    if(bad.length===0) alert('All iCal OK ✅');
+    else alert('Some iCals need attention. Open Admin to update.');
+  }catch(e){
+    alert('Network error');
+  }
+}
+</script>
 </body>
 </html>
