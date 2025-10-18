@@ -181,6 +181,69 @@ def send_alert(subject, body):
     except Exception as e:
         print("❌ Error sending alert:", e)
 
+# ---- Add /admin/test_email helper (paste after send_alert) ----
+def send_via_smtp(to_email: str, subject: str, html_body: str, text_body: str = "") -> None:
+    """
+    Send email using SMTP (Gmail App Password recommended).
+    Raises exception on failure so caller can catch/log.
+    """
+    smtp_server = os.environ.get("SMTP_SERVER", "").strip()
+    smtp_port = int(os.environ.get("SMTP_PORT", 587))
+    smtp_user = os.environ.get("SMTP_USER", "").strip()
+    smtp_pass = os.environ.get("SMTP_PASSWORD", "").strip()
+    email_from = os.environ.get("EMAIL_FROM", smtp_user)  # e.g. "RavuriCo <pradeep@ravuricoltd.com>"
+
+    if not all([smtp_server, smtp_user, smtp_pass]):
+        raise RuntimeError("SMTP env vars not configured (SMTP_SERVER / SMTP_USER / SMTP_PASSWORD)")
+
+    msg = MIMEMultipart("alternative")
+    msg["From"] = email_from
+    msg["To"] = to_email
+    msg["Subject"] = subject
+    if text_body:
+        msg.attach(MIMEText(text_body, "plain"))
+    msg.attach(MIMEText(html_body, "html"))
+
+    # Connect and send via STARTTLS (port 587)
+    smtp_port = int(smtp_port)
+    with smtplib.SMTP(smtp_server, smtp_port, timeout=15) as server:
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
+
+@app.get("/admin/test_email")
+def admin_test_email():
+    """
+    Admin-only test endpoint. Open this in a browser while logged in as admin.
+    Attempts to send a test email to ALERT_TO (or SMTP_USER).
+    """
+    if "user" not in session:
+        return redirect(url_for("login"))
+
+    to_email = os.environ.get("ALERT_TO") or os.environ.get("SMTP_USER") or ""
+    if not to_email:
+        return "ALERT_TO / SMTP_USER not set in environment", 500
+
+    sample_subject = "Test email — RavuriCo Channel Manager"
+    sample_html = f"""
+    <h3>RavuriCo Channel Manager — test email</h3>
+    <p>This is a test email sent from your deployed app at {datetime.utcnow().isoformat()}Z</p>
+    <p>If you received this, SMTP is working.</p>
+    """
+    sample_text = "RavuriCo Channel Manager — test email\n\nIf you received this, SMTP is working."
+
+    try:
+        send_via_smtp(to_email, sample_subject, sample_html, sample_text)
+        print(f"📧 Test email successfully sent to {to_email}")
+        return f"OK — test email sent to {to_email}"
+    except Exception as e:
+        # Log the detailed exception so you can inspect in Render logs
+        print("❌ SMTP send error:", repr(e))
+        # Return a helpful message to browser
+        return f"Failed to send test email: {str(e)}", 500
+        
 # ====== Background iCal sync → write to DB ======
 def _sync_units(db, units):
     """
