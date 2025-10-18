@@ -1,73 +1,46 @@
-<!-- backend/templates/properties.html -->
 <!doctype html>
-<html lang="{{ lang or 'en' }}">
+<html>
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8"/>
   <title>Properties</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{font-family:system-ui,Arial;margin:10px;padding:10px;background:#f6f8fa}
+    .card{background:#fff;padding:12px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.06);margin-bottom:12px}
+    .muted{color:#666;font-size:.95rem}
+    .slug{color:#444;font-weight:700}
+    .note{color:#b91c1c;font-weight:600;margin-left:8px}
+  </style>
 </head>
 <body>
-  <header>
-    <h1>Properties</h1>
-    {% if session.user %}
-      <a href="/logout">Logout</a>
-    {% else %}
-      <a href="/login">Admin login</a>
-    {% endif %}
-  </header>
+  <h2>Properties</h2>
+  <p class="muted">Open a property to view the calendar or book. Admin only features are under /login.</p>
 
-  <main>
-    {% if groups %}
-      <div class="grid">
-        {% for slug, info in groups.items() %}
-          <div class="card">
-            <a href="/prop/{{ slug }}">
-              <img src="{{ info.image_url or 'https://source.unsplash.com/featured/?villa' }}" alt="{{ info.title }}" style="width:100%;height:160px;object-fit:cover;">
-              <h2>{{ info.title }}</h2>
-            </a>
-
-            {# price row: show price if available #}
-            {% set unit_ids = info.get("unit_ids", []) %}
-            {% set price = None %}
-            {% if unit_ids %}
-              {% set rp = None %}
-              {% set _ = (lambda : (
-                    (rp := (session.get('db_rates_map') and session.get('db_rates_map').get(unit_ids[0]))) if session.get('db_rates_map') else None
-                ))() %}
-              {# fallback: server should have passed currency_map/rates_map; if not we'll show a safe message #}
-            {% endif %}
-
-            <div class="meta">
-              {% if unit_ids and (rates_map and rates_map.get(unit_ids[0])) %}
-                <div class="price">
-                  {{ rates_map[unit_ids[0]] | int | string }} {{ currency_map.get(unit_ids[0], 'THB') }} / night
-                </div>
-              {% else %}
-                <div class="no-price">No price yet - set one in admin</div>
-              {% endif %}
-            </div>
-
-            <div class="actions">
-              <a class="btn" href="/prop/{{ slug }}">View / Book</a>
-            </div>
+  {% if groups %}
+    {% for slug, info in groups.items() %}
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div class="slug">{{ info.title or slug }}</div>
+            <div class="muted">Slug: <code>{{ slug }}</code> • Units: {{ info.unit_ids | join(', ') }}</div>
           </div>
-        {% endfor %}
+          <div>
+            <a href="/prop/{{ slug }}" style="margin-right:8px;">View public</a>
+            <a href="/admin/calendar/{{ slug }}" target="_blank">Admin calendar</a>
+          </div>
+        </div>
+        {% if pending_map and slug in pending_map %}
+          <div style="margin-top:8px">
+            <span class="note">⚠️ {{ pending_map[slug] }} unit(s) currently have no iCal URL</span>
+          </div>
+        {% endif %}
       </div>
-    {% else %}
-      <p>No properties configured.</p>
-    {% endif %}
-  </main>
+    {% endfor %}
+  {% else %}
+    <div class="card">No properties found.</div>
+  {% endif %}
 
-  <style>
-    body{font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;margin:0;padding:20px}
-    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
-    .card{border:1px solid #eee;padding:12px;border-radius:8px;background:#fff}
-    .card h2{margin:8px 0 6px}
-    .price{font-weight:700;color:#111}
-    .no-price{color:#888;font-size:0.95rem}
-    .btn{display:inline-block;padding:8px 12px;background:#007bff;color:white;border-radius:6px;text-decoration:none}
-  </style>
+  <div style="margin-top:14px" class="muted">If you see any errors, open /debug/templates and /debug/groups for diagnostics (admin only).</div>
 </body>
 </html>
