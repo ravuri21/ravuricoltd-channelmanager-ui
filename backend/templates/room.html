@@ -465,10 +465,15 @@
         body: JSON.stringify({ start_date:startDate, end_date:endDate, name, email })
       });
       const j = await res.json();
-      if(res.ok && j.ok){
+         if(res.ok && j.ok){
+        // show confirmation message (don't immediately clear — keep visible briefly)
         setMsg("✅ Booking confirmed — dates blocked.", true);
-        clearSelection();
-        if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
+
+        // refresh UI after a short delay so user sees the confirmation
+        setTimeout(async () => {
+          clearSelection(); // then clear selection
+          if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
+        }, 1500);
       }else{
         throw new Error(j.error || "Unknown error");
       }
