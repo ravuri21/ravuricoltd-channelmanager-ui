@@ -28,13 +28,9 @@
     <div>
       <strong>Properties</strong>
       <div class="muted">Browse properties and book directly. Click a card to open the booking page.</div>
-    </div>
+   </div>
     <div>
-      {% if session.get('user') %}
-        <button class="btn secondary" onclick="checkIcalStatus()">🔁 Sync all OTAs</button>
-      {% endif %}
-    </div>
-  </div>
+     </div>
 
   <div class="grid">
     {% for slug, info in groups.items() %}
