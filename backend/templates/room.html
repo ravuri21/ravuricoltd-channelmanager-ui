@@ -67,16 +67,23 @@
         <p class="muted">Tap the calendar to choose check-in and check-out. <b>Red</b> = booked, <b>Green</b> = available.</p>
 
         <div class="panel">
-          <div id="calwrap" class="calwrap"></div>
-          <div class="legend">
-            <span class="dot d-ok"></span> Available
-            <span class="dot d-bad"></span> Booked
-            <span class="dot d-sel"></span> Selected
-          </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <div style="font-weight:600">Availability (click green days to select)</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="prevMonth" class="btn secondary small" type="button">← Prev</button>
+      <button id="nextMonth" class="btn small" type="button">Next →</button>
+    </div>
+  </div>
 
-          <div id="availSummary" style="margin-top:12px;font-size:.95rem;color:#333"></div>
-        </div>
+  <div id="calwrap" class="calwrap"></div>
+  <div class="legend">
+    <span class="dot d-ok"></span> Available
+    <span class="dot d-bad"></span> Booked
+    <span class="dot d-sel"></span> Selected
+  </div>
 
+  <div id="availSummary" style="margin-top:12px;font-size:.95rem;color:#333"></div>
+</div>
         <div class="footer">Powered by RavuriCo Ltd</div>
       </div>
 
