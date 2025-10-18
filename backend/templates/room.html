@@ -1,176 +1,247 @@
+<!-- backend/templates/room.html -->
 <!doctype html>
-<html lang="en">
+<html lang="{{ lang or 'en' }}">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>{{ title or "Property" }} — RavuriCo</title>
-
-  <!-- Tiny SEO -->
-  <meta name="description" content="{{ title or '' }} — Book directly with RavuriCo" />
-  <meta property="og:title" content="{{ title or '' }}" />
-  <meta property="og:description" content="Book {{ title or '' }} directly" />
-  <meta property="og:image" content="{{ image_url }}" />
-
-  <link rel="stylesheet" href="/static/style.css" />
-  <style>
-    /* Minimal helpful styles so messages appear clearly */
-    .price { font-size: 1.2rem; margin: 0.6rem 0; }
-    .price .amount { font-weight: 700; font-size: 1.4rem; }
-    .badge-test { display:inline-block; padding:3px 6px; font-size:0.75rem; border-radius:4px; background:#f0ad4e; color:#fff; margin-left:6px; }
-    .booking-area { margin-top: 18px; }
-    .btn-primary { background:#0b78e3; color:white; padding:10px 18px; border:none; border-radius:6px; cursor:pointer; }
-    .btn-primary:disabled { opacity:0.6; cursor:not-allowed; }
-    .success { margin-top:12px; padding:12px; border-radius:6px; background:#e6ffed; color:#006a2e; display:none; }
-    .success .tick { display:inline-block; width:22px; height:22px; background: #00a651; color:#fff; border-radius:50%; text-align:center; line-height:22px; margin-right:8px; }
-    .hidden { display:none; }
-    label.small { display:block; font-size:0.85rem; color:#444; margin:6px 0 2px; }
-    input[type="text"], input[type="email"], input[type="date"] { padding:8px; width:100%; max-width:320px; border:1px solid #ddd; border-radius:4px; margin-bottom:8px; }
-  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{ title }}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <!-- Stripe.js -->
+  <script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
-  <header style="padding:12px 18px; border-bottom:1px solid #eee;">
+  <header>
     <a href="/properties">← Back to properties</a>
-    <div style="float:right;">{{ t.brand if t and t.brand else "RavuriCo" }}</div>
+    <h1>{{ title }}</h1>
   </header>
 
-  <main style="padding:18px; max-width:960px; margin:auto;">
-    <h1>{{ title }}</h1>
-    <img src="{{ image_url }}" alt="{{ title }}" style="width:100%; max-height:380px; object-fit:cover; border-radius:8px;">
-
-    <!-- Price row -->
-    <div class="price" id="price-row">
-      {% if price_display %}
-        <span class="amount" id="price-amount">{{ price_display }}</span>
-      {% elif price %}
-        <span class="amount" id="price-amount">{{ price }} {{ currency }}</span>
-      {% else %}
-        <span id="price-na">No price yet - set one in admin.</span>
-      {% endif %}
-      {% if test_mode %}
-        <span class="badge-test" id="test-badge">{{ t.test_mode_badge if t and t.test_mode_badge else "Test mode" }}</span>
-      {% endif %}
-    </div>
-
-    <!-- Booking form -->
-    <div class="booking-area">
-      <form id="booking-form" onsubmit="return false;">
-        <label class="small">Check-in</label>
-        <input type="date" id="start_date" name="start_date" required>
-
-        <label class="small">Check-out</label>
-        <input type="date" id="end_date" name="end_date" required>
-
-        <label class="small">Your name</label>
-        <input type="text" id="guest_name" name="name" placeholder="Full name" required>
-
-        <label class="small">Email</label>
-        <input type="email" id="guest_email" name="email" placeholder="you@example.com" required>
-
-        <div style="margin-top:10px;">
-          <button id="book-btn" class="btn-primary" type="button">
-            {{ t.book_and_pay if t and t.book_and_pay else "Book & Pay" }}
-          </button>
+  <main style="max-width:900px;margin:0 auto;padding:16px;">
+    <div style="display:flex;gap:16px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:280px;">
+        <img src="{{ image_url }}" alt="{{ title }}" style="width:100%;height:260px;object-fit:cover;border-radius:8px;">
+        <div style="margin-top:12px;">
+          <strong>Price:</strong>
+          {% if price %}
+            <span id="price-val">{{ price|int }}</span> <small id="price-currency">{{ currency or 'THB' }}</small> / night
+          {% else %}
+            <span style="color:#888">No price yet - set one in admin</span>
+          {% endif %}
         </div>
-      </form>
+      </div>
 
-      <!-- Booking result area -->
-      <div id="booking-result" class="success" role="status" aria-live="polite">
-        <span class="tick">✓</span>
-        <span id="booking-result-text"></span>
+      <div style="flex:1;min-width:320px;">
+        <div id="availability-section">
+          <h3>Check availability</h3>
+          <p>Choose check-in and check-out dates</p>
+
+          <label>Check-in</label>
+          <input id="start_date" type="date" />
+
+          <label style="margin-left:8px">Check-out</label>
+          <input id="end_date" type="date" />
+
+          <div id="unavailable-list" style="margin-top:10px;color:#b00;font-size:0.95rem;"></div>
+        </div>
+
+        <hr style="margin:12px 0;">
+
+        <div id="book-form">
+          <label>Your name</label>
+          <input id="guest_name" type="text" placeholder="Full name" style="width:100%;padding:8px;margin-bottom:8px">
+
+          <label>Your email</label>
+          <input id="guest_email" type="email" placeholder="guest@example.com" style="width:100%;padding:8px;margin-bottom:8px">
+
+          <!-- Stripe Card element -->
+          <div id="card-element" style="margin-top:8px;padding:12px;border:1px solid #ddd;border-radius:8px"></div>
+          <div id="card-errors" role="alert" style="color:#b00;margin-top:8px"></div>
+
+          <button id="book-button" class="btn" style="margin-top:12px;background:#0069ff;color:#fff;padding:10px 14px;border-radius:8px;border:none">
+            Book & pay
+          </button>
+
+          <div id="booking-result" style="margin-top:12px;font-weight:600;"></div>
+        </div>
       </div>
     </div>
 
-    <div style="margin-top:28px; font-size:0.95rem; color:#666;">
-      <strong>Note:</strong> This booking will block the dates across listings after confirmation.
+    <div style="margin-top:18px;color:#666;font-size:0.95rem">
+      <strong>Blocked / unavailable ranges</strong>
+      <ul id="blocked-ranges"></ul>
     </div>
   </main>
 
-  <script>
-    (function(){
-      const slug = "{{ slug or '' }}";
-      const isLegacy = !slug && {{ 'true' if request.path.startswith('/r/') else 'false' }};
-      const publicBookUrl = slug ? `/api/public/book_group/${slug}` : null;
-      const publishableKey = "{{ publishable_key or '' }}";
+<script>
+const slug = "{{ slug }}";
+const publishableKey = "{{ publishable_key or '' }}";
+const pricePerNight = {{ price or "null" }};
+const currency = "{{ currency or 'THB' }}";
 
-      function showResult(text) {
-        const resEl = document.getElementById("booking-result");
-        const txt = document.getElementById("booking-result-text");
-        txt.textContent = text;
-        resEl.style.display = "block";
-      }
+let blocked = []; // [{start_date, end_date, unit_id, source}, ...]
 
-      function setBtnText(text) {
-        const btn = document.getElementById("book-btn");
-        if (btn) btn.textContent = text;
-      }
+function isoToLocalDate(iso) {
+  // iso like "2025-10-20"
+  return iso;
+}
 
-      // Ensure button label is present immediately
-      const initialBtnText = "{{ t.book_and_pay if t and t.book_and_pay else 'Book & Pay' }}";
-      setBtnText(initialBtnText);
+function loadAvailability() {
+  fetch(`/api/public/availability/${slug}`)
+    .then(r => r.json())
+    .then(data => {
+      blocked = data || [];
+      renderBlockedList();
+    })
+    .catch(err => {
+      console.error("availability fetch error:", err);
+    });
+}
 
-      document.getElementById("book-btn").addEventListener("click", async function(ev){
-        const btn = ev.currentTarget;
-        btn.disabled = true;
-        btn.textContent = "Processing...";
+function renderBlockedList() {
+  const ul = document.getElementById('blocked-ranges');
+  ul.innerHTML = '';
+  if (!blocked.length) {
+    ul.innerHTML = '<li>None</li>';
+    return;
+  }
+  blocked.forEach(b => {
+    const li = document.createElement('li');
+    li.textContent = `${b.start_date} → ${b.end_date}   (${b.source || 'ical/manual'})`;
+    ul.appendChild(li);
+  });
+  // Also show simple message if a date input falls into a blocked range
+  document.getElementById('unavailable-list').textContent = '';
+}
 
-        const start = document.getElementById("start_date").value;
-        const end   = document.getElementById("end_date").value;
-        const name  = document.getElementById("guest_name").value.trim();
-        const email = document.getElementById("guest_email").value.trim();
+function dateInBlocked(start, end) {
+  // check if any blocked overlap [start, end)
+  for (const b of blocked) {
+    if (!b.start_date || !b.end_date) continue;
+    // overlap if NOT (b.end <= start OR b.start >= end)
+    if (!(b.end_date <= start || b.start_date >= end)) return true;
+  }
+  return false;
+}
 
-        if (!start || !end || !name || !email) {
-          alert("Please fill all fields");
-          btn.disabled = false;
-          setBtnText(initialBtnText);
-          return;
-        }
+// Validate selected dates whenever changed
+document.addEventListener('input', () => {
+  const start = document.getElementById('start_date').value;
+  const end = document.getElementById('end_date').value;
+  if (!start || !end) return;
+  if (end <= start) {
+    document.getElementById('unavailable-list').textContent = "Check-out must be after check-in";
+    return;
+  }
+  if (dateInBlocked(start, end)) {
+    document.getElementById('unavailable-list').textContent = "One or more nights are unavailable. Change dates.";
+    document.getElementById('book-button').disabled = true;
+  } else {
+    document.getElementById('unavailable-list').textContent = "";
+    document.getElementById('book-button').disabled = false;
+  }
+});
 
-        // If publishableKey exists, the app may want to create a Stripe intent first.
-        // Original server supports create_intent; however this minimal flow calls the booking endpoint directly
-        // so the server creates booking blocks (and you can wire Stripe separately later).
-        const payload = { start_date: start, end_date: end, name: name, email: email };
-        const url = publicBookUrl || ("/api/public/book/" + ({{ request.path.split('/')[-1] | tojson }}));
+// Stripe integration
+let stripe = null;
+let card = null;
+function mountStripe() {
+  if (!publishableKey) {
+    document.getElementById('card-errors').textContent = "Payment not available (publishable key missing)";
+    document.getElementById('book-button').disabled = true;
+    return;
+  }
+  stripe = Stripe(publishableKey);
+  const elements = stripe.elements();
+  card = elements.create('card');
+  card.mount('#card-element');
+  card.on('change', function(ev) {
+    const err = document.getElementById('card-errors');
+    err.textContent = ev.error ? ev.error.message : '';
+  });
+}
 
-        try {
-          console.log("Booking POST to", url, payload);
-          const resp = await fetch(url, {
-            method: "POST",
-            headers: {"Content-Type":"application/json"},
-            body: JSON.stringify(payload),
-            credentials: "same-origin"
-          });
-          const data = await resp.json();
-          console.log("Booking response:", data);
+async function createPaymentIntent(start, end) {
+  const resp = await fetch(`/api/public/create_intent/${slug}`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({start_date:start, end_date:end})
+  });
+  return resp.json();
+}
 
-          if (resp.ok && data.ok) {
-            // show server message if available
-            const message = data.message || "{{ t.booking_confirmed if t and t.booking_confirmed else 'Booking confirmed — dates closed' }}";
-            showResult(message);
-            // keep button disabled briefly then re-enable so user can read
-            setTimeout(()=>{ btn.disabled = false; setBtnText(initialBtnText); }, 2500);
-          } else {
-            let msg = data.error || (data.message) || "Booking failed";
-            alert("Booking error: " + msg);
-            btn.disabled = false;
-            setBtnText(initialBtnText);
-          }
-        } catch (err) {
-          console.error("Booking error", err);
-          alert("Booking failed (network). Check console/logs.");
-          btn.disabled = false;
-          setBtnText(initialBtnText);
-        }
-      });
+document.getElementById('book-button').addEventListener('click', async function(e) {
+  e.preventDefault();
+  const name = document.getElementById('guest_name').value.trim();
+  const email = document.getElementById('guest_email').value.trim();
+  const start = document.getElementById('start_date').value;
+  const end = document.getElementById('end_date').value;
 
-      // If the price was hidden as "No price yet" we leave it; otherwise ensure it's visible.
-      document.addEventListener("DOMContentLoaded", () => {
-        const priceEl = document.getElementById("price-amount");
-        if (!priceEl) {
-          // no explicit price — nothing to do
-        }
-      });
+  if (!start || !end) { alert('Choose check-in and check-out'); return; }
+  if (end <= start) { alert('Check-out must be after check-in'); return; }
+  if (!name || !email) { alert('Enter name and email'); return; }
+  if (dateInBlocked(start, end)) { alert('Selected dates unavailable'); return; }
 
-    })();
-  </script>
+  // Create PaymentIntent
+  const createResp = await createPaymentIntent(start, end);
+  if (createResp.error) {
+    alert("Payment creation failed: " + createResp.error);
+    return;
+  }
+  const clientSecret = createResp.client_secret;
+  if (!clientSecret) {
+    alert("Payment creation returned no client_secret");
+    return;
+  }
+
+  // Confirm card payment
+  document.getElementById('book-button').disabled = true;
+  document.getElementById('booking-result').textContent = 'Processing payment...';
+
+  const {error, paymentIntent} = await stripe.confirmCardPayment(clientSecret, {
+    payment_method: {
+      card: card,
+      billing_details: {name: name, email: email}
+    }
+  });
+
+  if (error) {
+    document.getElementById('card-errors').textContent = error.message || 'Payment failed';
+    document.getElementById('book-button').disabled = false;
+    document.getElementById('booking-result').textContent = '';
+    return;
+  }
+
+  if (paymentIntent && paymentIntent.status === 'succeeded') {
+    // Payment succeeded — call your booking endpoint to record & block dates
+    const bookResp = await fetch(`/api/public/book_group/${slug}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({start_date:start, end_date:end, name:name, email:email})
+    });
+    const bookJson = await bookResp.json();
+    if (bookJson.ok) {
+      document.getElementById('booking-result').innerHTML = '✅ Booking confirmed — dates blocked.';
+      // Refresh availability
+      loadAvailability();
+    } else {
+      document.getElementById('booking-result').innerHTML = '⚠️ Booking saved on payment but failed to record: ' + (bookJson.error || JSON.stringify(bookJson));
+    }
+  } else {
+    document.getElementById('booking-result').textContent = 'Payment not completed: ' + (paymentIntent ? paymentIntent.status : 'unknown');
+    document.getElementById('book-button').disabled = false;
+  }
+});
+
+window.addEventListener('load', function() {
+  loadAvailability();
+  mountStripe();
+});
+</script>
+
+<style>
+  label{display:block;margin-top:8px;font-weight:600}
+  input[type=date], input[type=text], input[type=email]{width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;margin-top:6px}
+  .btn{display:inline-block;padding:10px 14px}
+</style>
+
 </body>
 </html>
