@@ -1,57 +1,71 @@
 <!doctype html>
-<html>
+<html lang="{{ lang or 'en' }}">
 <head>
   <meta charset="utf-8" />
   <title>Properties</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="/static/style.css" />
   <style>
-    body{font-family:system-ui,Arial,sans-serif;background:#f6f8fa;margin:0;padding:24px}
-    .wrap{max-width:1100px;margin:0 auto}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
-    .card{background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 6px 18px rgba(10,10,10,.06)}
-    .hero{height:180px;overflow:hidden}
-    .hero img{width:100%;height:180px;object-fit:cover;display:block}
-    .body{padding:12px}
-    h2{margin:0 0 8px}
-    .price{font-weight:700;margin-top:6px}
-    .muted{color:#6b7280;font-size:.95rem}
-    .actions{display:flex;gap:8px;margin-top:10px}
-    .btn{background:#0070f3;color:#fff;padding:8px 12px;border-radius:8px;border:none;cursor:pointer}
-    @media (max-width:720px){ .hero{height:140px} }
+    body { font-family: system-ui, Arial, sans-serif; margin:0; background:#f6f8fa; color:#222; }
+    .topbar { display:flex; justify-content:space-between; align-items:center; padding:12px 18px; background:#fff; box-shadow:0 1px 0 rgba(0,0,0,.04); }
+    .topbar a { color:#2563eb; text-decoration:none; margin-left:8px; }
+    .container{ max-width:1100px; margin:22px auto; padding:0 14px; }
+    h1{ margin:12px 0; font-size:1.25rem; }
+    .grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:16px; }
+    .card{ background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 6px 18px rgba(0,0,0,.06); display:flex; flex-direction:column; }
+    .card .media{ height:160px; background-size:cover; background-position:center; }
+    .card .body{ padding:12px; display:flex; flex-direction:column; gap:8px; flex:1; }
+    .title{ font-weight:700; font-size:1rem; }
+    .muted{ color:#6b7280; font-size:.92rem; }
+    .price{ margin-top:6px; font-weight:800; color:#111; }
+    .actions{ display:flex; gap:8px; margin-top:auto; align-items:center; }
+    .btn{ padding:8px 12px; border-radius:8px; border:none; background:#2563eb; color:#fff; cursor:pointer; text-decoration:none; display:inline-block; }
+    .btn.secondary{ background:#6b7280; }
+    .meta-row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    @media (max-width:640px){ .card .media{ height:140px } .topbar{ padding:10px } }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h2>Properties</h2>
-    <p class="muted">Choose a property to view availability and book. The calendar will show green = available, red = booked.</p>
+  <div class="topbar">
+    <div style="font-weight:700">RavuriCo — Properties</div>
+    <div style="font-size:.95rem">
+      <a href="/login">Admin</a>
+      <a href="/lang/en">EN</a> | <a href="/lang/th">ไทย</a>
+    </div>
+  </div>
 
-    <div class="grid">
-      {% for slug, info in groups.items() %}
-      <div class="card">
-        <div class="hero">
-          <img src="{{ info.image_url }}" alt="{{ info.title }}">
-        </div>
-        <div class="body">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div>
-              <div style="font-weight:700">{{ info.title }}</div>
-              {% if info.price %}
-                <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="muted">/ night {{ info.currency }}</span></div>
+  <div class="container">
+    <h1>Properties</h1>
+
+    {% if not groups %}
+      <div class="muted">No properties configured yet.</div>
+    {% else %}
+      <div class="grid" role="list">
+        {% for slug, info in groups.items() %}
+          <div class="card" role="listitem">
+            <div class="media" style="background-image: url('{{ info.image_url|e }}')"></div>
+            <div class="body">
+              <div class="title">{{ info.title|e }}</div>
+              <div class="muted">{{ (info.unit_ids or [])|length }} listing{{ (info.unit_ids or [])|length > 1 and 's' or '' }}</div>
+
+              {% if info.price is not none %}
+                <div class="price">฿ {{ ('%.0f'|format(info.price)) }} <span class="muted" style="font-weight:600">/ night {{ info.currency or 'THB' }}</span></div>
               {% else %}
                 <div class="muted">Price not set</div>
               {% endif %}
-            </div>
-            <div style="text-align:right">
-              <a class="btn" href="/prop/{{ slug }}">View & Book</a>
+
+              <div class="actions">
+                <a class="btn" href="/prop/{{ slug }}" target="_blank" rel="noopener">View public page</a>
+                <!-- admin link: visible on public pages; it's harmless but takes you to login if not admin -->
+                <a class="btn secondary" href="/admin/calendar/{{ slug }}" target="_blank" rel="noopener">Open calendar (admin)</a>
+              </div>
             </div>
           </div>
-        </div>
+        {% endfor %}
       </div>
-      {% endfor %}
-    </div>
+    {% endif %}
 
-    <div style="margin-top:18px" class="muted">If you are the admin, use the admin dashboard to manage units, iCal links and sync OTA calendars.</div>
+    <div style="margin-top:20px" class="muted">Tip: open a property to see calendar and booking UI. Admin calendar & sync are available through the Admin area.</div>
   </div>
 </body>
 </html>
