@@ -2,209 +2,226 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Dashboard - Channel Manager</title>
+  <title>Admin Dashboard — Channel Manager</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="/static/style.css" />
   <style>
-    body{font-family:system-ui,Arial,Helvetica;background:#f6f8fa;margin:0}
-    .topbar{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#fff;border-bottom:1px solid #eee}
-    .container{max-width:1100px;margin:18px auto;padding:16px}
-    table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden}
-    table th, table td{padding:10px;border-bottom:1px solid #f1f1f1;text-align:left}
-    .muted{color:#6b7280;font-size:.95rem}
-    .btn{padding:8px 10px;border-radius:8px;background:#2563eb;color:#fff;border:none;cursor:pointer}
-    .btn.small{padding:6px 8px;font-size:.9rem}
+    body{font-family:system-ui,Arial,sans-serif;background:#f6f8fa;margin:0;padding:0}
+    .topbar{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:#fff;border-bottom:1px solid #eee}
+    .brand{font-weight:700}
+    .container{max-width:1200px;margin:18px auto;padding:16px}
+    h2{margin:0 0 8px}
+    .controls{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+    .btn{background:#2563eb;color:#fff;padding:8px 12px;border:none;border-radius:8px;cursor:pointer}
     .btn.secondary{background:#6b7280}
-    .inline{display:inline-flex;gap:8px;align-items:center}
-    input[type="text"]{padding:8px;border-radius:8px;border:1px solid #ddd;width:100%}
-    .pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:.85rem}
+    .muted{color:#6b7280}
+    table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.04)}
+    th,td{padding:10px;border-bottom:1px solid #f1f1f1;text-align:left;font-size:.95rem}
+    th{background:#fafafa;font-weight:700}
+    tr:hover td{background:#fbfdff}
+    input[type=text], input[type=number]{padding:8px;border:1px solid #e6e6e6;border-radius:8px;width:100%}
+    .small{padding:6px 8px;font-size:.9rem}
+    .pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#eef2ff;color:#1e40af;font-weight:600;font-size:.85rem}
+    .status-ok{color:#16a34a;font-weight:700}
+    .status-warn{color:#ca8a04;font-weight:700}
+    .status-err{color:#dc2626;font-weight:700}
+    .actions{display:flex;gap:8px;align-items:center}
+    .muted-small{color:#9aa0a6;font-size:.85rem}
+    .note{color:#666;font-size:. nine rem}
+    .right{display:flex;gap:8px;align-items:center}
+    .table-scroll{overflow:auto;border-radius:8px}
   </style>
 </head>
 <body>
   <div class="topbar">
-    <div style="font-weight:700">Channel Manager — Admin</div>
-    <div>
-      <a href="/properties" target="_blank">Public index</a> |
-      <a href="/lang/en">EN</a> | <a href="/lang/th">ไทย</a> |
-      <a href="/logout">Logout</a>
+    <div class="brand">Channel Manager — Admin</div>
+    <div class="right">
+      <a href="/properties" target="_blank" class="muted">View public</a> |
+      <a href="/admin/groups" class="muted">Grouped Admin</a> |
+      <a href="/logout" class="muted">Logout</a>
     </div>
   </div>
 
   <div class="container">
-    <h2>All Units</h2>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div class="muted">Use <b>Manage</b> to close/open dates. Toggle “Apply to all OTAs”.</div>
-      <div>
-        <button onclick="checkIcalStatus()" class="btn" style="background:#16a34a;">🔍 Check iCal Status</button>
-      </div>
+    <h2>All Units <span class="muted" style="font-weight:600">(internal IDs shown)</span></h2>
+
+    <div class="controls">
+      <button id="syncAll" class="btn">🔄 Sync All OTAs Now</button>
+      <button id="checkIcal" class="btn secondary">🔍 Check iCal Status</button>
+      <div id="lastResult" class="muted" style="margin-left:8px">Last: —</div>
+      <div style="margin-left:auto" class="muted-small">Admin: {{ t.brand }} • support: {{ t.support_email }}</div>
     </div>
 
-    <div id="ical-results" style="margin-bottom:12px;font-family:system-ui,monospace;"></div>
+    <div id="icalResults" style="margin-bottom:10px;font-family:system-ui,monospace;"></div>
 
-    <table>
-      <thead style="background:#fafafa">
-        <tr>
-          <th style="width:110px">OTA</th>
-          <th>Property / Room ID</th>
-          <th>Public</th>
-          <th style="min-width:360px">iCal</th>
-          <th style="width:180px">Price (THB)</th>
-          <th style="width:120px">Availability</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for u in units %}
-        <tr>
-          <td>{{ u.ota }}</td>
-          <td>{{ u.property_id }}</td>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:60px">Unit</th>
+            <th style="width:120px">OTA</th>
+            <th>Property / Room ID</th>
+            <th style="min-width:160px">Public</th>
+            <th style="min-width:360px">iCal URL</th>
+            <th style="width:140px">Price ({{ currency_map.get(units[0].id, 'THB') if units else 'THB' }})</th>
+            <th style="width:140px">Availability</th>
+            <th style="width:160px">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in units %}
+          <tr>
+            <td style="font-weight:700">/r/{{ u.id }}</td>
+            <td>{{ u.ota }}</td>
+            <td style="max-width:240px;white-space:normal;">{{ u.property_id }}</td>
 
-          <td>
-            {% if u.group_slug %}
-              <a class="btn small" href="/prop/{{ u.group_slug }}" target="_blank">Public View</a>
-            {% else %}
-              <a class="btn small" href="/r/{{ u.id }}" target="_blank">Public Link</a>
-            {% endif %}
-          </td>
+            <td>
+              <a href="/r/{{ u.id }}" target="_blank">open</a>
+            </td>
 
-          <td>
-            <div style="display:flex; gap:8px; align-items:center;">
-              <a href="{{ u.ical_url }}" target="_blank">open</a>
-              <input id="in-{{u.id}}" type="text" value="{{ u.ical_url or '' }}" style="flex:1; min-width:220px; padding:6px;" />
-              <button class="btn small" onclick="saveIcal({{u.id}})">Save</button>
-            </div>
-          </td>
+            <td>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input id="ical-{{ u.id }}" type="text" value="{{ u.ical_url or '' }}" placeholder="iCal URL (https://...)" />
+                <button class="btn small" onclick="saveIcal({{ u.id }})">Save</button>
+              </div>
+            </td>
 
-          <td>
-            <div style="display:flex; gap:8px; align-items:center;">
-              <input id="rate-{{u.id}}" type="number" placeholder="Price" style="width:120px; padding:6px;" />
-              <button class="btn small" onclick="savePrice({{u.id}})">Save</button>
-            </div>
-          </td>
+            <td>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input id="rate-{{ u.id }}" type="number" placeholder="Price" value="{{ rates_map.get(u.id) or '' }}" />
+                <button class="btn small" onclick="savePrice({{ u.id }})">Save</button>
+              </div>
+            </td>
 
-          <td>
-            <button class="btn small" onclick="openManage({{u.id}},'{{u.ota|e}}','{{u.property_id|e}}')">Manage</button>
-          </td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+            <td>
+              <div class="muted-small">Blocks: <span id="blocks-{{ u.id }}">—</span></div>
+              <div style="margin-top:6px">
+                <button class="btn small secondary" onclick="openManage({{ u.id }}, '{{ u.ota|e }}', '{{ u.property_id|e }}')">Manage</button>
+              </div>
+            </td>
 
-    <p class="muted" style="margin-top:10px">Background sync fetches calendars every ~10 minutes.</p>
+            <td class="actions">
+              <button class="btn small" onclick="fetchIcalPreview({{ u.id }})">Preview</button>
+              <a class="btn small secondary" href="/ical/export/{{ u.id }}.ics" target="_blank">Export iCal</a>
+              <a class="btn small" style="background:#0ea5a4" href="/admin/calendar/{{ _load_meta().groups | selectattr('1','defined') and '??' or '??' }}" onclick="return confirm('Use Grouped Admin for property calendar')">Group</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <p class="muted" style="margin-top:12px">Tip: use <strong>Manage</strong> to create manual blocks which will be applied across all OTAs for a property (via grouped admin).</p>
   </div>
 
-  <!-- Manage Modal -->
+  <!-- Manage modal (same UI as earlier Manage modal) -->
   <div id="backdrop" style="position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:9999">
-    <div style="width:min(820px,96vw);background:#fff;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);overflow:hidden">
+    <div style="width:min(880px,96vw);background:#fff;border-radius:12px;overflow:hidden">
       <header style="padding:12px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between">
-        <h3 id="m-title" style="margin:0;font-size:1.05rem">Manage Availability</h3>
+        <h3 id="m-title" style="margin:0">Manage Availability</h3>
         <button class="btn secondary" onclick="closeManage()">✕</button>
       </header>
-      <div style="padding:14px 16px">
-        <div style="display:flex;gap:8px;align-items:center;margin:8px 0">
-          <span class="pill" id="m-pill"></span>
-          <span class="muted" id="m-sub" style="margin-left:8px;"></span>
+      <div style="padding:12px 16px">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+          <span class="pill" id="m-pill">OTA</span>
+          <div id="m-sub" class="muted" style="margin-left:8px"></div>
         </div>
 
-        <div style="display:flex;gap:8px;align-items:center;margin:8px 0">
-          <label style="display:inline-flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="m-group">
-            <span>Apply to <b>all OTAs</b> in this property</span>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <label style="display:inline-flex;align-items:center;gap:8px">
+            <input type="checkbox" id="m-group" /> Apply to <b>all OTAs</b>
           </label>
-          <span id="m-group-info" class="muted" style="margin-left:10px"></span>
+          <div id="m-group-info" class="muted-small">Detecting property group…</div>
         </div>
 
-        <div style="display:flex;gap:8px;align-items:center;margin:8px 0">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
           <input id="m-start" type="date" />
           <input id="m-end" type="date" />
-          <input id="m-note" type="text" placeholder="Note (optional)" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:8px" />
+          <input id="m-note" type="text" placeholder="Note (optional)" style="flex:1;padding:8px;border:1px solid #e6e6e6;border-radius:8px" />
           <button class="btn" onclick="addBlock()">➕ Block dates</button>
         </div>
-        <div class="muted">Block creates a hold from check-in (start) to check-out (end).</div>
 
-        <h4 style="margin:14px 0 6px;">Existing Blocks (this unit)</h4>
-        <table style="width:100%;border-collapse:collapse;margin-top:10px">
-          <thead>
-            <tr style="background:#fafafa">
-              <th style="padding:8px;text-align:left">ID</th>
-              <th style="padding:8px;text-align:left">Start</th>
-              <th style="padding:8px;text-align:left">End</th>
-              <th style="padding:8px;text-align:left">Source</th>
-              <th style="padding:8px;text-align:left">Note</th>
-              <th style="padding:8px;text-align:left"></th>
-            </tr>
-          </thead>
-          <tbody id="m-rows">
-            <tr><td colspan="6" class="muted" style="padding:8px">Loading…</td></tr>
-          </tbody>
-        </table>
+        <div style="margin-top:12px">
+          <h4 style="margin:8px 0">Existing Blocks</h4>
+          <table style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr><th style="text-align:left;padding:6px">ID</th><th style="padding:6px">Start</th><th style="padding:6px">End</th><th style="padding:6px">Source</th><th style="padding:6px">Note</th><th></th></tr>
+            </thead>
+            <tbody id="m-rows">
+              <tr><td colspan="6" class="muted">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
 
 <script>
-  async function checkIcalStatus() {
-    const resultsDiv = document.getElementById("ical-results");
-    resultsDiv.innerHTML = "<div style='padding:8px;'>⏳ Checking all iCal links...</div>";
-    try {
-      const res = await fetch("/api/check_ical");
-      const data = await res.json();
-      if (data.error) { resultsDiv.innerHTML = "❌ Unauthorized — please log in again."; return; }
-      let html = `
-        <table style='width:100%;border-collapse:collapse;margin-top:12px;'>
-          <tr style='background:#f0f0f0;'>
-            <th style='text-align:left;padding:8px;'>OTA</th>
-            <th style='text-align:left;padding:8px;'>Property</th>
-            <th style='text-align:left;padding:8px;'>Status</th>
-          </tr>`;
-      for (let row of data) {
+  // ---------- Helpers ----------
+  function setLast(msg){
+    const el = document.getElementById("lastResult");
+    if(el) el.textContent = "Last: " + msg;
+  }
+
+  async function checkIcalStatus(){
+    const out = document.getElementById("icalResults");
+    out.innerHTML = "⏳ Checking all iCal links...";
+    try{
+      const r = await fetch("/api/check_ical");
+      const j = await r.json();
+      if(j.error){ out.innerHTML = "❌ " + j.error; return; }
+      let html = "<table style='width:100%;border-collapse:collapse'><tr style='background:#f9fafb'><th style='padding:8px'>OTA</th><th style='padding:8px'>Property</th><th style='padding:8px'>Status</th></tr>";
+      for(const row of j){
         let color = "#dc2626";
-        if (row.status.includes("✅")) color = "#16a34a";
-        else if (row.status.includes("⚠️")) color = "#ca8a04";
-        html += `
-          <tr>
-            <td style='padding:8px;border-bottom:1px solid #eee;'>${row.ota}</td>
-            <td style='padding:8px;border-bottom:1px solid #eee;'>${row.property_id}</td>
-            <td style='padding:8px;border-bottom:1px solid #eee;color:${color};font-weight:600;'>${row.status}</td>
-          </tr>`;
+        if(row.status.includes("✅")) color = "#16a34a";
+        else if(row.status.includes("⚠️")) color = "#ca8a04";
+        html += `<tr><td style='padding:8px;border-bottom:1px solid #f1f1f1'>${row.ota}</td><td style='padding:8px;border-bottom:1px solid #f1f1f1'>${row.property_id}</td><td style='padding:8px;border-bottom:1px solid #f1f1f1;color:${color};font-weight:700'>${row.status}</td></tr>`;
       }
       html += "</table>";
-      resultsDiv.innerHTML = html;
-    } catch (err) {
-      resultsDiv.innerHTML = "❌ Error checking iCal status:<br>" + err;
+      out.innerHTML = html;
+      setLast("iCal checked");
+    }catch(err){
+      out.innerHTML = "❌ Error: " + err;
+      setLast("iCal check failed");
     }
   }
 
   async function saveIcal(id){
-    const val = document.getElementById("in-"+id).value.trim();
-    if(!val){ alert("⚠️ Enter iCal URL or clear to remove."); return; }
-    const lower = val.toLowerCase();
-    if((lower.includes("airbnb.com") || lower.includes("agoda.com")) && !lower.includes(".ics")){
-      alert("⚠️ Airbnb/Agoda iCal should include .ics"); return;
+    const val = document.getElementById("ical-"+id).value.trim();
+    if(!val){ alert("Enter iCal URL"); return; }
+    try{
+      const r = await fetch(`/api/unit/${id}/ical`, {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ ical_url: val })
+      });
+      const j = await r.json();
+      if(r.ok && j.ok){ alert("iCal saved ✅"); setLast("iCal saved for /r/"+id); }
+      else alert("Error: " + (j.error || "unknown"));
+    }catch(e){
+      alert("Network error");
     }
-    if(lower.includes("booking.com") && !lower.includes("/v1/export?t=")){
-      alert("⚠️ Booking.com iCal should include /v1/export?t="); return;
-    }
-    const r = await fetch(`/api/unit/${id}/ical`, {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ ical_url: val })
-    });
-    const j = await r.json();
-    alert(j.ok ? "Saved ✅" : ("Error: " + (j.error || "unknown")));
   }
 
   async function savePrice(unitId){
-    const v = document.getElementById("rate-"+unitId).value.trim();
+    const el = document.getElementById("rate-"+unitId);
+    const v = el.value.trim();
     if(!v || isNaN(v)){ alert("Enter a valid number"); return; }
-    const r = await fetch("/api/rates", {
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ unit_id: unitId, base_rate: parseFloat(v), currency: "THB" })
-    });
-    const j = await r.json();
-    alert(j.ok ? "Price saved ✅" : ("Error: " + (j.error || "unknown")));
+    try{
+      const r = await fetch("/api/rates", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ unit_id: unitId, base_rate: parseFloat(v), currency: "THB" })
+      });
+      const j = await r.json();
+      if(r.ok && j.ok){ alert("Price saved ✅"); setLast("Price saved for /r/"+unitId); }
+      else alert("Error: " + (j.error || "unknown"));
+    }catch(e){
+      alert("Network error");
+    }
   }
 
-  // Manage modal logic (same as before) -----------------
+  // ---------- Manage modal ----------
   let currentUnitId = null;
   let currentSlug = null;
   let currentGroupIds = [];
@@ -215,17 +232,16 @@
   }
 
   async function openManage(unitId, ota, propId){
-    currentUnitId = unitId; currentSlug = null; currentGroupIds = [];
+    currentUnitId = unitId;
     document.getElementById("m-title").textContent = "Manage Availability";
-    document.getElementById("m-pill").textContent = `${ota}`;
+    document.getElementById("m-pill").textContent = ota;
     document.getElementById("m-sub").textContent = propId;
-    const s = document.getElementById("m-start");
-    const e = document.getElementById("m-end");
-    const min = todayISO(); s.min = min; e.min = min; s.value = ""; e.value = "";
+    document.getElementById("m-start").min = todayISO();
+    document.getElementById("m-end").min = todayISO();
     document.getElementById("m-note").value = "";
     document.getElementById("m-group").checked = false;
     document.getElementById("m-group-info").textContent = "Detecting property group…";
-
+    // find group
     try{
       const r = await fetch(`/api/admin/find_group?unit_id=${unitId}`);
       const j = await r.json();
@@ -233,12 +249,11 @@
         currentSlug = j.slug; currentGroupIds = j.unit_ids || [];
         document.getElementById("m-group-info").textContent = `Property: ${j.title || j.slug} — Units: ${currentGroupIds.join(", ")}`;
       }else{
-        document.getElementById("m-group-info").textContent = "This unit is not mapped to a property group.";
+        document.getElementById("m-group-info").textContent = "Not mapped to a property group.";
       }
     }catch(_){
       document.getElementById("m-group-info").textContent = "Group lookup failed.";
     }
-
     loadBlocks();
     document.getElementById("backdrop").style.display = "flex";
   }
@@ -250,26 +265,26 @@
 
   async function loadBlocks(){
     const tbody = document.getElementById("m-rows");
-    tbody.innerHTML = `<tr><td colspan="6" class="muted" style="padding:8px">Loading…</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="muted">Loading…</td></tr>`;
     try{
       const r = await fetch(`/api/blocks?unit_id=${currentUnitId}`);
       const data = await r.json();
       if(!Array.isArray(data) || !data.length){
-        tbody.innerHTML = `<tr><td colspan="6" class="muted" style="padding:8px">No blocks</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="muted">No blocks</td></tr>`;
         return;
       }
       tbody.innerHTML = data.map(b => `
         <tr>
-          <td style="padding:8px;">${b.id}</td>
-          <td style="padding:8px;">${b.start_date}</td>
-          <td style="padding:8px;">${b.end_date}</td>
-          <td style="padding:8px;">${b.source || ''}</td>
-          <td style="padding:8px;">${b.note || ''}</td>
-          <td style="padding:8px;"><button class="btn small" style="background:#dc2626" onclick="delBlock(${b.id})">Delete</button></td>
+          <td style="padding:6px">${b.id}</td>
+          <td style="padding:6px">${b.start_date}</td>
+          <td style="padding:6px">${b.end_date}</td>
+          <td style="padding:6px">${b.source || ''}</td>
+          <td style="padding:6px">${b.note || ''}</td>
+          <td style="padding:6px"><button class="btn small" onclick="delBlock(${b.id})">Delete</button></td>
         </tr>
       `).join("");
     }catch(err){
-      tbody.innerHTML = `<tr><td colspan="6" class="muted" style="padding:8px">Error loading blocks</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="muted">Error loading blocks</td></tr>`;
     }
   }
 
@@ -277,49 +292,97 @@
     const s = document.getElementById("m-start").value;
     const e = document.getElementById("m-end").value;
     const note = document.getElementById("m-note").value.trim() || "manual";
-    if(!s || !e){ alert("Pick start and end dates"); return; }
+    if(!s || !e){ alert("Pick start and end"); return; }
     if(e <= s){ alert("Check-out must be after check-in"); return; }
-
     const applyGroup = document.getElementById("m-group").checked && currentSlug;
-
     try{
       if(applyGroup){
-        const r = await fetch(`/api/admin/block_group/${currentSlug}`,{
+        const r = await fetch(`/api/admin/sync_property/${currentSlug}`, { method:"POST" });
+        // we intentionally don't reuse sync_property for block — do group block using admin/block_group endpoint if implemented
+      }
+      if(applyGroup){
+        const resp = await fetch(`/api/admin/block_group/${currentSlug}`, {
           method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body: JSON.stringify({ start_date: s, end_date: e, note })
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({ start_date:s, end_date:e, note })
         });
-        const j = await r.json();
-        if(!(r.ok && j.ok)) throw new Error(j.error || "Group block failed");
+        const j = await resp.json();
+        if(!(resp.ok && j.ok)) throw new Error(j.error || "Group block failed");
       }else{
-        const r = await fetch("/api/blocks",{
+        const resp = await fetch("/api/blocks", {
           method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body: JSON.stringify({
-            unit_id: currentUnitId, start_date: s, end_date: e,
-            source: "manual", note
-          })
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({ unit_id: currentUnitId, start_date: s, end_date: e, source: "manual", note })
         });
-        const j = await r.json();
-        if(!(r.ok && j.ok)) throw new Error(j.error || "Block failed");
+        const j = await resp.json();
+        if(!(resp.ok && j.ok)) throw new Error(j.error || "Block failed");
       }
       loadBlocks();
-      alert(applyGroup ? "Blocked for ALL OTAs ✅" : "Blocked ✅");
+      alert("Blocked ✅");
     }catch(err){
-      alert("Error: " + err.message);
+      alert("Error: " + (err.message || err));
     }
   }
 
   async function delBlock(id){
-    if(!confirm("Delete this block? This will open those dates for this unit.")) return;
+    if(!confirm("Delete this block?")) return;
     try{
       const r = await fetch(`/api/blocks?id=${id}`, { method:"DELETE" });
       const j = await r.json();
-      if(r.ok && j.ok){ loadBlocks(); } else { alert(j.error || "Delete failed"); }
-    }catch(err){
-      alert("Network error");
+      if(r.ok && j.ok) loadBlocks(); else alert(j.error || "Delete failed");
+    }catch(e){ alert("Network error"); }
+  }
+
+  // ---------- Misc admin functions ----------
+  async function fetchIcalPreview(id){
+    const url = document.getElementById("ical-"+id).value.trim();
+    if(!url){ alert("No iCal URL"); return; }
+    try{
+      const r = await fetch(url, { method:"GET" });
+      const text = await r.text();
+      alert((text || "").slice(0,1200) || "No response or blocked by CORS");
+    }catch(e){
+      alert("Fetch error (CORS or bad URL)");
     }
   }
+
+  // Sync all OTAs
+  document.getElementById("syncAll").addEventListener("click", async () => {
+    if(!confirm("Run a full OTA sync now? This may take a minute.")) return;
+    setLast("Syncing…");
+    try{
+      const r = await fetch("/api/admin/sync_now", { method: "POST" });
+      const j = await r.json();
+      if(r.ok && j.ok){
+        setLast("Sync OK");
+        checkIcalStatus();
+        alert("Sync completed ✅");
+      }else{
+        setLast("Sync failed");
+        alert("Sync error: " + (j.error || "unknown"));
+      }
+    }catch(e){
+      setLast("Sync error");
+      alert("Network error during sync");
+    }
+  });
+
+  document.getElementById("checkIcal").addEventListener("click", checkIcalStatus);
+
+  // init — show blocks count for each unit
+  (function initBlocksSummary(){
+    const unitIds = [{% for u in units %}{{ u.id }},{% endfor %}];
+    unitIds.forEach(async id => {
+      try{
+        const r = await fetch(`/api/blocks?unit_id=${id}`);
+        const j = await r.json();
+        if(Array.isArray(j)) document.getElementById("blocks-"+id).textContent = j.length;
+        else document.getElementById("blocks-"+id).textContent = "—";
+      }catch(e){
+        document.getElementById("blocks-"+id).textContent = "—";
+      }
+    });
+  })();
 </script>
 </body>
 </html>
