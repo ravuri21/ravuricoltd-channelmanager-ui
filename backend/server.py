@@ -433,7 +433,9 @@ def index():
         return redirect(url_for("login"))
     db = SessionLocal()
     try:
-        units = db.query(Unit).all()
+        from sqlalchemy import asc
+        # ...
+        units = db.query(Unit).order_by(asc(Unit.id)).all()
         rates = db.query(RatePlan).all()
         rates_map = {r.unit_id: r.base_rate for r in rates}
         currency_map = {r.unit_id: (r.currency or "THB") for r in rates}
