@@ -300,6 +300,14 @@ def _sync_units(db, units):
                 except Exception:
                     continue
 
+            # record last_sync timestamp for this unit (UTC)
+            try:
+                u.last_sync = datetime.utcnow()
+                db.add(u)
+            except Exception as e:
+                # non-fatal: proceed but log
+                print(f"Warning: could not set last_sync for unit {u.id}: {e}")
+
             db.commit()
             results.append({
                 "unit_id": u.id,
@@ -361,6 +369,18 @@ def sync_calendars_for_group(slug):
 
 @app.post("/api/admin/sync_now")
 def api_admin_sync_now():
+    if "user" not in session:
+        return jsonify({"error": "unauthorized"}), 401
+    try:
+        summary = sync_calendars_once()
+        return jsonify({"ok": True, "summary": summary})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+# Add alias endpoint matching admin UI suggestion (/api/admin/sync_all)
+@app.post("/api/admin/sync_all")
+def api_admin_sync_all():
     if "user" not in session:
         return jsonify({"error": "unauthorized"}), 401
     try:
@@ -740,7 +760,7 @@ def api_public_create_intent(slug):
         )
         return jsonify({"ok": True, "client_secret": intent.client_secret})
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        return jsonify({"error": str(e)}, 400)
 
 # ---- Public booking: grouped + per-unit ----
 @app.route("/api/public/book_group/<slug>", methods=["POST"])
@@ -811,7 +831,7 @@ def list_public_links():
     rows = db.query(Unit).all()
     db.close()
     base = request.host_url.rstrip("/")
-    html = ["<h2>Public Links</h2><ul>"]
+    html = ["<h2>Public Links</haveh2><ul>"]
     for u in rows:
         html.append(f'<li><a href="/r/{u.id}" target="_blank">/r/{u.id}</a> — {u.ota} / {u.property_id}</li>')
     html.append("</ul>")
@@ -962,6 +982,33 @@ def api_admin_toggle_day(slug):
         else:
             return jsonify({"error": "unknown action"}), 400
 
+    finally:
+        db.close()
+
+# ====== API: last_sync for a property group ======
+@app.route("/api/admin/last_sync/<slug>")
+def api_admin_last_sync(slug):
+    if "user" not in session:
+        return jsonify({"error":"unauthorized"}), 401
+    info = _group_info(slug)
+    if not info:
+        return jsonify({"error":"group not found"}), 404
+    unit_ids = info.get("unit_ids", [])
+    if not unit_ids:
+        return jsonify({"error":"no units linked"}), 400
+
+    db = SessionLocal()
+    try:
+        rows = db.query(Unit).filter(Unit.id.in_(unit_ids)).all()
+        latest = None
+        for r in rows:
+            if r.last_sync:
+                if latest is None or r.last_sync > latest:
+                    latest = r.last_sync
+        if latest:
+            return jsonify({"ok": True, "last_sync": latest.isoformat()})
+        else:
+            return jsonify({"ok": True, "last_sync": None})
     finally:
         db.close()
 
