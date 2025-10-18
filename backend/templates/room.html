@@ -123,215 +123,262 @@
   </div>
 
   <script>
-  // --------- Context ----------
-  const path = location.pathname;
-  const isGroup = path.startsWith("/prop/");
-  const isUnit  = path.startsWith("/r/");
-  const slug    = isGroup ? path.split("/").pop() : null;
-  const unitId  = isUnit  ? parseInt(path.split("/").pop(), 10) : null;
+/* room.html client script — paste replacing the old <script> block */
+/* Handles loading availability, calendar navigation (up to 12 months),
+   selecting check-in/out, price calc, stripe payment, and shows a
+   larger persistent booking confirmation on success. */
 
-  let groupSlug = slug;
-  let groupUnitIds = [];
+const path = location.pathname;
+const isGroup = path.startsWith("/prop/");
+const isUnit  = path.startsWith("/r/");
+const slug    = isGroup ? path.split("/").pop() : null;
+const unitId  = isUnit  ? parseInt(path.split("/").pop(), 10) : null;
 
-  const STRIPE_PK = "{{ publishable_key or '' }}".trim();
-  let stripe, card;
+let groupSlug = slug;
+let groupUnitIds = [];
 
-  function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}` }
-  function addDays(dt, n){ const d=new Date(dt); d.setDate(d.getDate()+n); return d; }
+const STRIPE_PK = "{{ publishable_key or '' }}".trim();
+let stripe, card;
 
-  function expandRanges(ranges){
-    const set = new Set();
-    for(const r of ranges){
-      let d = new Date(r.start_date);
-      const end = new Date(r.end_date);
-      while(d < end){ set.add(ymd(d)); d = addDays(d,1); }
-    }
-    return set;
+function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}` }
+function addDays(dt, n){ const d=new Date(dt); d.setDate(d.getDate()+n); return d; }
+
+function expandRanges(ranges){
+  const set = new Set();
+  for(const r of ranges){
+    let d = new Date(r.start_date);
+    const end = new Date(r.end_date);
+    while(d < end){ set.add(ymd(d)); d = addDays(d,1); }
   }
+  return set;
+}
 
-  // --------- Message helper (bigger + persistent) ----------
-  let msgTimeout = null;
-  function setMsg(text, ok=false, durationMs=6000){
-    const el = document.getElementById("msg");
-    if(!text){
-      if(msgTimeout) { clearTimeout(msgTimeout); msgTimeout = null; }
-      el.style.display = "none"; el.textContent = ""; el.className = "msg";
-      return;
-    }
-    el.textContent = text;
-    el.className = "msg " + (ok ? "ok" : "err");
-    el.style.display = "block";
-    // keep longer for confirmations; durationMs controls it (default 6000ms)
-    if(msgTimeout) { clearTimeout(msgTimeout); msgTimeout = null; }
-    if(durationMs > 0){
-      msgTimeout = setTimeout(()=>{ el.style.display="none"; el.className="msg"; el.textContent=""; msgTimeout=null; }, durationMs);
-    }
+function setMsg(text, ok=true, persistMs=2200){
+  const m = document.getElementById("msg");
+  if(!text){ m.style.display="none"; return; }
+  m.textContent = text;
+  m.className = "msg " + (ok ? "ok" : "err");
+  m.style.display = "block";
+  // larger font for confirmations
+  if(ok){
+    m.style.fontSize = "1.2rem";
+    // stay longer for success messages
+    setTimeout(()=>{ m.style.display="none"; m.style.fontSize = ""; }, (persistMs || 5000));
+  } else {
+    // errors still visible a while
+    m.style.fontSize = "1.0rem";
+    setTimeout(()=>{ m.style.display="none"; }, (persistMs || 4000));
   }
+}
 
-  // --------- Calendar & selection (kept mostly same as before) ----------
-  let blocked = new Set();
-  let monthsToShow = 2;  // you'll keep multi-month; navigation adjusts monthsToShow by sliding window
-  let calendarOffset = 0; // months ahead relative to current month
-  let selStart = null;
-  let selEnd = null;
+let blocked = new Set();
+const monthsMax = 12;   // allow navigation up to 12 months forward
+let viewOffset = 0;     // 0 = current month
+let selStart = null;
+let selEnd = null;
+const monthsToShow = 2; // render two months side-by-side
 
-  function clearSelection(){
-    selStart = selEnd = null;
-    document.getElementById("start").value = "";
-    document.getElementById("end").value = "";
-    setMsg("");
-    renderCalendars();
-    document.getElementById("bookBtn").disabled = true;
-    updatePriceCalc();
+function clearSelection(){
+  selStart = selEnd = null;
+  document.getElementById("start").value = "";
+  document.getElementById("end").value = "";
+  setMsg("");
+  renderCalendars();
+  document.getElementById("bookBtn").disabled = true;
+  updatePriceCalc();
+}
+
+function buildMonth(year, month){
+  const wrap = document.createElement("div"); wrap.className = "cal";
+  const title = new Date(year, month, 1).toLocaleString('default', { month:'long', year:'numeric' });
+  wrap.innerHTML = `<h3>${title}</h3><div class="grid"></div>`;
+  const grid = wrap.querySelector(".grid");
+
+  const dows = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  dows.forEach(d => { const el=document.createElement("div"); el.className="dow"; el.textContent=d; grid.appendChild(el); });
+
+  const startDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  for(let i=0;i<startDay;i++){ const el=document.createElement("div"); el.className="cell dis"; grid.appendChild(el); }
+
+  for(let day=1; day<=daysInMonth; day++){
+    const el = document.createElement("div");
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    let cls = blocked.has(dateStr) ? "bad" : "ok";
+    if(selStart && !selEnd && dateStr === selStart) cls = "sel";
+    if(selStart && selEnd && dateStr >= selStart && dateStr < selEnd) cls = "sel";
+    el.className = "cell " + cls;
+    el.textContent = day;
+    if(cls !== "bad"){
+      el.addEventListener("click", ()=> onPick(dateStr));
+    }
+    grid.appendChild(el);
   }
+  return wrap;
+}
 
-  function buildMonth(year, month){
-    const wrap = document.createElement("div");
-    wrap.className = "cal";
-    const title = new Date(year, month, 1).toLocaleString('default', { month:'long', year:'numeric' });
-    wrap.innerHTML = `<h3>${title}</h3><div class="grid"></div>`;
-    const grid = wrap.querySelector(".grid");
-
-    const dows = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-    dows.forEach(d => { const el=document.createElement("div"); el.className="dow"; el.textContent=d; grid.appendChild(el); });
-
-    const startDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month+1, 0).getDate();
-
-    for(let i=0;i<startDay;i++){ const el=document.createElement("div"); el.className="cell dis"; el.textContent=""; grid.appendChild(el); }
-
-    for(let day=1; day<=daysInMonth; day++){
-      const el = document.createElement("div");
-      const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-
-      let cls = "ok";
-      if(blocked.has(dateStr)) cls = "bad";
-      if(selStart && !selEnd && dateStr===selStart) cls = "sel";
-      if(selStart && selEnd && dateStr>=selStart && dateStr<selEnd) cls = "sel";
-
-      el.className = "cell " + cls;
-      el.textContent = day;
-
-      if(cls !== "bad"){ el.addEventListener("click", () => onPick(dateStr)); }
-
-      grid.appendChild(el);
-    }
-    return wrap;
+function renderCalendars(){
+  const holder = document.getElementById("calwrap");
+  holder.innerHTML = "";
+  const now = new Date();
+  const baseMonth = new Date(now.getFullYear(), now.getMonth()+viewOffset, 1);
+  for(let m=0; m<monthsToShow; m++){
+    const dt = new Date(baseMonth.getFullYear(), baseMonth.getMonth()+m, 1);
+    holder.appendChild(buildMonth(dt.getFullYear(), dt.getMonth()));
   }
+  updatePriceCalc();
+}
 
-  function renderCalendars(){
-    const holder = document.getElementById("calwrap");
-    holder.innerHTML = "";
-    const now = new Date();
-    for(let m=0; m<monthsToShow; m++){
-      const dt = new Date(now.getFullYear(), now.getMonth()+m+calendarOffset, 1);
-      holder.appendChild(buildMonth(dt.getFullYear(), dt.getMonth()));
-    }
+function isAllAvailable(startStr, endStr){
+  let d = new Date(startStr); const end = new Date(endStr);
+  while(d < end){
+    if(blocked.has(ymd(d))) return false;
+    d = addDays(d,1);
   }
+  return true;
+}
 
-  function isAllAvailable(startStr, endStr){
-    let d = new Date(startStr);
-    const end = new Date(endStr);
-    while(d < end){
-      if(blocked.has(ymd(d))) return false;
-      d = addDays(d,1);
-    }
-    return true;
+function onPick(dateStr){
+  if(!selStart){
+    if(blocked.has(dateStr)) return;
+    selStart = dateStr; selEnd = null;
+    document.getElementById("start").value = selStart; document.getElementById("end").value = "";
+    setMsg(""); renderCalendars(); document.getElementById("bookBtn").disabled = true; updatePriceCalc(); return;
   }
-
-  function onPick(dateStr){
-    if(!selStart){
-      if(blocked.has(dateStr)) return;
-      selStart = dateStr; selEnd = null;
-      document.getElementById("start").value = selStart;
-      document.getElementById("end").value = "";
-      setMsg("");
-      renderCalendars();
-      document.getElementById("bookBtn").disabled = true;
-      updatePriceCalc();
-      return;
-    }
-    if(dateStr <= selStart){
-      if(blocked.has(dateStr)) return;
-      selStart = dateStr; selEnd = null;
-      document.getElementById("start").value = selStart;
-      document.getElementById("end").value = "";
-      setMsg("");
-      renderCalendars();
-      document.getElementById("bookBtn").disabled = true;
-      updatePriceCalc();
-      return;
-    }
-    if(!isAllAvailable(selStart, dateStr)){
-      setMsg("❌ Some dates in between are already booked (red). Please pick different dates.", false, 4000);
-      return;
-    }
-    selEnd = dateStr;
-    document.getElementById("end").value = selEnd;
-    setMsg("");
-    renderCalendars();
-    document.getElementById("bookBtn").disabled = false;
-    updatePriceCalc();
+  if(dateStr <= selStart){
+    if(blocked.has(dateStr)) return;
+    selStart = dateStr; selEnd = null;
+    document.getElementById("start").value = selStart; document.getElementById("end").value = "";
+    setMsg(""); renderCalendars(); document.getElementById("bookBtn").disabled = true; updatePriceCalc(); return;
   }
+  if(!isAllAvailable(selStart, dateStr)){
+    setMsg("❌ Some dates in between are already booked. Choose different dates.", false); return;
+  }
+  selEnd = dateStr;
+  document.getElementById("end").value = selEnd;
+  setMsg("Dates selected", true, 1200);
+  renderCalendars();
+  document.getElementById("bookBtn").disabled = false;
+  updatePriceCalc();
+}
 
-  // --------- Availability load ----------
-  async function loadAvailabilityViaSlug(theSlug){
+/* Load availability for a group slug */
+async function loadAvailabilityViaSlug(theSlug){
+  try{
+    const r = await fetch(`/api/public/availability/${theSlug}`);
+    const data = await r.json();
+    blocked = Array.isArray(data) ? expandRanges(data) : new Set();
+  }catch(e){
+    blocked = new Set();
+  }
+  renderCalendars();
+}
+
+/* Price calc */
+function updatePriceCalc(){
+  const s = document.getElementById('start').value;
+  const e = document.getElementById('end').value;
+  const pricePerNight = {{ price or 0 }};
+  if(!s || !e || e <= s){ document.getElementById('priceCalc').textContent = ''; return; }
+  const days = (new Date(e) - new Date(s)) / (1000*60*60*24);
+  const total = Math.round(pricePerNight * days);
+  document.getElementById('priceCalc').textContent = `฿${pricePerNight} × ${days} night(s) = ฿${total}`;
+}
+
+/* Prev / Next nav for months */
+document.getElementById("prevMonth").addEventListener("click", () => {
+  if(viewOffset <= 0) { setMsg("Can't go earlier than current month", false, 1200); return; }
+  viewOffset = Math.max(0, viewOffset - 1); renderCalendars();
+});
+document.getElementById("nextMonth").addEventListener("click", () => {
+  if(viewOffset >= (monthsMax - monthsToShow)) { setMsg("Max months reached", false, 1200); return; }
+  viewOffset = Math.min(monthsMax - monthsToShow, viewOffset + 1); renderCalendars();
+});
+
+/* Init page / Stripe */
+async function initPage(){
+  if(STRIPE_PK){
     try{
-      const r = await fetch(`/api/public/availability/${theSlug}`);
-      const data = await r.json();
-      if(Array.isArray(data)){ blocked = expandRanges(data); } else blocked = new Set();
-    }catch(_){ blocked = new Set(); }
-    renderCalendars();
+      stripe = Stripe(STRIPE_PK);
+      const elements = stripe.elements();
+      card = elements.create('card');
+      card.mount('#card-element');
+      document.getElementById("cardWrap").style.display = "block";
+    }catch(e){
+      console.warn("Stripe init failed:", e);
+    }
   }
 
-  function updatePriceCalc(){
-    const s = document.getElementById('start').value;
-    const e = document.getElementById('end').value;
-    if(!s || !e || e <= s){ document.getElementById('priceCalc').textContent = ''; return; }
-    const pricePerNight = {{ price or 0 }};
-    const days = (new Date(e) - new Date(s)) / (1000*60*60*24);
-    const total = Math.round(pricePerNight * days);
-    document.getElementById('priceCalc').textContent = `฿${pricePerNight} × ${days} night(s) = ฿${total}`;
-  }
+  if(isGroup){ await loadAvailabilityViaSlug(groupSlug); return; }
 
-  // --------- Init & Stripe ---------
-  async function initPage(){
-    // Stripe init (card) if publishable key present
-    if(STRIPE_PK){
-      try{
-        stripe = Stripe(STRIPE_PK);
-        const elements = stripe.elements();
-        card = elements.create('card');
-        card.mount('#card-element');
-        document.getElementById("cardWrap").style.display = "block";
-        document.getElementById("stripeBadge").style.display = "flex";
-      }catch(e){
-        console.log("Stripe init error:", e);
+  if(isUnit){
+    try{
+      const r = await fetch(`/api/admin/find_group?unit_id=${unitId}`);
+      const j = await r.json();
+      if(j.ok && j.slug){
+        groupSlug = j.slug;
+        groupUnitIds = j.unit_ids || [];
+        await loadAvailabilityViaSlug(groupSlug);
+        return;
       }
+    }catch(_){}
+    blocked = new Set(); renderCalendars();
+  }
+}
+
+document.getElementById("bookForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const startDate = document.getElementById("start").value;
+  const endDate   = document.getElementById("end").value;
+  const name      = document.getElementById("name").value.trim();
+  const email     = document.getElementById("email").value.trim();
+  if(!startDate || !endDate){ setMsg("❌ Please select dates from the calendar.", false); return; }
+  if(endDate <= startDate){ setMsg("❌ Check-out must be after check-in.", false); return; }
+  if(!name || !email){ setMsg("❌ Please enter your name and email.", false); return; }
+
+  const btn = document.getElementById("bookBtn");
+  const original = btn.textContent;
+  btn.disabled = true; btn.textContent = "Processing…"; setMsg("");
+
+  try{
+    if(STRIPE_PK){
+      const piRes = await fetch("/api/public/create_intent/" + groupSlug, {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ start_date: startDate, end_date: endDate })
+      });
+      const pi = await piRes.json();
+      if(!piRes.ok || !pi.ok){ throw new Error(pi.error || "Failed to create payment"); }
+      const {error, paymentIntent} = await stripe.confirmCardPayment(pi.client_secret, {
+        payment_method: { card, billing_details: { name, email } }
+      });
+      if(error) throw error;
+      if(paymentIntent.status !== "succeeded") throw new Error("Payment not completed");
     }
 
-    // load availability
-    if(isGroup){ await loadAvailabilityViaSlug(groupSlug); } else if(isUnit){
-      try{
-        const r = await fetch(`/api/admin/find_group?unit_id=${unitId}`);
-        const j = await r.json();
-        if(j.ok && j.slug){ groupSlug = j.slug; groupUnitIds = j.unit_ids || []; await loadAvailabilityViaSlug(groupSlug); } else { blocked = new Set(); renderCalendars(); }
-      }catch(_){ blocked = new Set(); renderCalendars(); }
-    }
+    const postUrl = groupSlug ? `/api/public/book_group/${groupSlug}` : (isUnit ? `/api/public/book/${unitId}` : "/api/public/book");
 
-    // handle #book auto-open
-    if(location.hash === "#book"){
-      // wait a little for calendar to render then scroll
-      setTimeout(()=> {
-        const form = document.getElementById("bookForm");
-        if(form){ form.scrollIntoView({behavior:"smooth", block:"center"}); form.querySelector("input,button")?.focus(); }
-      }, 450);
-    }
-
-    // wire prev/next buttons to slide months
-    document.getElementById("prevMonth").addEventListener("click", ()=>{
-      calendarOffset = Math.max(calendarOffset - 1, -0); // prevent going into past months < current month
-      renderCalendars();
+    const res = await fetch(postUrl, {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ start_date:startDate, end_date:endDate, name, email })
     });
-    document.getElementById("nextMonth").addEventListener("click", ()=>{
-      calendarOffset
+    const j = await res.json();
+    if(res.ok && j.ok){
+      // Big persistent confirmation visible for longer
+      setMsg(`✅ Booking confirmed — ${startDate} → ${endDate}. Thank you ${name}!`, true, 7000);
+      clearSelection();
+      if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
+    }else{
+      throw new Error(j.error || "Unknown error");
+    }
+  }catch(err){
+    console.error("Booking error:", err);
+    setMsg("❌ " + (err.message || err), false, 6000);
+  }finally{
+    btn.disabled = false; btn.textContent = original;
+  }
+});
+
+initPage();
+</script>
