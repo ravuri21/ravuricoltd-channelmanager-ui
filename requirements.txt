@@ -17,11 +17,11 @@ stripe==5.0.0
 # Prod server
 gunicorn==21.2.0
 
-# Optional (calendar helper; safe to keep)
+# Optional (kept for compatibility if any code or future snippet uses it)
 ics==0.7
 
 # Typing helpers
 typing_extensions>=4.12.2
 
-# Postgres driver for SQLAlchemy (Python 3.13 compatible)
-psycopg[binary]==3.2.4
+# Use psycopg (psycopg3) binary wheels compatible with modern Python
+psycopg[binary]==3.2.10
