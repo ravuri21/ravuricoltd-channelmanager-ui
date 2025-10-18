@@ -25,6 +25,8 @@ import import_properties as importer
 
 # ====== App & Config ======
 app = Flask(__name__)
+# make helper available inside templates (so templates can call _load_meta())
+app.jinja_env.globals["_load_meta"] = _load_meta
 app.secret_key = os.environ.get("SECRET_KEY", "change_this_secret")
 
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@example.com")
