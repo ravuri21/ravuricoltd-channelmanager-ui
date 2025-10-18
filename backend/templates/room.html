@@ -7,7 +7,7 @@
   <style>
     :root { --bg:#f6f8fa; --text:#222; --muted:#666; --ok:#ecfdf5; --okb:#a7f3d0; --bad:#fef2f2; --badb:#fecaca; --sel:#e0f2fe; --selb:#93c5fd; --blue:#0070f3; --blue-d:#005ad1; }
     * { box-sizing: border-box; }
-    body { font-family: system-ui, Arial, sans-serif; margin:0; background:var(--bg); color:var(--text); -webkit-font-smoothing:antialiased; }
+    body { font-family: system-ui, Arial, sans-serif; margin:0; background:var(--bg); color:var(--text); }
     .container { max-width: 980px; margin: 24px auto; background:#fff; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,.08); overflow:hidden; }
     .hero img { width:100%; height:300px; object-fit:cover; display:block; }
     .content { padding:20px; display:grid; grid-template-columns: 1.15fr 0.85fr; gap:24px; }
@@ -35,14 +35,6 @@
     .d-bad{background:var(--bad);border:1px solid var(--badb)}
     .d-sel{background:var(--sel);border:1px solid var(--selb)}
 
-    /* controls */
-    .cal-controls { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
-    .nav-buttons { display:flex; gap:8px; align-items:center; }
-    .btn { padding:8px 12px; border-radius:8px; border:none; background:var(--blue); color:#fff; cursor:pointer; font-weight:600; }
-    .btn.secondary { background:#6b7280; }
-    .btn.small { padding:6px 8px; font-size:.95rem; }
-    .btn[disabled] { opacity:.6; cursor:not-allowed; }
-
     /* Form */
     label { display:block; font-size:.9rem; margin:10px 0 4px; color:#333; }
     input, button { width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; font-size:1rem; }
@@ -53,8 +45,8 @@
     button:hover { background:var(--blue-d); }
     button.secondary { background:#6b7280; }
     button[disabled] { opacity:.65; cursor:not-allowed; }
-    .msg { margin-top:10px; padding:10px; border-radius:8px; font-size:.95rem; display:none; }
-    .ok { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+    .msg { margin-top:10px; padding:14px; border-radius:10px; font-size:1.05rem; display:none; text-align:center; }
+    .ok { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-weight:700; font-size:1.15rem; }
     .err { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
     .footer { text-align:center; font-size:.8rem; color:#777; margin:16px 0 10px; }
   </style>
@@ -75,23 +67,22 @@
         <p class="muted">Tap the calendar to choose check-in and check-out. <b>Red</b> = booked, <b>Green</b> = available.</p>
 
         <div class="panel">
-          <div class="cal-controls">
-            <div style="font-weight:600">Availability (click green days to select)</div>
-            <div class="nav-buttons">
-              <button id="prevMonth" class="btn secondary small" type="button">← Prev</button>
-              <button id="nextMonth" class="btn small" type="button">Next →</button>
-            </div>
-          </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <div style="font-weight:600">Availability (click green days to select)</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="prevMonth" class="btn secondary small" type="button">← Prev</button>
+      <button id="nextMonth" class="btn small" type="button">Next →</button>
+    </div>
+  </div>
 
-          <div id="calwrap" class="calwrap"></div>
+  <div id="calwrap" class="calwrap"></div>
+  <div class="legend">
+    <span class="dot d-ok"></span> Available
+    <span class="dot d-bad"></span> Booked
+    <span class="dot d-sel"></span> Selected
+  </div>
 
-          <div class="legend">
-            <span class="dot d-ok"></span> Available
-            <span class="dot d-bad"></span> Booked
-            <span class="dot d-sel"></span> Selected
-          </div>
-        </div>
-
+</div>
         <div class="footer">Powered by RavuriCo Ltd</div>
       </div>
 
@@ -106,7 +97,7 @@
           <label>Your Email</label>
           <input id="email" type="email" placeholder="Email address" required>
 
-          <div id="cardWrap" style="display:none; margin-top:10px;">
+          <div id="cardWrap" style="display:none;">
             <label>Card</label>
             <div id="card-element" style="padding:10px;border:1px solid #ddd;border-radius:8px;"></div>
           </div>
@@ -137,64 +128,37 @@
   const STRIPE_PK = "{{ publishable_key or '' }}".trim();
   let stripe, card;
 
-  // --------- Date helpers ----------
   function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}` }
   function addDays(dt, n){ const d=new Date(dt); d.setDate(d.getDate()+n); return d; }
 
-  // Convert ranges [{start_date,end_date}] -> Set of YYYY-MM-DD
   function expandRanges(ranges){
     const set = new Set();
     for(const r of ranges){
       let d = new Date(r.start_date);
       const end = new Date(r.end_date);
-      while(d < end){
-        set.add(ymd(d));
-        d = addDays(d,1);
-      }
+      while(d < end){ set.add(ymd(d)); d = addDays(d,1); }
     }
     return set;
   }
 
-  function setMsg(text, ok=false){
+  function setMsg(text, ok=false, persistMs=6000){
     const m = document.getElementById("msg");
-    m.textContent = text || "";
+    if(!text){ m.style.display = "none"; return; }
+    m.textContent = text;
     m.className = "msg " + (ok ? "ok" : "err");
-    m.style.display = text ? "block" : "none";
-  }
-
-  // --------- Calendar state & navigation (12 months) ----------
-  let blocked = new Set();    // booked days (YYYY-MM-DD)
-  let selStart = null;        // "YYYY-MM-DD"
-  let selEnd   = null;
-
-  // navigation config
-  const MAX_SPAN_MONTHS = 12;     // user can view up to 12 months ahead
-  let monthsToShow = calculateMonthsToShow(); // computed on init & resize
-  let currentOffset = 0;          // months from now the left-most month
-
-  // determine how many months to show depending on viewport width
-  function calculateMonthsToShow(){
-    const w = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
-    if(w < 420) return 1;
-    if(w < 740) return 2;
-    return 3; // desktop shows 3 months
-  }
-
-  window.addEventListener('resize', () => {
-    const prev = monthsToShow;
-    monthsToShow = calculateMonthsToShow();
-    if(prev !== monthsToShow){
-      currentOffset = clampOffset(currentOffset);
-      renderCalendars();
+    m.style.display = "block";
+    if(persistMs && persistMs > 0){
+      clearTimeout(window.__msgTimeout);
+      window.__msgTimeout = setTimeout(()=>{ m.style.display="none"; }, persistMs);
     }
-  });
-
-  function clampOffset(o){
-    if(o < 0) return 0;
-    const max = Math.max(0, MAX_SPAN_MONTHS - monthsToShow);
-    if(o > max) return max;
-    return o;
   }
+
+  let blocked = new Set();
+  let monthsToShow = 2;
+  let selStart = null;
+  let selEnd   = null;
+  // track current base month index for navigation (0 = this month)
+  let baseMonthOffset = 0;
 
   function clearSelection(){
     selStart = selEnd = null;
@@ -204,6 +168,12 @@
     renderCalendars();
     document.getElementById("bookBtn").disabled = true;
     updatePriceCalc();
+  }
+
+  function buildMonthForOffset(offset){
+    const now = new Date();
+    const dt = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    return buildMonth(dt.getFullYear(), dt.getMonth());
   }
 
   function buildMonth(year, month){
@@ -249,10 +219,9 @@
   function renderCalendars(){
     const holder = document.getElementById("calwrap");
     holder.innerHTML = "";
-    const now = new Date();
     for(let m=0; m<monthsToShow; m++){
-      const dt = new Date(now.getFullYear(), now.getMonth()+currentOffset+m, 1);
-      holder.appendChild(buildMonth(dt.getFullYear(), dt.getMonth()));
+      const offset = baseMonthOffset + m;
+      holder.appendChild(buildMonthForOffset(offset));
     }
   }
 
@@ -290,7 +259,7 @@
       return;
     }
     if(!isAllAvailable(selStart, dateStr)){
-      setMsg("❌ Some dates in between are already booked (red). Please pick different dates.");
+      setMsg("❌ Some dates in between are already booked (red). Please pick different dates.", false, 5000);
       return;
     }
     selEnd = dateStr;
@@ -301,43 +270,6 @@
     updatePriceCalc();
   }
 
-  // Prev / Next handlers & swipe init
-  document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById('prevMonth').addEventListener('click', () => {
-      const newOffset = clampOffset(currentOffset - monthsToShow);
-      currentOffset = newOffset;
-      renderCalendars();
-    });
-    document.getElementById('nextMonth').addEventListener('click', () => {
-      const newOffset = clampOffset(currentOffset + monthsToShow);
-      currentOffset = newOffset;
-      renderCalendars();
-    });
-
-    // small swipe support for mobile calendars
-    addSwipeSupport(document.getElementById('calwrap'));
-  });
-
-  function addSwipeSupport(el){
-    if(!el) return;
-    let startX = null;
-    el.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; });
-    el.addEventListener('touchend', (e) => {
-      if(startX === null) return;
-      const dx = e.changedTouches[0].clientX - startX;
-      if(Math.abs(dx) < 40) return;
-      if(dx > 0){
-        currentOffset = clampOffset(currentOffset - monthsToShow);
-        renderCalendars();
-      }else{
-        currentOffset = clampOffset(currentOffset + monthsToShow);
-        renderCalendars();
-      }
-      startX = null;
-    });
-  }
-
-  // load availability (DB blocks + iCal merged) for a group slug
   async function loadAvailabilityViaSlug(theSlug){
     try{
       const r = await fetch(`/api/public/availability/${theSlug}`);
@@ -347,11 +279,7 @@
       }else{
         blocked = new Set();
       }
-    }catch(_){
-      blocked = new Set();
-    }
-    // reset to showing current months
-    currentOffset = 0;
+    }catch(_){ blocked = new Set(); }
     renderCalendars();
   }
 
@@ -365,9 +293,7 @@
     document.getElementById('priceCalc').textContent = `฿${pricePerNight} × ${days} night(s) = ฿${total}`;
   }
 
-  // Init page: Stripe, availability load
   async function initPage(){
-    monthsToShow = calculateMonthsToShow();
     if(STRIPE_PK){
       stripe = Stripe(STRIPE_PK);
       const elements = stripe.elements();
@@ -376,8 +302,13 @@
       document.getElementById("cardWrap").style.display = "block";
     }
 
+    // default to showing 2 columns but allow user to increase months easily:
+    monthsToShow = 2;
+
+    // For /prop/<slug>, slug already known
     if(isGroup){ await loadAvailabilityViaSlug(groupSlug); return; }
 
+    // For /r/<id>, find its group, then use group availability + group booking
     if(isUnit){
       try{
         const r = await fetch(`/api/admin/find_group?unit_id=${unitId}`);
@@ -394,7 +325,17 @@
     }
   }
 
-  // Booking form submit (Stripe + block)
+  // Calendar navigation handlers (Prev / Next)
+  document.getElementById("prevMonth").addEventListener("click", ()=>{
+    baseMonthOffset = Math.max(baseMonthOffset - 1, 0);
+    renderCalendars();
+  });
+  document.getElementById("nextMonth").addEventListener("click", ()=>{
+    baseMonthOffset = baseMonthOffset + 1;
+    // allow unlimited forward navigation — user can move forward up to 12 months visually by clicking repeatedly
+    renderCalendars();
+  });
+
   document.getElementById("bookForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const startDate = document.getElementById("start").value;
@@ -402,16 +343,15 @@
     const name      = document.getElementById("name").value.trim();
     const email     = document.getElementById("email").value.trim();
 
-    if(!startDate || !endDate){ setMsg("❌ Please select dates from the calendar."); return; }
-    if(endDate <= startDate){ setMsg("❌ Check-out must be after check-in."); return; }
-    if(!name || !email){ setMsg("❌ Please enter your name and email."); return; }
+    if(!startDate || !endDate){ setMsg("❌ Please select dates from the calendar.", false, 5000); return; }
+    if(endDate <= startDate){ setMsg("❌ Check-out must be after check-in.", false, 5000); return; }
+    if(!name || !email){ setMsg("❌ Please enter your name and email.", false, 5000); return; }
 
     const btn = document.getElementById("bookBtn");
     const original = btn.textContent;
-    btn.disabled = true; btn.textContent = "Processing…"; setMsg("");
+    btn.disabled = true; btn.textContent = "Processing…"; setMsg("", false);
 
     try{
-      // If Stripe configured, create PaymentIntent (server) and confirm with card
       if(STRIPE_PK){
         const piRes = await fetch("/api/public/create_intent/" + groupSlug, {
           method:"POST",
@@ -420,20 +360,14 @@
         });
         const pi = await piRes.json();
         if(!piRes.ok || !pi.ok){ throw new Error(pi.error || "Failed to create payment"); }
-
-        const result = await stripe.confirmCardPayment(pi.client_secret, {
+        const {error, paymentIntent} = await stripe.confirmCardPayment(pi.client_secret, {
           payment_method: { card, billing_details: { name, email } }
         });
-        if(result.error) throw result.error;
-        if(result.paymentIntent && result.paymentIntent.status !== "succeeded"){
-          throw new Error("Payment not completed");
-        }
+        if(error) throw error;
+        if(paymentIntent.status !== "succeeded") throw new Error("Payment not completed");
       }
 
-      // Block dates server-side (group or single unit)
-      const postUrl = groupSlug
-        ? `/api/public/book_group/${groupSlug}`
-        : (isUnit ? `/api/public/book/${unitId}` : "/api/public/book");
+      const postUrl = groupSlug ? `/api/public/book_group/${groupSlug}` : (isUnit ? `/api/public/book/${unitId}` : "/api/public/book");
 
       const res = await fetch(postUrl, {
         method:"POST",
@@ -442,25 +376,21 @@
       });
       const j = await res.json();
       if(res.ok && j.ok){
-        // show confirmation message (don't immediately clear — keep visible briefly)
-        setMsg("✅ Booking confirmed — dates blocked.", true);
-
-        // refresh UI after a short delay so user sees the confirmation
-        setTimeout(async () => {
-          clearSelection(); // then clear selection
-          if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
-        }, 1500);
+        // show larger confirmation and persist for 6 seconds
+        setMsg("✅ Booking confirmed — dates blocked. Thank you!", true, 6000);
+        clearSelection();
+        if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
       }else{
         throw new Error(j.error || "Unknown error");
       }
     }catch(err){
-      setMsg("❌ " + (err.message || err));
+      setMsg("❌ " + (err.message || err), false, 6000);
     }finally{
       btn.disabled = false; btn.textContent = original;
     }
   });
 
-  // start
+  // init
   initPage();
   </script>
 </body>
