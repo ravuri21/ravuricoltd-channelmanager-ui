@@ -1,199 +1,204 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Admin Calendar — {{ title }}</title>
-  <link rel="stylesheet" href="/static/style.css" />
+  <meta charset="UTF-8" />
+  <title>{{ title }} — Admin Calendar</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    .wrap{max-width:980px;margin:18px auto;background:#fff;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.08);overflow:hidden}
-    .head{padding:12px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
-    .muted{color:#6b7280}
-    .calwrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;padding:16px}
-    .cal{border:1px solid #eee;border-radius:10px;overflow:hidden;background:#fafafa}
-    .cal h3{margin:0;padding:8px 10px;background:#f3f4f6;border-bottom:1px solid #eee;font-size:.95rem}
-    .grid{display:grid;grid-template-columns:repeat(7,1fr)}
-    .dow,.cell{padding:10px;text-align:center;border-bottom:1px solid #f1f1f1;border-right:1px solid #f1f1f1;user-select:none}
-    .grid>*:nth-child(7n){border-right:none}
-    .dow{background:#fafafa;font-weight:600;font-size:.85rem}
-    .cell.dis{color:#bbb;background:#fafafa;cursor:not-allowed}
-    .cell.ok{background:#ecfdf5;border-bottom-color:#a7f3d0;cursor:pointer}
-    .cell.bad{background:#fef2f2;border-bottom-color:#fecaca;color:#991b1b;cursor:pointer}
-    .legend{display:flex;gap:12px;align-items:center;padding:0 16px 16px;flex-wrap:wrap}
-    .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
-    .okd{background:#ecfdf5;border:1px solid #a7f3d0}
-    .badd{background:#fef2f2;border:1px solid #fecaca}
-    .msg{margin:10px 16px;padding:10px;border-radius:8px;display:none}
-    .ok{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
-    .err{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
-    .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .btn{padding:8px 12px;border:none;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer}
-    .btn.secondary{background:#6b7280}
-    .btn.warn{background:#16a34a}
-    .result{margin:0 16px 16px;font-family:system-ui,monospace}
+    body {
+      font-family: system-ui, Arial, sans-serif;
+      background:#f9fafb;
+      color:#111;
+      margin:0;
+      padding:0;
+    }
+    .wrap {
+      max-width: 980px;
+      margin: 20px auto;
+      background:#fff;
+      border-radius:12px;
+      padding:20px;
+      box-shadow:0 4px 12px rgba(0,0,0,0.08);
+    }
+    h1 { margin:0 0 6px; font-size:1.4rem; }
+    .muted { color:#666; font-size:.9rem; }
+    .calendar {
+      margin-top:20px;
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap:14px;
+    }
+    .month {
+      border:1px solid #e5e7eb;
+      border-radius:8px;
+      overflow:hidden;
+      background:#fafafa;
+    }
+    .month h3 {
+      margin:0;
+      padding:8px 10px;
+      font-size:.95rem;
+      background:#f3f4f6;
+      border-bottom:1px solid #e5e7eb;
+    }
+    .grid {
+      display:grid;
+      grid-template-columns: repeat(7, 1fr);
+      border-top:1px solid #e5e7eb;
+    }
+    .cell, .dow {
+      padding:8px;
+      text-align:center;
+      border-bottom:1px solid #e5e7eb;
+      border-right:1px solid #e5e7eb;
+      font-size:.9rem;
+      user-select:none;
+    }
+    .dow { background:#f9fafb; font-weight:600; }
+    .cell.ok { background:#ecfdf5; cursor:pointer; }
+    .cell.bad { background:#fee2e2; color:#991b1b; cursor:not-allowed; }
+    .cell.manual { background:#e0f2fe; color:#1e3a8a; }
+    .cell.sel { outline:2px solid #60a5fa; }
+    .cell:hover.ok { background:#d1fae5; }
+    .grid > *:nth-child(7n){ border-right:none; }
+
+    .legend {
+      display:flex;
+      gap:12px;
+      align-items:center;
+      font-size:.9rem;
+      margin-top:10px;
+    }
+    .dot {
+      width:12px;
+      height:12px;
+      border-radius:3px;
+      display:inline-block;
+    }
+    .d-ok { background:#ecfdf5; border:1px solid #a7f3d0; }
+    .d-bad { background:#fee2e2; border:1px solid #fecaca; }
+    .d-manual { background:#e0f2fe; border:1px solid #93c5fd; }
+
+    /* sync button + toast */
+    .btn {
+      background:#0070f3;
+      color:#fff;
+      border:none;
+      border-radius:6px;
+      padding:8px 14px;
+      font-weight:600;
+      cursor:pointer;
+      transition:background .2s;
+    }
+    .btn:hover { background:#0366d6; }
+    .toast {
+      position:fixed;
+      bottom:20px;
+      right:20px;
+      background:#10b981;
+      color:white;
+      padding:12px 18px;
+      border-radius:8px;
+      font-weight:600;
+      box-shadow:0 4px 10px rgba(0,0,0,0.2);
+      opacity:0;
+      transform:translateY(20px);
+      transition:all .4s ease;
+      z-index:999;
+    }
+    .toast.show {
+      opacity:1;
+      transform:translateY(0);
+    }
   </style>
 </head>
 <body>
-  <div class="topbar">
-    <div>Channel Manager — Admin Calendar</div>
-    <div>
-      <a href="/">Admin (All 27)</a> |
-      <a href="/admin/groups">Grouped Admin</a> |
-      <a href="/prop/{{ slug }}" target="_blank">Public Page</a> |
-      <a href="/logout">Logout</a>
-    </div>
-  </div>
-
   <div class="wrap">
-    <div class="head">
-      <div>
-        <div style="font-weight:700">{{ title }}</div>
-        <div class="muted">Slug: {{ slug }} • Units: {{ unit_ids|join(', ') }}</div>
-      </div>
-      <div class="actions">
-        <button class="btn secondary" onclick="window.history.back()">← Back</button>
-        <button class="btn warn" onclick="syncThis()">🔄 Sync This Property Now</button>
-      </div>
+    <h1>{{ title }}</h1>
+    <div class="muted">
+      Slug: {{ slug }} • Units: {{ unit_ids|join(', ') }}
+      <span id="lastSync" style="margin-left:12px;color:#111;font-weight:600">• Last sync: —</span>
+    </div>
+    <div style="margin-top:8px;">
+      <button id="syncAllBtn" class="btn">🔄 Sync All OTA Now</button>
+      <a href="/properties" target="_blank" style="margin-left:10px;font-size:.9rem;">🌐 View Public Page</a>
     </div>
 
-    <div id="msg" class="msg"></div>
-    <div id="syncbox" class="result"></div>
+    <div id="calendar" class="calendar"></div>
 
-    <div class="calwrap" id="calwrap"></div>
     <div class="legend">
-      <span class="dot okd"></span> Available (click to BLOCK that day)
-      <span class="dot badd"></span> Blocked (click to UNBLOCK that day)
+      <span class="dot d-ok"></span> Available
+      <span class="dot d-bad"></span> Booked
+      <span class="dot d-manual"></span> Manual Block
     </div>
-    <div class="muted" style="padding:0 16px 16px">Tip: Blocks are single-day holds (checkout next day). Click multiple days to add/remove quickly.</div>
   </div>
 
-<script>
-const slug = "{{ slug }}";
-function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}` }
-function addDays(dt, n){ const d=new Date(dt); d.setDate(d.getDate()+n); return d; }
+  <div id="toast" class="toast">Sync completed successfully!</div>
 
-let blocked = new Set(); // booked days (YYYY-MM-DD)
-const monthsToShow = 2;
+  <script>
+    const SLUG = "{{ slug }}";
 
-function setMsg(t,ok=false){
-  const m=document.getElementById("msg");
-  if(!t){ m.style.display="none"; return; }
-  m.textContent=t; m.className="msg "+(ok?"ok":"err"); m.style.display="block";
-}
-
-function expandRanges(ranges){
-  const s=new Set();
-  for(const r of ranges){
-    let d=new Date(r.start_date);
-    const end=new Date(r.end_date);
-    while(d<end){ s.add(ymd(d)); d=addDays(d,1); }
-  }
-  return s;
-}
-
-async function loadAvailability(){
-  setMsg("Loading availability…", true);
-  try{
-    const r=await fetch(`/api/public/availability/${slug}`);
-    const data=await r.json();
-    blocked = Array.isArray(data) ? expandRanges(data) : new Set();
-    renderCalendars();
-    setMsg("Loaded.", true); setTimeout(()=>setMsg(""),800);
-  }catch(e){
-    setMsg("Failed to load availability.");
-  }
-}
-
-// ---- NEW: per-property sync ----
-async function syncThis(){
-  const box = document.getElementById("syncbox");
-  box.innerHTML = "⏳ Syncing this property…";
-  try{
-    const res = await fetch(`/api/admin/sync_property/${slug}`, { method:"POST" });
-    const j = await res.json();
-    if(!(res.ok && j.ok)){ throw new Error(j.error || "Failed"); }
-    const rows = j.summary || [];
-    let html = `
-      <table style='width:100%;border-collapse:collapse;margin-top:8px;'>
-        <tr style='background:#f0f0f0;'>
-          <th style='text-align:left;padding:8px;'>Unit</th>
-          <th style='text-align:left;padding:8px;'>OTA</th>
-          <th style='text-align:left;padding:8px;'>Property</th>
-          <th style='text-align:left;padding:8px;'>Result</th>
-        </tr>`;
-    for(const r of rows){
-      let color = "#111";
-      if(String(r.status).startsWith("OK")) color = "#16a34a";
-      if(String(r.status).startsWith("ERROR")) color = "#dc2626";
-      html += `
-        <tr>
-          <td style='padding:8px;border-bottom:1px solid #eee;'>${r.unit_id}</td>
-          <td style='padding:8px;border-bottom:1px solid #eee;'>${r.ota || ''}</td>
-          <td style='padding:8px;border-bottom:1px solid #eee;'>${r.property_id || ''}</td>
-          <td style='padding:8px;border-bottom:1px solid #eee;color:${color};font-weight:600;'>${r.status}</td>
-        </tr>`;
+    function showToast(msg, color="#10b981") {
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.style.background = color;
+      t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), 3500);
     }
-    html += "</table>";
-    box.innerHTML = html;
-    // Refresh calendar colors after sync
-    try { await loadAvailability(); } catch(_){}
-  }catch(e){
-    box.innerHTML = "❌ Sync error: " + (e.message || e);
-  }
-}
 
-function buildMonth(year,month){
-  const wrap=document.createElement("div");
-  wrap.className="cal";
-  wrap.innerHTML=`<h3>${new Date(year,month,1).toLocaleString('default',{month:'long',year:'numeric'})}</h3><div class="grid"></div>`;
-  const grid=wrap.querySelector(".grid");
-  const dows=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  dows.forEach(d=>{ const el=document.createElement("div"); el.className="dow"; el.textContent=d; grid.appendChild(el); });
-  const startDay=new Date(year,month,1).getDay();
-  const daysInMonth=new Date(year,month+1,0).getDate();
-  for(let i=0;i<startDay;i++){ const el=document.createElement("div"); el.className="cell dis"; grid.appendChild(el); }
-  for(let day=1; day<=daysInMonth; day++){
-    const el=document.createElement("div");
-    const dateStr=`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    const isBlocked=blocked.has(dateStr);
-    el.className="cell "+(isBlocked?"bad":"ok");
-    el.textContent=day;
-    el.title = isBlocked ? "Click to UNBLOCK" : "Click to BLOCK";
-    el.addEventListener("click",()=>toggleDay(dateStr,isBlocked));
-    grid.appendChild(el);
-  }
-  return wrap;
-}
+    function _formatIsoLocal(iso) {
+      try {
+        const d = new Date(iso);
+        if (isNaN(d)) return iso;
+        return d.toLocaleString();
+      } catch (e) { return iso; }
+    }
 
-function renderCalendars(){
-  const holder=document.getElementById("calwrap");
-  holder.innerHTML="";
-  const now=new Date();
-  for(let m=0;m<monthsToShow;m++){
-    const dt=new Date(now.getFullYear(),now.getMonth()+m,1);
-    holder.appendChild(buildMonth(dt.getFullYear(),dt.getMonth()));
-  }
-}
+    async function fetchLastSync() {
+      const el = document.getElementById("lastSync");
+      if (!el) return;
+      el.textContent = "• Last sync: loading…";
+      try {
+        const r = await fetch(`/api/admin/last_sync/${encodeURIComponent(SLUG)}`);
+        const j = await r.json();
+        if (r.ok && j.ok) {
+          const val = j.last_sync ? _formatIsoLocal(j.last_sync) : "never";
+          el.textContent = "• Last sync: " + val;
+        } else {
+          el.textContent = "• Last sync: error";
+        }
+      } catch (e) {
+        console.error(e);
+        el.textContent = "• Last sync: error";
+      }
+    }
 
-async function toggleDay(dateStr,isCurrentlyBlocked){
-  try{
-    const r=await fetch(`/api/admin/toggle_day/${slug}`,{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ date: dateStr, action: isCurrentlyBlocked ? "unblock" : "block" })
+    async function adminSyncAll() {
+      const el = document.getElementById("lastSync");
+      if (el) el.textContent = "• Syncing all OTAs…";
+      try {
+        const r = await fetch("/api/admin/sync_all", { method: "POST" });
+        const j = await r.json();
+        if (r.ok && j.ok) {
+          if (el) el.textContent = "• Sync complete! Refreshing timestamp…";
+          await fetchLastSync();
+          showToast("✅ OTA synchronization completed!");
+        } else {
+          showToast("❌ Sync failed!", "#ef4444");
+          if (el) el.textContent = "• Last sync: failed";
+        }
+      } catch (err) {
+        console.error("Sync all error:", err);
+        showToast("❌ Sync error!", "#ef4444");
+        if (el) el.textContent = "• Last sync: error";
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      fetchLastSync();
+      const btn = document.getElementById("syncAllBtn");
+      if (btn) btn.addEventListener("click", () => adminSyncAll());
     });
-    const j=await r.json();
-    if(!(r.ok && j.ok)) throw new Error(j.error||"Error");
-    if(isCurrentlyBlocked) blocked.delete(dateStr); else blocked.add(dateStr);
-    renderCalendars();
-    setMsg(isCurrentlyBlocked?"Opened that date ✅":"Blocked that date ✅", true);
-    setTimeout(()=>setMsg(""),800);
-  }catch(e){
-    setMsg("Failed: "+(e.message||e));
-  }
-}
-
-// init
-loadAvailability();
-</script>
+  </script>
 </body>
 </html>
