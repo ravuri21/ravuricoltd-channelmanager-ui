@@ -460,30 +460,52 @@ def api_blocks():
         return jsonify({"error":"unauthorized"}),401
     db = SessionLocal()
     try:
-        if request.method=="GET":
-            unit_id=request.args.get("unit_id",type=int)
-            q=db.query(AvailabilityBlock)
-            if unit_id: q=q.filter(AvailabilityBlock.unit_id==unit_id)
-            rows=q.order_by(AvailabilityBlock.start_date.desc()).all()
-            return jsonify([{"id":b.id,"unit_id":b.unit_id,"start_date":b.start_date,"end_date":b.end_date,"source":b.source,"note":b.note} for b in rows])
-        if request.method=="POST":
-            data=request.json or {}
-            b=AvailabilityBlock(
+        if request.method == "GET":
+            unit_id = request.args.get("unit_id", type=int)
+            q = db.query(AvailabilityBlock)
+            if unit_id:
+                q = q.filter(AvailabilityBlock.unit_id == unit_id)
+            rows = q.order_by(AvailabilityBlock.start_date.desc()).all()
+            out = []
+            for b in rows:
+                out.append({
+                    "id": b.id,
+                    "unit_id": b.unit_id,
+                    "start_date": b.start_date,
+                    "end_date": b.end_date,
+                    "source": b.source,
+                    "note": b.note
+                })
+            return jsonify(out)
+
+        if request.method == "POST":
+            data = request.json or {}
+            b = AvailabilityBlock(
                 unit_id=data.get("unit_id"),
                 start_date=data.get("start_date"),
                 end_date=data.get("end_date"),
-                source=data.get("source","manual"),
-                note=data.get("note","")
+                source=data.get("source", "manual"),
+                note=data.get("note", "")
             )
-            db.add(b); db.commit()
-            send_alert("New Manual Block", f"Unit {b.unit_id}: {b.start_date}–{b.end_date} ({b.source}) {b.note}")
-            return jsonify({"ok":True,"id":b.id})
-        if request.method=="DELETE":
-            bid=request.args.get("id",type=int)
-            if not bid: return jsonify({"error":"id required"}),400
-            b=db.query(AvailabilityBlock).filter(AvailabilityBlock.id==bid).first()
-            if b: db.delete(b); db.commit()
-            return jsonify({"ok":True"})
+            db.add(b)
+            db.commit()
+            # send an alert to admin when manual block is added
+            try:
+                send_alert("New Manual Block", f"Unit {b.unit_id}: {b.start_date}–{b.end_date} ({b.source}) {b.note}")
+            except Exception as e:
+                # don't fail the request if alert fails
+                print("alert send error:", e)
+            return jsonify({"ok": True, "id": b.id})
+
+        if request.method == "DELETE":
+            bid = request.args.get("id", type=int)
+            if not bid:
+                return jsonify({"error": "id required"}), 400
+            b = db.query(AvailabilityBlock).filter(AvailabilityBlock.id == bid).first()
+            if b:
+                db.delete(b)
+                db.commit()
+            return jsonify({"ok": True})
     finally:
         db.close()
 
