@@ -19,8 +19,11 @@
     .muted{ color:#6b7280; font-size:.92rem; }
     .price{ margin-top:6px; font-weight:800; color:#111; }
     .actions{ display:flex; gap:8px; margin-top:auto; align-items:center; }
-    .btn{ padding:8px 12px; border-radius:8px; border:none; background:#2563eb; color:#fff; cursor:pointer; text-decoration:none; display:inline-block; }
-    .btn.secondary{ background:#6b7280; }
+    .btn{ padding:8px 12px; border-radius:8px; border:none; color:#fff; cursor:pointer; text-decoration:none; display:inline-block; font-weight:700; }
+    .btn.view{ background:#2563eb; }       /* blue */
+    .btn.book{ background:#16a34a; }       /* green */
+    .stripe-badge { margin-left:auto; font-size:.85rem; background:#f6f8fa; color:#111; padding:6px 8px; border-radius:8px; display:flex; gap:8px; align-items:center; }
+    .stripe-badge small { color:#6b7280; font-weight:600; }
     .meta-row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     @media (max-width:640px){ .card .media{ height:140px } .topbar{ padding:10px } }
   </style>
@@ -45,8 +48,22 @@
           <div class="card" role="listitem">
             <div class="media" style="background-image: url('{{ info.image_url|e }}')"></div>
             <div class="body">
-              <div class="title">{{ info.title|e }}</div>
-              <div class="muted">{{ (info.unit_ids or [])|length }} listing{{ (info.unit_ids or [])|length > 1 and 's' or '' }}</div>
+              <div style="display:flex;gap:12px;align-items:center;">
+                <div style="flex:1">
+                  <div class="title">{{ info.title|e }}</div>
+                  <div class="muted">{{ (info.unit_ids or [])|length }} listing{{ (info.unit_ids or [])|length > 1 and 's' or '' }}</div>
+                </div>
+
+                {% if t.publishable_key %}
+                  <div class="stripe-badge" title="Payments powered by Stripe">
+                    <svg width="20" height="14" viewBox="0 0 64 32" aria-hidden focusable="false">
+                      <rect width="64" height="32" rx="4" fill="#6772e5"></rect>
+                      <text x="8" y="21" font-size="14" fill="#fff" font-family="Arial,Helvetica,sans-serif">S</text>
+                    </svg>
+                    <small>Stripe</small>
+                  </div>
+                {% endif %}
+              </div>
 
               {% if info.price is not none %}
                 <div class="price">฿ {{ ('%.0f'|format(info.price)) }} <span class="muted" style="font-weight:600">/ night {{ info.currency or 'THB' }}</span></div>
@@ -55,9 +72,8 @@
               {% endif %}
 
               <div class="actions">
-                <a class="btn" href="/prop/{{ slug }}" target="_blank" rel="noopener">View public page</a>
-                <!-- admin link: visible on public pages; it's harmless but takes you to login if not admin -->
-                <a class="btn secondary" href="/admin/calendar/{{ slug }}" target="_blank" rel="noopener">Open calendar (admin)</a>
+                <a class="btn view" href="/prop/{{ slug }}" target="_blank" rel="noopener">View</a>
+                <a class="btn book" href="/prop/{{ slug }}#book" target="_blank" rel="noopener">Book</a>
               </div>
             </div>
           </div>
@@ -65,7 +81,7 @@
       </div>
     {% endif %}
 
-    <div style="margin-top:20px" class="muted">Tip: open a property to see calendar and booking UI. Admin calendar & sync are available through the Admin area.</div>
+    <div style="margin-top:20px" class="muted">Tip: press <strong>Book</strong> to open the property booking form directly. Admin calendar & OTA sync are available only after login.</div>
   </div>
 </body>
 </html>
