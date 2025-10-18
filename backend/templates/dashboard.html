@@ -103,7 +103,7 @@
             <td class="actions">
               <button class="btn small" onclick="fetchIcalPreview({{ u.id }})">Preview</button>
               <a class="btn small secondary" href="/ical/export/{{ u.id }}.ics" target="_blank">Export iCal</a>
-              <a class="btn small" style="background:#0ea5a4" href="/admin/calendar/{{ _load_meta().groups | selectattr('1','defined') and '??' or '??' }}" onclick="return confirm('Use Grouped Admin for property calendar')">Group</a>
+              <a class="btn small secondary" href="/admin/groups">Group</a>
             </td>
           </tr>
           {% endfor %}
