@@ -1,87 +1,73 @@
+<!-- backend/templates/properties.html -->
 <!doctype html>
-<html>
+<html lang="{{ lang or 'en' }}">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Properties</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    body{font-family:system-ui,Arial,sans-serif;margin:0;background:#f6f8fa;color:#222}
-    .topbar{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#111;color:#fff}
-    .topbar a{color:#fff;text-decoration:none;margin-left:10px}
-    .wrap{max-width:1040px;margin:20px auto;padding:0 12px}
-    h2{margin:10px 0 16px}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
-    .card{background:#fff;border:1px solid #eee;border-radius:10px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.06);text-decoration:none;color:inherit}
-    .card img{width:100%;height:160px;object-fit:cover;display:block}
-    .card .b{padding:10px 12px}
-    .title{font-weight:700;margin-bottom:4px}
-    .price{font-weight:700;margin:4px 0 6px}
-    .muted{color:#6b7280}
-    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#f1f5f9;color:#334155;font-size:.8rem;margin-left:6px}
-    .admin{margin-top:12px;font-size:.9rem}
-    .admin a{color:#2563eb;text-decoration:none}
-    .lang{margin-left:8px;opacity:.9}
-  </style>
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <div class="topbar">
-    <div>
-      <b>Channel Manager</b>
-      <span class="lang">
-        <a href="/langpub/en">EN</a> | <a href="/langpub/th">ไทย</a>
-      </span>
-    </div>
-    <div>
-      <a href="/properties">Public</a>
-      <a href="/">Admin</a>
+  <header>
+    <h1>Properties</h1>
+    {% if session.user %}
       <a href="/logout">Logout</a>
-    </div>
-  </div>
+    {% else %}
+      <a href="/login">Admin login</a>
+    {% endif %}
+  </header>
 
-  <div class="wrap">
-    <h2>Properties</h2>
+  <main>
+    {% if groups %}
+      <div class="grid">
+        {% for slug, info in groups.items() %}
+          <div class="card">
+            <a href="/prop/{{ slug }}">
+              <img src="{{ info.image_url or 'https://source.unsplash.com/featured/?villa' }}" alt="{{ info.title }}" style="width:100%;height:160px;object-fit:cover;">
+              <h2>{{ info.title }}</h2>
+            </a>
 
-    <div class="grid">
-      {% for slug, info in groups.items() %}
-        <a class="card" href="/prop/{{ slug }}">
-          <img src="{{ info.image_url or 'https://source.unsplash.com/featured/?pattaya,villa' }}" alt="">
-          <div class="b">
-            <div class="title">{{ info.title or slug }}</div>
+            {# price row: show price if available #}
+            {% set unit_ids = info.get("unit_ids", []) %}
+            {% set price = None %}
+            {% if unit_ids %}
+              {% set rp = None %}
+              {% set _ = (lambda : (
+                    (rp := (session.get('db_rates_map') and session.get('db_rates_map').get(unit_ids[0]))) if session.get('db_rates_map') else None
+                ))() %}
+              {# fallback: server should have passed currency_map/rates_map; if not we'll show a safe message #}
+            {% endif %}
 
-            {% if prices_map and prices_map.get(slug) %}
-              <div class="price">
-                From ฿ {{ '%.0f'|format(prices_map[slug]) }}
-                <span class="muted">/ night {{ (curr_map.get(slug) or 'THB') }}</span>
-              </div>
-            {% else %}
-              {% if 'user' in session %}
-                <div class="muted">No price yet — set one in Admin</div>
+            <div class="meta">
+              {% if unit_ids and (rates_map and rates_map.get(unit_ids[0])) %}
+                <div class="price">
+                  {{ rates_map[unit_ids[0]] | int | string }} {{ currency_map.get(unit_ids[0], 'THB') }} / night
+                </div>
               {% else %}
-                <div class="muted">Open calendar & book</div>
+                <div class="no-price">No price yet - set one in admin</div>
               {% endif %}
-            {% endif %}
+            </div>
 
-            {% if pending_map and slug in pending_map %}
-              <div class="muted" title="Some OTA iCal links not set yet">
-                iCal pending <span class="pill">{{ pending_map[slug] }}</span>
-              </div>
-            {% endif %}
+            <div class="actions">
+              <a class="btn" href="/prop/{{ slug }}">View / Book</a>
+            </div>
           </div>
-        </a>
-      {% endfor %}
-    </div>
-
-    {% if not groups %}
-      <p class="muted">No properties found. Make sure <code>backend/unit_meta.json</code> has your groups.</p>
-    {% endif %}
-
-    {% if pending_map %}
-      <div class="admin">
-        <span class="muted">Admin shortcuts:</span>
-        <a href="/admin/groups" target="_blank">Grouped Admin</a> ·
-        <a href="/admin/export_links" target="_blank">Export iCal</a>
+        {% endfor %}
       </div>
+    {% else %}
+      <p>No properties configured.</p>
     {% endif %}
-  </div>
+  </main>
+
+  <style>
+    body{font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;margin:0;padding:20px}
+    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+    .card{border:1px solid #eee;padding:12px;border-radius:8px;background:#fff}
+    .card h2{margin:8px 0 6px}
+    .price{font-weight:700;color:#111}
+    .no-price{color:#888;font-size:0.95rem}
+    .btn{display:inline-block;padding:8px 12px;background:#007bff;color:white;border-radius:6px;text-decoration:none}
+  </style>
 </body>
 </html>
