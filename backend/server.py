@@ -25,9 +25,10 @@ import import_properties as importer
 
 # ====== App & Config ======
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "change_this_secret")
+
 # make helper available inside templates (so templates can call _load_meta())
 app.jinja_env.globals["_load_meta"] = _load_meta
-app.secret_key = os.environ.get("SECRET_KEY", "change_this_secret")
 
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@example.com")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "changeme")
@@ -639,7 +640,10 @@ def properties_index():
     finally:
         db.close()
 
-    return render_template("properties.html", groups=out, lang=session.get("lang", APP_LANG_DEFAULT))
+    # prepare context and include template helper object 't'
+    ctx = {"groups": out, "lang": session.get("lang", APP_LANG_DEFAULT)}
+    ctx.update(_template_context_extra())
+    return render_template("properties.html", **ctx)
 
 # ====== Public property page ======
 @app.route("/prop/<slug>")
