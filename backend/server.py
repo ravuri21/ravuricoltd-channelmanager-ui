@@ -584,29 +584,37 @@ def ical_export(unit_id):
 # ====== PUBLIC: Properties page (public) ======
 @app.route("/properties")
 def properties_index():
+    """
+    Show grouped public properties (title, image, unit_ids, price).
+    For each group we use the first unit's RatePlan (if present) as the default price.
+    """
     meta = _load_meta()
     groups = meta.get("groups", {})
 
-    # Optional: show "pending iCal" counts
+    # enrich groups with price info
+    out = {}
     db = SessionLocal()
-    pending_map = {}
     try:
         for slug, info in groups.items():
-            unit_ids = info.get("unit_ids", [])
-            if not unit_ids:
-                continue
-            missing = db.query(Unit).filter(
-                Unit.id.in_(unit_ids),
-                (Unit.ical_url == None) | (Unit.ical_url == "")
-            ).count()
-            if missing:
-                pending_map[slug] = missing
+            unit_ids = info.get("unit_ids", []) or []
+            price = None
+            currency = "THB"
+            if unit_ids:
+                rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
+                if rp and rp.base_rate:
+                    price = float(rp.base_rate)
+                    currency = rp.currency or "THB"
+            out[slug] = {
+                "title": info.get("title", slug),
+                "image_url": info.get("image_url") or "https://source.unsplash.com/featured/?pattaya,villa",
+                "unit_ids": unit_ids,
+                "price": price,
+                "currency": currency
+            }
     finally:
         db.close()
 
-    ctx = {"groups": groups, "pending_map": pending_map}
-    ctx.update(_template_context_extra())
-    return render_template("properties.html", **ctx)
+    return render_template("properties.html", groups=out, lang=session.get("lang", APP_LANG_DEFAULT))
 
 # ====== Public property page ======
 @app.route("/prop/<slug>")
