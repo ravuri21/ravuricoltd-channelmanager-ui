@@ -1,247 +1,339 @@
-<!-- backend/templates/room.html -->
-<!doctype html>
-<html lang="{{ lang or 'en' }}">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="UTF-8" />
   <title>{{ title }}</title>
-  <link rel="stylesheet" href="/static/style.css">
-  <!-- Stripe.js -->
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --bg:#f6f8fa; --text:#222; --muted:#666; --ok:#ecfdf5; --okb:#a7f3d0; --bad:#fef2f2; --badb:#fecaca; --sel:#e0f2fe; --selb:#93c5fd; --blue:#0070f3; --blue-d:#005ad1; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, Arial, sans-serif; margin:0; background:var(--bg); color:var(--text); }
+    .container { max-width: 980px; margin: 24px auto; background:#fff; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,.08); overflow:hidden; }
+    .hero img { width:100%; height:300px; object-fit:cover; display:block; }
+    .content { padding:20px; display:grid; grid-template-columns: 1.15fr 0.85fr; gap:24px; }
+    @media (max-width: 960px){ .content { grid-template-columns: 1fr; } }
+    h1 { font-size:1.3rem; margin:0 0 6px; }
+    .price { font-weight:700; margin:0 0 10px; }
+    .muted { color:var(--muted); }
+
+    /* Calendar */
+    .panel { background:#fafafa; border:1px solid #eee; border-radius:10px; padding:14px; }
+    .calwrap { display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:16px; }
+    .cal { border:1px solid #eee; border-radius:10px; overflow:hidden; }
+    .cal h3 { margin:0; padding:8px 10px; background:#f3f4f6; border-bottom:1px solid #eee; font-size:.95rem; }
+    .grid { display:grid; grid-template-columns: repeat(7, 1fr); }
+    .dow, .cell { padding:10px; text-align:center; border-bottom:1px solid #f1f1f1; border-right:1px solid #f1f1f1; user-select:none; }
+    .grid > *:nth-child(7n){ border-right:none; }
+    .dow { background:#fafafa; font-weight:600; font-size:.85rem; }
+    .cell.dis { color:#bbb; background:#fafafa; cursor:not-allowed; }
+    .cell.ok { background:var(--ok); border-bottom-color:var(--okb); cursor:pointer; }
+    .cell.bad { background:var(--bad); border-bottom-color:var(--badb); color:#991b1b; cursor:not-allowed; }
+    .cell.sel { background:var(--sel); border-bottom-color:var(--selb); outline:2px solid var(--selb); }
+    .legend{display:flex; gap:10px; align-items:center; font-size:.9rem; margin-top:10px;}
+    .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
+    .d-ok{background:var(--ok);border:1px solid var(--okb)}
+    .d-bad{background:var(--bad);border:1px solid var(--badb)}
+    .d-sel{background:var(--sel);border:1px solid var(--selb)}
+
+    /* Form */
+    label { display:block; font-size:.9rem; margin:10px 0 4px; color:#333; }
+    input, button { width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; font-size:1rem; }
+    input[readonly]{ background:#f9fafb }
+    input:focus { outline:none; border-color: var(--blue); }
+    .actions { display:flex; gap:10px; align-items:center; margin-top:10px; }
+    button { background:var(--blue); color:#fff; border:none; font-weight:600; cursor:pointer; }
+    button:hover { background:var(--blue-d); }
+    button.secondary { background:#6b7280; }
+    button[disabled] { opacity:.65; cursor:not-allowed; }
+    .msg { margin-top:10px; padding:10px; border-radius:8px; font-size:.95rem; display:none; }
+    .ok { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+    .err { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
+    .footer { text-align:center; font-size:.8rem; color:#777; margin:16px 0 10px; }
+  </style>
   <script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
-  <header>
-    <a href="/properties">← Back to properties</a>
-    <h1>{{ title }}</h1>
-  </header>
+  <div class="container">
+    <div class="hero">
+      <img src="{{ image_url or 'https://source.unsplash.com/featured/?pattaya,villa' }}" alt="Property photo">
+    </div>
 
-  <main style="max-width:900px;margin:0 auto;padding:16px;">
-    <div style="display:flex;gap:16px;flex-wrap:wrap;">
-      <div style="flex:1;min-width:280px;">
-        <img src="{{ image_url }}" alt="{{ title }}" style="width:100%;height:260px;object-fit:cover;border-radius:8px;">
-        <div style="margin-top:12px;">
-          <strong>Price:</strong>
-          {% if price %}
-            <span id="price-val">{{ price|int }}</span> <small id="price-currency">{{ currency or 'THB' }}</small> / night
-          {% else %}
-            <span style="color:#888">No price yet - set one in admin</span>
-          {% endif %}
+    <div class="content">
+      <div>
+        <h1>{{ title }}</h1>
+        {% if price %}
+          <div class="price">฿ {{ '%.0f'|format(price) }} <span class="muted">/ night {{ currency or 'THB' }}</span></div>
+        {% endif %}
+        <p class="muted">Tap the calendar to choose check-in and check-out. <b>Red</b> = booked, <b>Green</b> = available.</p>
+
+        <div class="panel">
+          <div id="calwrap" class="calwrap"></div>
+          <div class="legend">
+            <span class="dot d-ok"></span> Available
+            <span class="dot d-bad"></span> Booked
+            <span class="dot d-sel"></span> Selected
+          </div>
+
+          <div id="availSummary" style="margin-top:12px;font-size:.95rem;color:#333"></div>
         </div>
+
+        <div class="footer">Powered by RavuriCo Ltd</div>
       </div>
 
-      <div style="flex:1;min-width:320px;">
-        <div id="availability-section">
-          <h3>Check availability</h3>
-          <p>Choose check-in and check-out dates</p>
-
+      <div>
+        <form id="bookForm" class="panel" novalidate>
           <label>Check-in</label>
-          <input id="start_date" type="date" />
+          <input id="start" type="date" required>
+          <label>Check-out</label>
+          <input id="end" type="date" required>
+          <label>Your Name</label>
+          <input id="name" type="text" placeholder="Full name" required>
+          <label>Your Email</label>
+          <input id="email" type="email" placeholder="Email address" required>
 
-          <label style="margin-left:8px">Check-out</label>
-          <input id="end_date" type="date" />
+          <div id="cardWrap" style="display:none;">
+            <label>Card</label>
+            <div id="card-element" style="padding:10px;border:1px solid #ddd;border-radius:8px;"></div>
+          </div>
 
-          <div id="unavailable-list" style="margin-top:10px;color:#b00;font-size:0.95rem;"></div>
-        </div>
+          <div id="priceCalc" style="margin-top:10px;font-weight:700;"></div>
 
-        <hr style="margin:12px 0;">
-
-        <div id="book-form">
-          <label>Your name</label>
-          <input id="guest_name" type="text" placeholder="Full name" style="width:100%;padding:8px;margin-bottom:8px">
-
-          <label>Your email</label>
-          <input id="guest_email" type="email" placeholder="guest@example.com" style="width:100%;padding:8px;margin-bottom:8px">
-
-          <!-- Stripe Card element -->
-          <div id="card-element" style="margin-top:8px;padding:12px;border:1px solid #ddd;border-radius:8px"></div>
-          <div id="card-errors" role="alert" style="color:#b00;margin-top:8px"></div>
-
-          <button id="book-button" class="btn" style="margin-top:12px;background:#0069ff;color:#fff;padding:10px 14px;border-radius:8px;border:none">
-            Book & pay
-          </button>
-
-          <div id="booking-result" style="margin-top:12px;font-weight:600;"></div>
-        </div>
+          <div class="actions">
+            <button id="bookBtn" type="submit" disabled>Book & Pay</button>
+            <button type="button" class="secondary" onclick="clearSelection()">Clear</button>
+          </div>
+          <div id="msg" class="msg"></div>
+        </form>
       </div>
     </div>
+  </div>
 
-    <div style="margin-top:18px;color:#666;font-size:0.95rem">
-      <strong>Blocked / unavailable ranges</strong>
-      <ul id="blocked-ranges"></ul>
-    </div>
-  </main>
+  <script>
+  // --------- Context ----------
+  const path = location.pathname;
+  const isGroup = path.startsWith("/prop/");
+  const isUnit  = path.startsWith("/r/");
+  const slug    = isGroup ? path.split("/").pop() : null;
+  const unitId  = isUnit  ? parseInt(path.split("/").pop(), 10) : null;
 
-<script>
-const slug = "{{ slug }}";
-const publishableKey = "{{ publishable_key or '' }}";
-const pricePerNight = {{ price or "null" }};
-const currency = "{{ currency or 'THB' }}";
+  let groupSlug = slug;
+  let groupUnitIds = [];
 
-let blocked = []; // [{start_date, end_date, unit_id, source}, ...]
+  const STRIPE_PK = "{{ publishable_key or '' }}".trim();
+  let stripe, card;
 
-function isoToLocalDate(iso) {
-  // iso like "2025-10-20"
-  return iso;
-}
+  function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}` }
+  function addDays(dt, n){ const d=new Date(dt); d.setDate(d.getDate()+n); return d; }
 
-function loadAvailability() {
-  fetch(`/api/public/availability/${slug}`)
-    .then(r => r.json())
-    .then(data => {
-      blocked = data || [];
-      renderBlockedList();
-    })
-    .catch(err => {
-      console.error("availability fetch error:", err);
-    });
-}
-
-function renderBlockedList() {
-  const ul = document.getElementById('blocked-ranges');
-  ul.innerHTML = '';
-  if (!blocked.length) {
-    ul.innerHTML = '<li>None</li>';
-    return;
-  }
-  blocked.forEach(b => {
-    const li = document.createElement('li');
-    li.textContent = `${b.start_date} → ${b.end_date}   (${b.source || 'ical/manual'})`;
-    ul.appendChild(li);
-  });
-  // Also show simple message if a date input falls into a blocked range
-  document.getElementById('unavailable-list').textContent = '';
-}
-
-function dateInBlocked(start, end) {
-  // check if any blocked overlap [start, end)
-  for (const b of blocked) {
-    if (!b.start_date || !b.end_date) continue;
-    // overlap if NOT (b.end <= start OR b.start >= end)
-    if (!(b.end_date <= start || b.start_date >= end)) return true;
-  }
-  return false;
-}
-
-// Validate selected dates whenever changed
-document.addEventListener('input', () => {
-  const start = document.getElementById('start_date').value;
-  const end = document.getElementById('end_date').value;
-  if (!start || !end) return;
-  if (end <= start) {
-    document.getElementById('unavailable-list').textContent = "Check-out must be after check-in";
-    return;
-  }
-  if (dateInBlocked(start, end)) {
-    document.getElementById('unavailable-list').textContent = "One or more nights are unavailable. Change dates.";
-    document.getElementById('book-button').disabled = true;
-  } else {
-    document.getElementById('unavailable-list').textContent = "";
-    document.getElementById('book-button').disabled = false;
-  }
-});
-
-// Stripe integration
-let stripe = null;
-let card = null;
-function mountStripe() {
-  if (!publishableKey) {
-    document.getElementById('card-errors').textContent = "Payment not available (publishable key missing)";
-    document.getElementById('book-button').disabled = true;
-    return;
-  }
-  stripe = Stripe(publishableKey);
-  const elements = stripe.elements();
-  card = elements.create('card');
-  card.mount('#card-element');
-  card.on('change', function(ev) {
-    const err = document.getElementById('card-errors');
-    err.textContent = ev.error ? ev.error.message : '';
-  });
-}
-
-async function createPaymentIntent(start, end) {
-  const resp = await fetch(`/api/public/create_intent/${slug}`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({start_date:start, end_date:end})
-  });
-  return resp.json();
-}
-
-document.getElementById('book-button').addEventListener('click', async function(e) {
-  e.preventDefault();
-  const name = document.getElementById('guest_name').value.trim();
-  const email = document.getElementById('guest_email').value.trim();
-  const start = document.getElementById('start_date').value;
-  const end = document.getElementById('end_date').value;
-
-  if (!start || !end) { alert('Choose check-in and check-out'); return; }
-  if (end <= start) { alert('Check-out must be after check-in'); return; }
-  if (!name || !email) { alert('Enter name and email'); return; }
-  if (dateInBlocked(start, end)) { alert('Selected dates unavailable'); return; }
-
-  // Create PaymentIntent
-  const createResp = await createPaymentIntent(start, end);
-  if (createResp.error) {
-    alert("Payment creation failed: " + createResp.error);
-    return;
-  }
-  const clientSecret = createResp.client_secret;
-  if (!clientSecret) {
-    alert("Payment creation returned no client_secret");
-    return;
-  }
-
-  // Confirm card payment
-  document.getElementById('book-button').disabled = true;
-  document.getElementById('booking-result').textContent = 'Processing payment...';
-
-  const {error, paymentIntent} = await stripe.confirmCardPayment(clientSecret, {
-    payment_method: {
-      card: card,
-      billing_details: {name: name, email: email}
+  function expandRanges(ranges){
+    const set = new Set();
+    for(const r of ranges){
+      let d = new Date(r.start_date);
+      const end = new Date(r.end_date);
+      while(d < end){ set.add(ymd(d)); d = addDays(d,1); }
     }
-  });
-
-  if (error) {
-    document.getElementById('card-errors').textContent = error.message || 'Payment failed';
-    document.getElementById('book-button').disabled = false;
-    document.getElementById('booking-result').textContent = '';
-    return;
+    return set;
   }
 
-  if (paymentIntent && paymentIntent.status === 'succeeded') {
-    // Payment succeeded — call your booking endpoint to record & block dates
-    const bookResp = await fetch(`/api/public/book_group/${slug}`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({start_date:start, end_date:end, name:name, email:email})
+  function setMsg(text, ok=false){
+    const m = document.getElementById("msg");
+    m.textContent = text || "";
+    m.className = "msg " + (ok ? "ok" : "err");
+    m.style.display = text ? "block" : "none";
+  }
+
+  let blocked = new Set();
+  const monthsToShow = 2;
+  let selStart = null;
+  let selEnd   = null;
+
+  function clearSelection(){
+    selStart = selEnd = null;
+    document.getElementById("start").value = "";
+    document.getElementById("end").value = "";
+    setMsg("");
+    renderCalendars();
+    document.getElementById("bookBtn").disabled = true;
+    updatePriceCalc();
+    updateAvailabilitySummary();
+  }
+
+  function buildMonth(year, month){
+    const wrap = document.createElement("div");
+    wrap.className = "cal";
+    const title = new Date(year, month, 1).toLocaleString('default', { month:'long', year:'numeric' });
+    wrap.innerHTML = `<h3>${title}</h3><div class="grid"></div>`;
+    const grid = wrap.querySelector(".grid");
+
+    const dows = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    dows.forEach(d => {
+      const el=document.createElement("div"); el.className="dow"; el.textContent=d; grid.appendChild(el);
     });
-    const bookJson = await bookResp.json();
-    if (bookJson.ok) {
-      document.getElementById('booking-result').innerHTML = '✅ Booking confirmed — dates blocked.';
-      // Refresh availability
-      loadAvailability();
-    } else {
-      document.getElementById('booking-result').innerHTML = '⚠️ Booking saved on payment but failed to record: ' + (bookJson.error || JSON.stringify(bookJson));
+
+    const startDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+
+    for(let i=0;i<startDay;i++){
+      const el=document.createElement("div"); el.className="cell dis"; el.textContent=""; grid.appendChild(el);
     }
-  } else {
-    document.getElementById('booking-result').textContent = 'Payment not completed: ' + (paymentIntent ? paymentIntent.status : 'unknown');
-    document.getElementById('book-button').disabled = false;
+
+    for(let day=1; day<=daysInMonth; day++){
+      const el = document.createElement("div");
+      const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+
+      let cls = "ok";
+      if(blocked.has(dateStr)) cls = "bad";
+      if(selStart && !selEnd && dateStr===selStart) cls = "sel";
+      if(selStart && selEnd && dateStr>=selStart && dateStr<selEnd) cls = "sel";
+
+      el.className = "cell " + cls;
+      el.textContent = day;
+
+      if(cls !== "bad"){
+        el.addEventListener("click", () => onPick(dateStr));
+      }
+
+      grid.appendChild(el);
+    }
+    return wrap;
   }
-});
 
-window.addEventListener('load', function() {
-  loadAvailability();
-  mountStripe();
-});
-</script>
+  function renderCalendars(){
+    const holder = document.getElementById("calwrap");
+    holder.innerHTML = "";
+    const now = new Date();
+    for(let m=0; m<monthsToShow; m++){
+      const dt = new Date(now.getFullYear(), now.getMonth()+m, 1);
+      holder.appendChild(buildMonth(dt.getFullYear(), dt.getMonth()));
+    }
+    updateAvailabilitySummary();
+  }
 
-<style>
-  label{display:block;margin-top:8px;font-weight:600}
-  input[type=date], input[type=text], input[type=email]{width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;margin-top:6px}
-  .btn{display:inline-block;padding:10px 14px}
-</style>
+  function isAllAvailable(startStr, endStr){
+    let d = new Date(startStr);
+    const end = new Date(endStr);
+    while(d < end){
+      if(blocked.has(ymd(d))) return false;
+      d = addDays(d,1);
+    }
+    return true;
+  }
 
-</body>
-</html>
+  function onPick(dateStr){
+    if(!selStart){
+      if(blocked.has(dateStr)) return;
+      selStart = dateStr; selEnd = null;
+      document.getElementById("start").value = selStart;
+      document.getElementById("end").value = "";
+      setMsg("");
+      renderCalendars();
+      document.getElementById("bookBtn").disabled = true;
+      updatePriceCalc();
+      return;
+    }
+    if(dateStr <= selStart){
+      if(blocked.has(dateStr)) return;
+      selStart = dateStr; selEnd = null;
+      document.getElementById("start").value = selStart;
+      document.getElementById("end").value = "";
+      setMsg("");
+      renderCalendars();
+      document.getElementById("bookBtn").disabled = true;
+      updatePriceCalc();
+      return;
+    }
+    if(!isAllAvailable(selStart, dateStr)){
+      setMsg("❌ Some dates in between are already booked (red). Please pick different dates.");
+      return;
+    }
+    selEnd = dateStr;
+    document.getElementById("end").value = selEnd;
+    setMsg("");
+    renderCalendars();
+    document.getElementById("bookBtn").disabled = false;
+    updatePriceCalc();
+  }
+
+  async function loadAvailabilityViaSlug(theSlug){
+    try{
+      const r = await fetch(`/api/public/availability/${theSlug}`);
+      const data = await r.json();
+      if(Array.isArray(data)){
+        blocked = expandRanges(data);
+      }else{
+        blocked = new Set();
+      }
+    }catch(_){ blocked = new Set(); }
+    renderCalendars();
+    updateAvailabilitySummary();
+  }
+
+  function updateAvailabilitySummary(){
+    const out = [];
+    const now = new Date();
+    for(let i=0;i<14;i++){
+      const d = addDays(now,i);
+      const ds = ymd(d);
+      out.push(`<div style="margin-bottom:6px;"><strong>${ds}</strong>: ${blocked.has(ds)?'<span style="color:#b91c1c">Booked</span>':'<span style="color:#065f46">Available</span>'}</div>`);
+    }
+    const el = document.getElementById('availSummary');
+    if(el) el.innerHTML = out.join("");
+  }
+
+  function updatePriceCalc(){
+    const s = document.getElementById('start').value;
+    const e = document.getElementById('end').value;
+    if(!s || !e || e <= s){ document.getElementById('priceCalc').textContent = ''; return; }
+    const pricePerNight = {{ price or 0 }};
+    const days = (new Date(e) - new Date(s)) / (1000*60*60*24);
+    const total = Math.round(pricePerNight * days);
+    document.getElementById('priceCalc').textContent = `฿${pricePerNight} × ${days} night(s) = ฿${total}`;
+  }
+
+  async function initPage(){
+    if(STRIPE_PK){
+      stripe = Stripe(STRIPE_PK);
+      const elements = stripe.elements();
+      card = elements.create('card');
+      card.mount('#card-element');
+      document.getElementById("cardWrap").style.display = "block";
+    }
+
+    if(isGroup){ await loadAvailabilityViaSlug(groupSlug); return; }
+
+    if(isUnit){
+      try{
+        const r = await fetch(`/api/admin/find_group?unit_id=${unitId}`);
+        const j = await r.json();
+        if(j.ok && j.slug){
+          groupSlug = j.slug;
+          groupUnitIds = j.unit_ids || [];
+          await loadAvailabilityViaSlug(groupSlug);
+          return;
+        }
+      }catch(_){}
+      blocked = new Set();
+      renderCalendars();
+    }
+  }
+
+  document.getElementById("bookForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const startDate = document.getElementById("start").value;
+    const endDate   = document.getElementById("end").value;
+    const name      = document.getElementById("name").value.trim();
+    const email     = document.getElementById("email").value.trim();
+
+    if(!startDate || !endDate){ setMsg("❌ Please select dates from the calendar."); return; }
+    if(endDate <= startDate){ setMsg("❌ Check-out must be after check-in."); return; }
+    if(!name || !email){ setMsg("❌ Please enter your name and email."); return; }
+
+    const btn = document.getElementById("bookBtn");
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = "Processing…"; setMsg("");
+
+    try{
+      if(STRIPE_PK){
+        const piRes = await fetch("/api/public/create_intent/" + groupSlug, {
+          method:"POST",
+          headers:{"
