@@ -5,7 +5,7 @@
   <title>{{ title }}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root { --bg:#f6f8fa; --text:#222; --muted:#666; --ok:#ecfdf5; --okb:#a7f3d0; --bad:#fef2f2; --badb:#fecaca; --sel:#e0f2fe; --selb:#93c5fd; --blue:#0070f3; --green:#16a34a; }
+    :root { --bg:#f6f8fa; --text:#222; --muted:#666; --ok:#ecfdf5; --okb:#a7f3d0; --bad:#fef2f2; --badb:#fecaca; --sel:#e0f2fe; --selb:#93c5fd; --blue:#0070f3; --blue-d:#005ad1; }
     * { box-sizing: border-box; }
     body { font-family: system-ui, Arial, sans-serif; margin:0; background:var(--bg); color:var(--text); }
     .container { max-width: 980px; margin: 24px auto; background:#fff; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,.08); overflow:hidden; }
@@ -42,17 +42,13 @@
     input:focus { outline:none; border-color: var(--blue); }
     .actions { display:flex; gap:10px; align-items:center; margin-top:10px; }
     button { background:var(--blue); color:#fff; border:none; font-weight:600; cursor:pointer; }
-    button.book { background:var(--green); }
+    button:hover { background:var(--blue-d); }
     button.secondary { background:#6b7280; }
     button[disabled] { opacity:.65; cursor:not-allowed; }
-    .msg { margin-top:10px; padding:12px; border-radius:10px; font-size:1rem; display:none; }
-    .msg.ok { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-weight:700; font-size:1.1rem; text-align:center; }
-    .msg.err { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
+    .msg { margin-top:10px; padding:14px; border-radius:10px; font-size:1.05rem; display:none; text-align:center; }
+    .ok { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-weight:700; font-size:1.15rem; }
+    .err { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
     .footer { text-align:center; font-size:.8rem; color:#777; margin:16px 0 10px; }
-
-    /* Stripe badge near booking form */
-    .stripe-small { display:flex; gap:8px; align-items:center; font-size:.85rem; color:#6b7280; margin-top:8px; }
-    .stripe-small svg{ display:block }
   </style>
   <script src="https://js.stripe.com/v3/"></script>
 </head>
@@ -71,21 +67,22 @@
         <p class="muted">Tap the calendar to choose check-in and check-out. <b>Red</b> = booked, <b>Green</b> = available.</p>
 
         <div class="panel">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <div style="font-weight:600">Availability (click green days to select)</div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <button id="prevMonth" class="btn secondary small" type="button">← Prev</button>
-              <button id="nextMonth" class="btn small" type="button">Next →</button>
-            </div>
-          </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <div style="font-weight:600">Availability (click green days to select)</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="prevMonth" class="btn secondary small" type="button">← Prev</button>
+      <button id="nextMonth" class="btn small" type="button">Next →</button>
+    </div>
+  </div>
 
-          <div id="calwrap" class="calwrap"></div>
-          <div class="legend">
-            <span class="dot d-ok"></span> Available
-            <span class="dot d-bad"></span> Booked
-            <span class="dot d-sel"></span> Selected
-          </div>
-        </div>
+  <div id="calwrap" class="calwrap"></div>
+  <div class="legend">
+    <span class="dot d-ok"></span> Available
+    <span class="dot d-bad"></span> Booked
+    <span class="dot d-sel"></span> Selected
+  </div>
+
+</div>
         <div class="footer">Powered by RavuriCo Ltd</div>
       </div>
 
@@ -107,278 +104,294 @@
 
           <div id="priceCalc" style="margin-top:10px;font-weight:700;"></div>
 
-          <div class="stripe-small" id="stripeBadge" style="display:none;">
-            <svg width="24" height="16" viewBox="0 0 64 32" aria-hidden><rect width="64" height="32" rx="4" fill="#6772e5"></rect><text x="8" y="21" font-size="14" fill="#fff" font-family="Arial,Helvetica,sans-serif">S</text></svg>
-            <div>Payments powered by <strong>Stripe</strong></div>
-          </div>
-
           <div class="actions">
-            <button id="bookBtn" class="book" type="submit" disabled>Book & Pay</button>
+            <button id="bookBtn" type="submit" disabled>Book & Pay</button>
             <button type="button" class="secondary" onclick="clearSelection()">Clear</button>
           </div>
-          <div id="msg" class="msg" role="status"></div>
+          <div id="msg" class="msg"></div>
         </form>
       </div>
     </div>
   </div>
 
   <script>
-/* room.html client script — paste replacing the old <script> block */
-/* Handles loading availability, calendar navigation (up to 12 months),
-   selecting check-in/out, price calc, stripe payment, and shows a
-   larger persistent booking confirmation on success. */
+  // --------- Context ----------
+  const path = location.pathname;
+  const isGroup = path.startsWith("/prop/");
+  const isUnit  = path.startsWith("/r/");
+  const slug    = isGroup ? path.split("/").pop() : null;
+  const unitId  = isUnit  ? parseInt(path.split("/").pop(), 10) : null;
 
-const path = location.pathname;
-const isGroup = path.startsWith("/prop/");
-const isUnit  = path.startsWith("/r/");
-const slug    = isGroup ? path.split("/").pop() : null;
-const unitId  = isUnit  ? parseInt(path.split("/").pop(), 10) : null;
+  let groupSlug = slug;
+  let groupUnitIds = [];
 
-let groupSlug = slug;
-let groupUnitIds = [];
+  const STRIPE_PK = "{{ publishable_key or '' }}".trim();
+  let stripe, card;
 
-const STRIPE_PK = "{{ publishable_key or '' }}".trim();
-let stripe, card;
+  function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}` }
+  function addDays(dt, n){ const d=new Date(dt); d.setDate(d.getDate()+n); return d; }
 
-function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}` }
-function addDays(dt, n){ const d=new Date(dt); d.setDate(d.getDate()+n); return d; }
-
-function expandRanges(ranges){
-  const set = new Set();
-  for(const r of ranges){
-    let d = new Date(r.start_date);
-    const end = new Date(r.end_date);
-    while(d < end){ set.add(ymd(d)); d = addDays(d,1); }
-  }
-  return set;
-}
-
-function setMsg(text, ok=true, persistMs=2200){
-  const m = document.getElementById("msg");
-  if(!text){ m.style.display="none"; return; }
-  m.textContent = text;
-  m.className = "msg " + (ok ? "ok" : "err");
-  m.style.display = "block";
-  // larger font for confirmations
-  if(ok){
-    m.style.fontSize = "1.2rem";
-    // stay longer for success messages
-    setTimeout(()=>{ m.style.display="none"; m.style.fontSize = ""; }, (persistMs || 5000));
-  } else {
-    // errors still visible a while
-    m.style.fontSize = "1.0rem";
-    setTimeout(()=>{ m.style.display="none"; }, (persistMs || 4000));
-  }
-}
-
-let blocked = new Set();
-const monthsMax = 12;   // allow navigation up to 12 months forward
-let viewOffset = 0;     // 0 = current month
-let selStart = null;
-let selEnd = null;
-const monthsToShow = 2; // render two months side-by-side
-
-function clearSelection(){
-  selStart = selEnd = null;
-  document.getElementById("start").value = "";
-  document.getElementById("end").value = "";
-  setMsg("");
-  renderCalendars();
-  document.getElementById("bookBtn").disabled = true;
-  updatePriceCalc();
-}
-
-function buildMonth(year, month){
-  const wrap = document.createElement("div"); wrap.className = "cal";
-  const title = new Date(year, month, 1).toLocaleString('default', { month:'long', year:'numeric' });
-  wrap.innerHTML = `<h3>${title}</h3><div class="grid"></div>`;
-  const grid = wrap.querySelector(".grid");
-
-  const dows = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  dows.forEach(d => { const el=document.createElement("div"); el.className="dow"; el.textContent=d; grid.appendChild(el); });
-
-  const startDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month+1, 0).getDate();
-  for(let i=0;i<startDay;i++){ const el=document.createElement("div"); el.className="cell dis"; grid.appendChild(el); }
-
-  for(let day=1; day<=daysInMonth; day++){
-    const el = document.createElement("div");
-    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    let cls = blocked.has(dateStr) ? "bad" : "ok";
-    if(selStart && !selEnd && dateStr === selStart) cls = "sel";
-    if(selStart && selEnd && dateStr >= selStart && dateStr < selEnd) cls = "sel";
-    el.className = "cell " + cls;
-    el.textContent = day;
-    if(cls !== "bad"){
-      el.addEventListener("click", ()=> onPick(dateStr));
+  function expandRanges(ranges){
+    const set = new Set();
+    for(const r of ranges){
+      let d = new Date(r.start_date);
+      const end = new Date(r.end_date);
+      while(d < end){ set.add(ymd(d)); d = addDays(d,1); }
     }
-    grid.appendChild(el);
+    return set;
   }
-  return wrap;
-}
 
-function renderCalendars(){
-  const holder = document.getElementById("calwrap");
-  holder.innerHTML = "";
-  const now = new Date();
-  const baseMonth = new Date(now.getFullYear(), now.getMonth()+viewOffset, 1);
-  for(let m=0; m<monthsToShow; m++){
-    const dt = new Date(baseMonth.getFullYear(), baseMonth.getMonth()+m, 1);
-    holder.appendChild(buildMonth(dt.getFullYear(), dt.getMonth()));
+  function setMsg(text, ok=false, persistMs=6000){
+    const m = document.getElementById("msg");
+    if(!text){ m.style.display = "none"; return; }
+    m.textContent = text;
+    m.className = "msg " + (ok ? "ok" : "err");
+    m.style.display = "block";
+    if(persistMs && persistMs > 0){
+      clearTimeout(window.__msgTimeout);
+      window.__msgTimeout = setTimeout(()=>{ m.style.display="none"; }, persistMs);
+    }
   }
-  updatePriceCalc();
-}
 
-function isAllAvailable(startStr, endStr){
-  let d = new Date(startStr); const end = new Date(endStr);
-  while(d < end){
-    if(blocked.has(ymd(d))) return false;
-    d = addDays(d,1);
+  let blocked = new Set();
+  let monthsToShow = 2;
+  let selStart = null;
+  let selEnd   = null;
+  // track current base month index for navigation (0 = this month)
+  let baseMonthOffset = 0;
+
+  function clearSelection(){
+    selStart = selEnd = null;
+    document.getElementById("start").value = "";
+    document.getElementById("end").value = "";
+    setMsg("");
+    renderCalendars();
+    document.getElementById("bookBtn").disabled = true;
+    updatePriceCalc();
   }
-  return true;
-}
 
-function onPick(dateStr){
-  if(!selStart){
-    if(blocked.has(dateStr)) return;
-    selStart = dateStr; selEnd = null;
-    document.getElementById("start").value = selStart; document.getElementById("end").value = "";
-    setMsg(""); renderCalendars(); document.getElementById("bookBtn").disabled = true; updatePriceCalc(); return;
+  function buildMonthForOffset(offset){
+    const now = new Date();
+    const dt = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    return buildMonth(dt.getFullYear(), dt.getMonth());
   }
-  if(dateStr <= selStart){
-    if(blocked.has(dateStr)) return;
-    selStart = dateStr; selEnd = null;
-    document.getElementById("start").value = selStart; document.getElementById("end").value = "";
-    setMsg(""); renderCalendars(); document.getElementById("bookBtn").disabled = true; updatePriceCalc(); return;
+
+  function buildMonth(year, month){
+    const wrap = document.createElement("div");
+    wrap.className = "cal";
+    const title = new Date(year, month, 1).toLocaleString('default', { month:'long', year:'numeric' });
+    wrap.innerHTML = `<h3>${title}</h3><div class="grid"></div>`;
+    const grid = wrap.querySelector(".grid");
+
+    const dows = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    dows.forEach(d => {
+      const el=document.createElement("div"); el.className="dow"; el.textContent=d; grid.appendChild(el);
+    });
+
+    const startDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+
+    for(let i=0;i<startDay;i++){
+      const el=document.createElement("div"); el.className="cell dis"; el.textContent=""; grid.appendChild(el);
+    }
+
+    for(let day=1; day<=daysInMonth; day++){
+      const el = document.createElement("div");
+      const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+
+      let cls = "ok";
+      if(blocked.has(dateStr)) cls = "bad";
+      if(selStart && !selEnd && dateStr===selStart) cls = "sel";
+      if(selStart && selEnd && dateStr>=selStart && dateStr<selEnd) cls = "sel";
+
+      el.className = "cell " + cls;
+      el.textContent = day;
+
+      if(cls !== "bad"){
+        el.addEventListener("click", () => onPick(dateStr));
+      }
+
+      grid.appendChild(el);
+    }
+    return wrap;
   }
-  if(!isAllAvailable(selStart, dateStr)){
-    setMsg("❌ Some dates in between are already booked. Choose different dates.", false); return;
+
+  function renderCalendars(){
+    const holder = document.getElementById("calwrap");
+    holder.innerHTML = "";
+    for(let m=0; m<monthsToShow; m++){
+      const offset = baseMonthOffset + m;
+      holder.appendChild(buildMonthForOffset(offset));
+    }
   }
-  selEnd = dateStr;
-  document.getElementById("end").value = selEnd;
-  setMsg("Dates selected", true, 1200);
-  renderCalendars();
-  document.getElementById("bookBtn").disabled = false;
-  updatePriceCalc();
-}
 
-/* Load availability for a group slug */
-async function loadAvailabilityViaSlug(theSlug){
-  try{
-    const r = await fetch(`/api/public/availability/${theSlug}`);
-    const data = await r.json();
-    blocked = Array.isArray(data) ? expandRanges(data) : new Set();
-  }catch(e){
-    blocked = new Set();
+  function isAllAvailable(startStr, endStr){
+    let d = new Date(startStr);
+    const end = new Date(endStr);
+    while(d < end){
+      if(blocked.has(ymd(d))) return false;
+      d = addDays(d,1);
+    }
+    return true;
   }
-  renderCalendars();
-}
 
-/* Price calc */
-function updatePriceCalc(){
-  const s = document.getElementById('start').value;
-  const e = document.getElementById('end').value;
-  const pricePerNight = {{ price or 0 }};
-  if(!s || !e || e <= s){ document.getElementById('priceCalc').textContent = ''; return; }
-  const days = (new Date(e) - new Date(s)) / (1000*60*60*24);
-  const total = Math.round(pricePerNight * days);
-  document.getElementById('priceCalc').textContent = `฿${pricePerNight} × ${days} night(s) = ฿${total}`;
-}
+  function onPick(dateStr){
+    if(!selStart){
+      if(blocked.has(dateStr)) return;
+      selStart = dateStr; selEnd = null;
+      document.getElementById("start").value = selStart;
+      document.getElementById("end").value = "";
+      setMsg("");
+      renderCalendars();
+      document.getElementById("bookBtn").disabled = true;
+      updatePriceCalc();
+      return;
+    }
+    if(dateStr <= selStart){
+      if(blocked.has(dateStr)) return;
+      selStart = dateStr; selEnd = null;
+      document.getElementById("start").value = selStart;
+      document.getElementById("end").value = "";
+      setMsg("");
+      renderCalendars();
+      document.getElementById("bookBtn").disabled = true;
+      updatePriceCalc();
+      return;
+    }
+    if(!isAllAvailable(selStart, dateStr)){
+      setMsg("❌ Some dates in between are already booked (red). Please pick different dates.", false, 5000);
+      return;
+    }
+    selEnd = dateStr;
+    document.getElementById("end").value = selEnd;
+    setMsg("");
+    renderCalendars();
+    document.getElementById("bookBtn").disabled = false;
+    updatePriceCalc();
+  }
 
-/* Prev / Next nav for months */
-document.getElementById("prevMonth").addEventListener("click", () => {
-  if(viewOffset <= 0) { setMsg("Can't go earlier than current month", false, 1200); return; }
-  viewOffset = Math.max(0, viewOffset - 1); renderCalendars();
-});
-document.getElementById("nextMonth").addEventListener("click", () => {
-  if(viewOffset >= (monthsMax - monthsToShow)) { setMsg("Max months reached", false, 1200); return; }
-  viewOffset = Math.min(monthsMax - monthsToShow, viewOffset + 1); renderCalendars();
-});
-
-/* Init page / Stripe */
-async function initPage(){
-  if(STRIPE_PK){
+  async function loadAvailabilityViaSlug(theSlug){
     try{
+      const r = await fetch(`/api/public/availability/${theSlug}`);
+      const data = await r.json();
+      if(Array.isArray(data)){
+        blocked = expandRanges(data);
+      }else{
+        blocked = new Set();
+      }
+    }catch(_){ blocked = new Set(); }
+    renderCalendars();
+  }
+
+  function updatePriceCalc(){
+    const s = document.getElementById('start').value;
+    const e = document.getElementById('end').value;
+    if(!s || !e || e <= s){ document.getElementById('priceCalc').textContent = ''; return; }
+    const pricePerNight = {{ price or 0 }};
+    const days = (new Date(e) - new Date(s)) / (1000*60*60*24);
+    const total = Math.round(pricePerNight * days);
+    document.getElementById('priceCalc').textContent = `฿${pricePerNight} × ${days} night(s) = ฿${total}`;
+  }
+
+  async function initPage(){
+    if(STRIPE_PK){
       stripe = Stripe(STRIPE_PK);
       const elements = stripe.elements();
       card = elements.create('card');
       card.mount('#card-element');
       document.getElementById("cardWrap").style.display = "block";
-    }catch(e){
-      console.warn("Stripe init failed:", e);
+    }
+
+    // default to showing 2 columns but allow user to increase months easily:
+    monthsToShow = 2;
+
+    // For /prop/<slug>, slug already known
+    if(isGroup){ await loadAvailabilityViaSlug(groupSlug); return; }
+
+    // For /r/<id>, find its group, then use group availability + group booking
+    if(isUnit){
+      try{
+        const r = await fetch(`/api/admin/find_group?unit_id=${unitId}`);
+        const j = await r.json();
+        if(j.ok && j.slug){
+          groupSlug = j.slug;
+          groupUnitIds = j.unit_ids || [];
+          await loadAvailabilityViaSlug(groupSlug);
+          return;
+        }
+      }catch(_){}
+      blocked = new Set();
+      renderCalendars();
     }
   }
 
-  if(isGroup){ await loadAvailabilityViaSlug(groupSlug); return; }
+  // Calendar navigation handlers (Prev / Next)
+  document.getElementById("prevMonth").addEventListener("click", ()=>{
+    baseMonthOffset = Math.max(baseMonthOffset - 1, 0);
+    renderCalendars();
+  });
+  document.getElementById("nextMonth").addEventListener("click", ()=>{
+    baseMonthOffset = baseMonthOffset + 1;
+    // allow unlimited forward navigation — user can move forward up to 12 months visually by clicking repeatedly
+    renderCalendars();
+  });
 
-  if(isUnit){
+  document.getElementById("bookForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const startDate = document.getElementById("start").value;
+    const endDate   = document.getElementById("end").value;
+    const name      = document.getElementById("name").value.trim();
+    const email     = document.getElementById("email").value.trim();
+
+    if(!startDate || !endDate){ setMsg("❌ Please select dates from the calendar.", false, 5000); return; }
+    if(endDate <= startDate){ setMsg("❌ Check-out must be after check-in.", false, 5000); return; }
+    if(!name || !email){ setMsg("❌ Please enter your name and email.", false, 5000); return; }
+
+    const btn = document.getElementById("bookBtn");
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = "Processing…"; setMsg("", false);
+
     try{
-      const r = await fetch(`/api/admin/find_group?unit_id=${unitId}`);
-      const j = await r.json();
-      if(j.ok && j.slug){
-        groupSlug = j.slug;
-        groupUnitIds = j.unit_ids || [];
-        await loadAvailabilityViaSlug(groupSlug);
-        return;
+      if(STRIPE_PK){
+        const piRes = await fetch("/api/public/create_intent/" + groupSlug, {
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({ start_date: startDate, end_date: endDate })
+        });
+        const pi = await piRes.json();
+        if(!piRes.ok || !pi.ok){ throw new Error(pi.error || "Failed to create payment"); }
+        const {error, paymentIntent} = await stripe.confirmCardPayment(pi.client_secret, {
+          payment_method: { card, billing_details: { name, email } }
+        });
+        if(error) throw error;
+        if(paymentIntent.status !== "succeeded") throw new Error("Payment not completed");
       }
-    }catch(_){}
-    blocked = new Set(); renderCalendars();
-  }
-}
 
-document.getElementById("bookForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const startDate = document.getElementById("start").value;
-  const endDate   = document.getElementById("end").value;
-  const name      = document.getElementById("name").value.trim();
-  const email     = document.getElementById("email").value.trim();
-  if(!startDate || !endDate){ setMsg("❌ Please select dates from the calendar.", false); return; }
-  if(endDate <= startDate){ setMsg("❌ Check-out must be after check-in.", false); return; }
-  if(!name || !email){ setMsg("❌ Please enter your name and email.", false); return; }
+      const postUrl = groupSlug ? `/api/public/book_group/${groupSlug}` : (isUnit ? `/api/public/book/${unitId}` : "/api/public/book");
 
-  const btn = document.getElementById("bookBtn");
-  const original = btn.textContent;
-  btn.disabled = true; btn.textContent = "Processing…"; setMsg("");
-
-  try{
-    if(STRIPE_PK){
-      const piRes = await fetch("/api/public/create_intent/" + groupSlug, {
+      const res = await fetch(postUrl, {
         method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ start_date: startDate, end_date: endDate })
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ start_date:startDate, end_date:endDate, name, email })
       });
-      const pi = await piRes.json();
-      if(!piRes.ok || !pi.ok){ throw new Error(pi.error || "Failed to create payment"); }
-      const {error, paymentIntent} = await stripe.confirmCardPayment(pi.client_secret, {
-        payment_method: { card, billing_details: { name, email } }
-      });
-      if(error) throw error;
-      if(paymentIntent.status !== "succeeded") throw new Error("Payment not completed");
+      const j = await res.json();
+      if(res.ok && j.ok){
+        // show larger confirmation and persist for 6 seconds
+        setMsg("✅ Booking confirmed — dates blocked. Thank you!", true, 6000);
+        clearSelection();
+        if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
+      }else{
+        throw new Error(j.error || "Unknown error");
+      }
+    }catch(err){
+      setMsg("❌ " + (err.message || err), false, 6000);
+    }finally{
+      btn.disabled = false; btn.textContent = original;
     }
+  });
 
-    const postUrl = groupSlug ? `/api/public/book_group/${groupSlug}` : (isUnit ? `/api/public/book/${unitId}` : "/api/public/book");
-
-    const res = await fetch(postUrl, {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ start_date:startDate, end_date:endDate, name, email })
-    });
-    const j = await res.json();
-    if(res.ok && j.ok){
-      // Big persistent confirmation visible for longer
-      setMsg(`✅ Booking confirmed — ${startDate} → ${endDate}. Thank you ${name}!`, true, 7000);
-      clearSelection();
-      if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
-    }else{
-      throw new Error(j.error || "Unknown error");
-    }
-  }catch(err){
-    console.error("Booking error:", err);
-    setMsg("❌ " + (err.message || err), false, 6000);
-  }finally{
-    btn.disabled = false; btn.textContent = original;
-  }
-});
-
-initPage();
-</script>
+  // init
+  initPage();
+  </script>
+</body>
+</html>
