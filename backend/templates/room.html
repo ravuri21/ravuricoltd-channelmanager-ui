@@ -90,8 +90,6 @@
             <span class="dot d-bad"></span> Booked
             <span class="dot d-sel"></span> Selected
           </div>
-
-          <div id="availSummary" style="margin-top:12px;font-size:.95rem;color:#333"></div>
         </div>
 
         <div class="footer">Powered by RavuriCo Ltd</div>
@@ -186,7 +184,6 @@
     const prev = monthsToShow;
     monthsToShow = calculateMonthsToShow();
     if(prev !== monthsToShow){
-      // clamp offset to remain in allowed range
       currentOffset = clampOffset(currentOffset);
       renderCalendars();
     }
@@ -207,7 +204,6 @@
     renderCalendars();
     document.getElementById("bookBtn").disabled = true;
     updatePriceCalc();
-    updateAvailabilitySummary();
   }
 
   function buildMonth(year, month){
@@ -258,7 +254,6 @@
       const dt = new Date(now.getFullYear(), now.getMonth()+currentOffset+m, 1);
       holder.appendChild(buildMonth(dt.getFullYear(), dt.getMonth()));
     }
-    updateAvailabilitySummary();
   }
 
   function isAllAvailable(startStr, endStr){
@@ -272,7 +267,6 @@
   }
 
   function onPick(dateStr){
-    // 1) if no start -> set start
     if(!selStart){
       if(blocked.has(dateStr)) return;
       selStart = dateStr; selEnd = null;
@@ -284,7 +278,6 @@
       updatePriceCalc();
       return;
     }
-    // 2) if clicked before or equal start -> reset start
     if(dateStr <= selStart){
       if(blocked.has(dateStr)) return;
       selStart = dateStr; selEnd = null;
@@ -296,7 +289,6 @@
       updatePriceCalc();
       return;
     }
-    // 3) pick as end -> ensure full range available
     if(!isAllAvailable(selStart, dateStr)){
       setMsg("❌ Some dates in between are already booked (red). Please pick different dates.");
       return;
@@ -309,7 +301,7 @@
     updatePriceCalc();
   }
 
-  // Prev / Next handlers (move by monthsToShow)
+  // Prev / Next handlers & swipe init
   document.addEventListener("DOMContentLoaded", () => {
     document.getElementById('prevMonth').addEventListener('click', () => {
       const newOffset = clampOffset(currentOffset - monthsToShow);
@@ -322,11 +314,10 @@
       renderCalendars();
     });
 
-    // small swipe support for mobile calendars (optional)
+    // small swipe support for mobile calendars
     addSwipeSupport(document.getElementById('calwrap'));
   });
 
-  // Touch swipe helpers (left/right)
   function addSwipeSupport(el){
     if(!el) return;
     let startX = null;
@@ -336,11 +327,9 @@
       const dx = e.changedTouches[0].clientX - startX;
       if(Math.abs(dx) < 40) return;
       if(dx > 0){
-        // swipe right -> prev
         currentOffset = clampOffset(currentOffset - monthsToShow);
         renderCalendars();
       }else{
-        // swipe left -> next
         currentOffset = clampOffset(currentOffset + monthsToShow);
         renderCalendars();
       }
@@ -364,19 +353,6 @@
     // reset to showing current months
     currentOffset = 0;
     renderCalendars();
-    updateAvailabilitySummary();
-  }
-
-  function updateAvailabilitySummary(){
-    const out = [];
-    const now = new Date();
-    for(let i=0;i<14;i++){
-      const d = addDays(now,i);
-      const ds = ymd(d);
-      out.push(`<div style="margin-bottom:6px;"><strong>${ds}</strong>: ${blocked.has(ds)?'<span style="color:#b91c1c">Booked</span>':'<span style="color:#065f46">Available</span>'}</div>`);
-    }
-    const el = document.getElementById('availSummary');
-    if(el) el.innerHTML = out.join("");
   }
 
   function updatePriceCalc(){
@@ -465,7 +441,7 @@
         body: JSON.stringify({ start_date:startDate, end_date:endDate, name, email })
       });
       const j = await res.json();
-         if(res.ok && j.ok){
+      if(res.ok && j.ok){
         // show confirmation message (don't immediately clear — keep visible briefly)
         setMsg("✅ Booking confirmed — dates blocked.", true);
 
