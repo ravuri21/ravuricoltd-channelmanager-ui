@@ -623,47 +623,42 @@ def ical_export(unit_id):
 @app.route("/properties")
 def properties_index():
     """
-    Show grouped public properties (title, image, unit_ids, price).
-    For each group we use the first unit's RatePlan (if present) as the default price.
-
-    This endpoint will **hide** any unit IDs listed in the environment variable
-    IGNORE_PUBLIC_UNIT_IDS (comma-separated), while leaving the admin DB and
-    grouped metadata unchanged.
+    Public listing: show grouped properties.
+    NOTE: we intentionally DO NOT expose unit IDs or per-unit names on the public page.
+    We only show title, image, and a public price (from the first unit's rate plan).
     """
+
     meta = _load_meta()
     groups = meta.get("groups", {})
 
-    # parse ignore list from env (safe)
+    # Optionally hide specific unit IDs from public view via env var (comma separated ints)
     ignore_env = os.environ.get("IGNORE_PUBLIC_UNIT_IDS", "").strip()
     ignore_set = set()
     if ignore_env:
         try:
             ignore_set = set(int(x.strip()) for x in ignore_env.split(",") if x.strip())
         except Exception:
-            # if parsing fails, keep ignore_set empty (fail-safe)
             ignore_set = set()
 
-    # enrich groups with price info, but filter unit_ids for public output
     out = {}
     db = SessionLocal()
     try:
         for slug, info in groups.items():
             unit_ids = info.get("unit_ids", []) or []
-            # filter out ignored unit ids for public page only
-            public_unit_ids = [uid for uid in unit_ids if uid not in ignore_set]
-
+            # Filter unit list only for internal price lookup — public view will not print unit IDs
+            visible_unit_ids_for_price = [uid for uid in unit_ids if uid not in ignore_set]
             price = None
             currency = "THB"
-            if public_unit_ids:
-                rp = db.query(RatePlan).filter(RatePlan.unit_id == public_unit_ids[0]).first()
+            if visible_unit_ids_for_price:
+                rp = db.query(RatePlan).filter(RatePlan.unit_id == visible_unit_ids_for_price[0]).first()
                 if rp and rp.base_rate:
                     price = float(rp.base_rate)
                     currency = rp.currency or "THB"
-
             out[slug] = {
                 "title": info.get("title", slug),
                 "image_url": info.get("image_url") or "https://source.unsplash.com/featured/?pattaya,villa",
-                "unit_ids": public_unit_ids,
+                # Do NOT include unit_ids in public JSON/template
+                "unit_count": len([uid for uid in unit_ids if uid not in ignore_set]),
                 "price": price,
                 "currency": currency
             }
@@ -673,10 +668,15 @@ def properties_index():
     ctx = {"groups": out, "lang": session.get("lang", APP_LANG_DEFAULT)}
     ctx.update(_template_context_extra())
     return render_template("properties.html", **ctx)
-    
+
+
 # ====== Public property page ======
 @app.route("/prop/<slug>")
 def property_page(slug):
+    """
+    Public single property page. Does not reveal internal unit IDs or per-unit OTA names.
+    Uses price from first visible unit (respecting IGNORE_PUBLIC_UNIT_IDS).
+    """
     info = _group_info(slug)
     if not info:
         return "Not found", 404
@@ -685,15 +685,28 @@ def property_page(slug):
     image_url = info.get("image_url") or "https://source.unsplash.com/featured/?pattaya,villa"
     unit_ids = info.get("unit_ids", [])
 
+    # respect ignore list
+    ignore_env = os.environ.get("IGNORE_PUBLIC_UNIT_IDS", "").strip()
+    ignore_set = set()
+    if ignore_env:
+        try:
+            ignore_set = set(int(x.strip()) for x in ignore_env.split(",") if x.strip())
+        except Exception:
+            ignore_set = set()
+
+    visible_unit_ids = [uid for uid in unit_ids if uid not in ignore_set]
+
     price = None
     currency = "THB"
-    if unit_ids:
+    if visible_unit_ids:
         db = SessionLocal()
-        rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
-        db.close()
-        if rp:
-            price = rp.base_rate
-            currency = rp.currency or "THB"
+        try:
+            rp = db.query(RatePlan).filter(RatePlan.unit_id == visible_unit_ids[0]).first()
+            if rp:
+                price = rp.base_rate
+                currency = rp.currency or "THB"
+        finally:
+            db.close()
 
     ctx = {
         "title": title,
@@ -702,6 +715,7 @@ def property_page(slug):
         "currency": currency,
         "publishable_key": STRIPE_PUBLISHABLE_KEY,
         "slug": slug
+        # NOTE: we intentionally do NOT pass visible_unit_ids into the template
     }
     ctx.update(_template_context_extra())
     return render_template("room.html", **ctx)
