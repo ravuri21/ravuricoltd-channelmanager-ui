@@ -1,0 +1,79 @@
+/* =========================
+   Property Theme Variations
+   =========================
+   Usage: add class `theme-villa`, `theme-urban`, or `theme-lux`
+   to the top-level card element (.card) or the <body> to style whole page.
+*/
+
+/* Base variables (will be overridden per theme) */
+:root {
+  --theme-bg: #ffffff;
+  --theme-accent: #2563eb;
+  --theme-accent-2: #0ea5a4;
+  --theme-muted: #6b7280;
+  --theme-cta-text: #ffffff;
+  --theme-card-elev: rgba(37,99,235,.07);
+}
+
+/* ===== Villa (relaxing, tropical) ===== */
+.theme-villa {
+  --theme-accent: #0ea5a4;      /* teal */
+  --theme-accent-2: #16a34a;    /* green */
+  --theme-bg: #fffaf9;
+  --theme-muted: #4b5563;
+  --theme-cta-text: #ffffff;
+  --theme-card-elev: rgba(14,165,164, .06);
+}
+.theme-villa .card { background: linear-gradient(180deg, var(--theme-bg) 0%, #ffffff 60%); }
+.theme-villa .btn.view { background: var(--theme-accent-2); color: var(--theme-cta-text); }
+.theme-villa .btn.book { background: var(--theme-accent); color: var(--theme-cta-text); }
+.theme-villa .stripe-badge { color: #0b5cff; background: #f0fdfa; border-color: rgba(14,165,164,.08); }
+
+/* ===== Urban (modern, clean) ===== */
+.theme-urban {
+  --theme-accent: #2563eb;      /* blue */
+  --theme-accent-2: #64748b;    /* slate */
+  --theme-bg: #fbfdff;
+  --theme-muted: #475569;
+  --theme-cta-text: #ffffff;
+  --theme-card-elev: rgba(37,99,235,.06);
+}
+.theme-urban .card { background: linear-gradient(180deg, var(--theme-bg) 0%, #ffffff 40%); }
+.theme-urban .btn.view { background: var(--theme-accent-2); color: var(--theme-cta-text); }
+.theme-urban .btn.book { background: var(--theme-accent); color: var(--theme-cta-text); }
+.theme-urban .stripe-badge { color: #0b5cff; background: #f8fafc; border-color: rgba(37,99,235,.06); }
+
+/* ===== Luxury (premium, warm) ===== */
+.theme-luxury {
+  --theme-accent: #b45309;      /* warm amber */
+  --theme-accent-2: #111827;    /* dark slate */
+  --theme-bg: #fffaf6;
+  --theme-muted: #374151;
+  --theme-cta-text: #ffffff;
+  --theme-card-elev: rgba(180,83,9,.05);
+}
+.theme-luxury .card { background: linear-gradient(180deg, var(--theme-bg) 0%, #fffefb 50%); }
+.theme-luxury .btn.view { background: var(--theme-accent-2); color: var(--theme-cta-text); }
+.theme-luxury .btn.book { background: var(--theme-accent); color: var(--theme-cta-text); }
+.theme-luxury .stripe-badge { color: #7c2d12; background: #fff6f1; border-color: rgba(180,83,9,.06); }
+
+/* ===== Accent helpers used across templates ===== */
+.card { transition: transform .12s, box-shadow .12s, border-color .12s; border: 1px solid rgba(0,0,0,0.04); }
+.card:hover { box-shadow: 0 14px 30px rgba(0,0,0,0.08); transform: translateY(-6px); border-color: rgba(0,0,0,0.06); }
+
+/* CTA overrides — make them slightly larger and themed */
+.btn.view, .btn.book {
+  font-size: 0.98rem;
+  padding: 12px;
+  border-radius: 10px;
+  box-shadow: 0 6px 18px var(--theme-card-elev);
+  border: 1px solid rgba(255,255,255,0.02);
+}
+
+/* Make price feel premium on luxury */
+.theme-luxury .price { color: #7c2d12; }
+
+/* small responsive tweaks */
+@media (max-width:720px) {
+  .trust-row { flex-direction: column; gap: 12px; }
+}
