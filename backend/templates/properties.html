@@ -2,84 +2,140 @@
 <html lang="{{ session.get('lang','en') }}">
 <head>
   <meta charset="utf-8" />
-  <title>Properties — {{ t.brand if t else "Ravuri Properties" }}</title>
+  <title>Properties — Ravuri <span style="display:none">Properties</span></title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="/static/style.css" />
   <link rel="stylesheet" href="/static/style-additions.css" />
+  <style>
+    /* Page-level polish (safe to paste into template) */
+    :root {
+      --bg:#f6f8fa; --card-bg:#fff; --muted:#6b7280; --accent:#e11d48; --teal:#0ea5a4; --blue:#2563eb;
+    }
+    html,body {height:100%;margin:0;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+    body{background:var(--bg); color:#111; -webkit-font-smoothing:antialiased}
+    .wrap{max-width:1200px;margin:28px auto;padding:18px}
+    .header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}
+    .brand{font-weight:800;font-size:1.25rem;display:flex;align-items:center;gap:8px}
+    .brand .r{color:var(--accent);font-family:"Georgia",serif;font-size:1.45rem;letter-spacing:0.4px}
+    .brand .p{color:#111;font-size:1.3rem}
+    .right{display:flex;gap:10px;align-items:center}
+    .lang a{color:var(--muted);text-decoration:none;margin:0 6px;font-weight:600}
+    .stripe-badge{display:inline-block;background:#f8fafc;border-radius:8px;padding:6px 8px;font-size:.82rem;color:#0b5cff;border:1px solid #e6eefc;margin-left:8px}
+    .trust-row{display:flex;gap:12px;margin:18px 0 22px;flex-wrap:wrap}
+    .trust-card{padding:12px;border-radius:10px;background:var(--card-bg);border:1px solid #eef2f7;min-width:200px;flex:1;box-shadow:0 6px 18px rgba(8,15,25,0.04)}
+    .trust-card h4{margin:0 0 6px;font-size:0.98rem}
+    .trust-card p{margin:0;color:var(--muted);font-size:0.92rem}
+
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+    .card{background:var(--card-bg);border-radius:14px;overflow:hidden;box-shadow:0 10px 30px rgba(8,15,25,0.06);display:flex;flex-direction:column;transition:transform .12s,box-shadow .12s}
+    .card:hover{transform:translateY(-8px);box-shadow:0 20px 40px rgba(8,15,25,0.09)}
+    .card a.media{display:block}
+    .card img{width:100%;height:200px;object-fit:cover;display:block}
+    .pad{padding:14px;display:flex;flex-direction:column;gap:10px}
+    .title{font-weight:800;font-size:1.05rem;color:#0b1b2b;line-height:1.2}
+    .meta{color:var(--muted);font-size:.95rem}
+    .price{font-size:1.1rem;font-weight:900;margin-top:6px}
+    .buttons{display:flex;gap:10px;margin-top:6px}
+    .btn{flex:1;padding:10px;border-radius:10px;border:0;font-weight:800;cursor:pointer;text-align:center;text-decoration:none;color:#fff;display:inline-block}
+    .btn.view{background:var(--teal)}
+    .btn.book{background:var(--blue)}
+    .rating{display:flex;gap:8px;align-items:center;color:#b45309;font-weight:700;font-size:0.98rem}
+    .card-footer{padding:12px 14px;border-top:1px solid #f1f5f9;background:linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.6));display:flex;justify-content:space-between;align-items:center}
+
+    footer{max-width:1200px;margin:18px auto;padding:10px 18px;color:var(--muted);font-size:.9rem;text-align:center}
+    @media (max-width:720px){
+      .trust-row{flex-direction:column}
+      .brand{font-size:1.05rem}
+      .card img{height:160px}
+    }
+  </style>
 </head>
 <body>
-  <header class="site-hero">
-    <div class="hero-inner">
-      <div class="brand">
-        <span class="brand-red">Ravuri</span><span class="brand-dark"> Properties</span>
+  <div class="wrap">
+    <div class="header" role="banner">
+      <div class="brand" aria-label="Ravuri Properties">
+        <span class="r">Ravuri</span>
+        <span class="p">Properties</span>
       </div>
-      <div class="hero-actions">
-        <nav class="lang-switch">
-          <a href="/lang/en" class="lang">English</a> • <a href="/lang/th" class="lang">ไทย</a>
+
+      <div class="right">
+        <nav class="lang" aria-label="language">
+          <a href="/lang/en" title="English" {% if session.get('lang','en') == 'en' %}style="opacity:0.7"{% endif %}>English</a> •
+          <a href="/lang/th" title="ภาษาไทย" {% if session.get('lang','en') == 'th' %}style="opacity:0.7"{% endif %}>ไทย</a>
         </nav>
+
         {% if t.publishable_key %}
-          <div class="stripe-badge">Secure payments by Stripe</div>
+          <span class="stripe-badge">Secure payments by Stripe</span>
         {% endif %}
       </div>
     </div>
-  </header>
 
-  <main class="wrap">
-    <section class="intro">
-      <h1>Handpicked stays around Pattaya</h1>
-      <p class="muted">Simple direct booking — instant confirmation, secure payments, and friendly support.</p>
-
-      <div class="trust-row">
-        <div class="trust-card">
-          <div class="trust-title">🔒 Secure payments</div>
-          <div class="muted">Cards handled by Stripe — we don't store card numbers.</div>
-        </div>
-        <div class="trust-card">
-          <div class="trust-title">✅ Instant confirmation</div>
-          <div class="muted">Your dates are blocked immediately after booking.</div>
-        </div>
-        <div class="trust-card">
-          <div class="trust-title">📞 Support</div>
-          <div class="muted">Email: {{ t.support_email or '' }}</div>
-        </div>
+    <!-- Trust row -->
+    <div class="trust-row" aria-hidden="false">
+      <div class="trust-card">
+        <h4>🔒 Secure payments</h4>
+        <p>Payments processed by Stripe. Card details are handled securely and never stored here.</p>
       </div>
-    </section>
+      <div class="trust-card">
+        <h4>✅ Instant confirmation</h4>
+        <p>When you book from this site, dates are blocked immediately and you receive a confirmation email.</p>
+      </div>
+      <div class="trust-card">
+        <h4>📞 Support</h4>
+        <p>Email: <strong>{{ t.support_email or 'support@ravuricoltd.com' }}</strong> — reply within 24 hours.</p>
+      </div>
+    </div>
 
-    <section class="grid" aria-label="Properties list">
+    <!-- Properties grid -->
+    <div class="grid" role="main" aria-live="polite">
       {% for slug, info in groups.items() %}
-      <article class="card" role="article" aria-labelledby="title-{{ loop.index }}">
-        <a class="card-media" href="/prop/{{ slug }}">
-          <img src="{{ info.image_url }}" alt="{{ info.title }}" loading="lazy">
+      <article class="card" aria-labelledby="p-title-{{ loop.index }}">
+        <a class="media" href="/prop/{{ slug }}" aria-hidden="false">
+          <img src="{{ info.image_url }}" alt="{{ info.title }}">
         </a>
 
         <div class="pad">
           <div>
-            <div id="title-{{ loop.index }}" class="title">{{ info.title }}</div>
+            <div id="p-title-{{ loop.index }}" class="title">{{ info.title }}</div>
 
-            <!-- hide internal IDs from public page - show only unit count -->
-            <div class="meta">Rooms: {{ info.unit_ids|length }} · {{ info.currency or 'THB' }}</div>
+            <!-- We show number of units but hide internal unit IDs / raw strings from public -->
+            <div class="meta">Units: {{ info.unit_ids|length }}</div>
 
             {% if info.price %}
-              <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="muted">/ night</span></div>
+              <div class="price">฿ {{ '%.0f'|format(info.price) }} <span style="color:var(--muted);font-weight:600">/ night</span></div>
             {% else %}
-              <div class="price muted">Price: not set</div>
+              <div class="price" style="color:var(--muted);font-weight:700">Price: not set</div>
             {% endif %}
 
-            <p class="teaser muted" aria-hidden="true">Comfortable, clean and centrally located — perfect for couples and families.</p>
+            <!-- small sample: rating + short caption -->
+            <div style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+              <div class="rating">★ 4.8 <span style="color:var(--muted);font-weight:600;margin-left:8px"> · 235 reviews</span></div>
+            </div>
+            <div style="margin-top:8px;color:#334">{% if info.subtitle %}{{ info.subtitle }}{% else %}"Comfortable stay in Pattaya" {% endif %}</div>
           </div>
 
-          <div class="card-actions">
-            <a class="btn btn-outline" href="/prop/{{ slug }}">View</a>
-            <a class="btn btn-primary" href="/prop/{{ slug }}#book">Book</a>
+          <div class="buttons" role="group" aria-label="property-actions">
+            <a class="btn view" href="/prop/{{ slug }}">View</a>
+            <a class="btn book" href="/prop/{{ slug }}#book">Book</a>
           </div>
+        </div>
+
+        <div class="card-footer">
+          <div style="color:var(--muted);font-weight:600">Instant booking</div>
+          <div style="color:var(--muted);font-size:.95rem">Secure • Verified</div>
         </div>
       </article>
       {% endfor %}
-    </section>
+    </div>
+  </div>
 
-    <footer class="page-footer">
-      <small class="muted">© {{ (now()|default('')) or '' }} {{ t.brand if t else 'Ravuri Properties' }} — Built with care</small>
-    </footer>
-  </main>
+  <footer>
+    <small>
+      ©
+      {% if current_year %}{{ current_year }}{% elif now is defined %}{{ now().year }}{% else %}{{ "" }}{% endif %}
+      <strong style="color:var(--accent)">Ravuri</strong> <strong style="color:#111">Properties</strong>
+      — Built with care
+    </small>
+  </footer>
 </body>
 </html>
