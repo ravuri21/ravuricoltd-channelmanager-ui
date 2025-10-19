@@ -15,13 +15,14 @@
     .title{font-weight:700;margin-bottom:6px}
     .price{font-size:1.05rem;font-weight:800;margin-bottom:10px}
     .buttons{display:flex;gap:8px}
-    .btn{flex:1;padding:10px;border-radius:10px;border:0;font-weight:700;cursor:pointer}
+    .btn{flex:1;padding:10px;border-radius:10px;border:0;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block;text-align:center}
     .btn.view{background:#0ea5a4;color:#fff}    /* teal */
     .btn.book{background:#2563eb;color:#fff}    /* blue */
     .small{font-size:.92rem;padding:8px;border-radius:8px}
     .topline{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
     .muted{color:#6b7280}
     .stripe-badge{display:inline-block;background:#f8fafc;border-radius:8px;padding:6px 8px;font-size:.82rem;color:#0b5cff;margin-left:8px;border:1px solid #e6eefc}
+    .langlinks a{margin-left:8px;color:#0b5cff;text-decoration:none;font-weight:600}
     @media (max-width:720px){ .card img{height:140px} }
   </style>
 </head>
@@ -30,7 +31,12 @@
     <div class="topline">
       <div style="font-weight:800;font-size:1.1rem">{{ t.brand if t else "Properties" }}</div>
       <div class="muted">
-        <span>English</span> • <a href="/lang/th">ไทย</a>
+        {# language links - set session and return to current page #}
+        {% set current_lang = session.get('lang', 'en') %}
+        <span style="font-weight:600">{{ 'English' if current_lang=='en' else 'ภาษาอังกฤษ' }}</span>
+        <span class="langlinks">
+          <a href="/lang/en">English</a> • <a href="/lang/th">ไทย</a>
+        </span>
         {% if t.publishable_key %}<span class="stripe-badge">Secure payments by Stripe</span>{% endif %}
       </div>
     </div>
@@ -43,7 +49,9 @@
         </a>
         <div class="pad">
           <div>
-            <div class="title">{{ info.title }}</div>
+            <div class="title">
+              {{ info.title }}
+            </div>
 
             {% if info.price %}
               <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="muted">/ night ({{ info.currency or 'THB' }})</span></div>
@@ -53,8 +61,8 @@
           </div>
 
           <div class="buttons">
-            <a class="btn view" href="/prop/{{ slug }}">View</a>
-            <a class="btn book" href="/prop/{{ slug }}#book">Book</a>
+            <a class="btn view" href="/prop/{{ slug }}">{{ 'View' if session.get('lang','en')=='en' else 'ดู' }}</a>
+            <a class="btn book" href="/prop/{{ slug }}#book">{{ 'Book' if session.get('lang','en')=='en' else 'จอง' }}</a>
           </div>
         </div>
       </div>
@@ -62,7 +70,13 @@
     </div>
 
     <div style="margin-top:20px;color:#666;font-size:.95rem;">
-      <p>Showing public properties. For admin actions (sync, edit iCal), sign in to the admin dashboard.</p>
+      <p>
+        {% if session.get('lang','en') == 'en' %}
+          Showing public properties. For admin actions (sync, edit iCal), sign in to the admin dashboard.
+        {% else %}
+          แสดงรายการที่พักสาธารณะ หากต้องการจัดการ (ซิงค์ แก้ไข iCal) กรุณาเข้าสู่ระบบผู้ดูแล
+        {% endif %}
+      </p>
     </div>
   </div>
 </body>
