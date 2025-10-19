@@ -176,15 +176,20 @@
   let baseMonthOffset = 0;
   const MAX_OFFSET = 11; // allow navigation up to 12 months ahead (0..11)
 
-  function clearSelection(){
-    selStart = selEnd = null;
-    document.getElementById("start").value = "";
-    document.getElementById("end").value = "";
+  function clearSelection(options){
+  // options: { keepMsg: false } - if keepMsg true, don't hide the current message
+  options = options || {};
+  selStart = selEnd = null;
+  document.getElementById("start").value = "";
+  document.getElementById("end").value = "";
+  // only clear message if keepMsg is NOT true
+  if(!options.keepMsg){
     setMsg("");
-    renderCalendars();
-    document.getElementById("bookBtn").disabled = true;
-    updatePriceCalc();
   }
+  renderCalendars();
+  document.getElementById("bookBtn").disabled = true;
+  updatePriceCalc();
+ }
 
   function buildMonthForOffset(offset){
     const now = new Date();
@@ -362,59 +367,89 @@
   });
 
   document.getElementById("bookForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const startDate = document.getElementById("start").value;
-    const endDate   = document.getElementById("end").value;
-    const name      = document.getElementById("name").value.trim();
-    const email     = document.getElementById("email").value.trim();
+  e.preventDefault();
+  const startDate = document.getElementById("start").value;
+  const endDate   = document.getElementById("end").value;
+  const name      = document.getElementById("name").value.trim();
+  const email     = document.getElementById("email").value.trim();
 
-    if(!startDate || !endDate){ setMsg(STR_PLEASE_SELECT, false, 5000); return; }
-    if(endDate <= startDate){ setMsg(STR_CHECKOUT_AFTER, false, 5000); return; }
-    if(!name || !email){ setMsg(STR_FILL_FIELDS, false, 5000); return; }
+  if(!startDate || !endDate){ setMsg("❌ Please select dates from the calendar.", false, 6000); return; }
+  if(endDate <= startDate){ setMsg("❌ Check-out must be after check-in.", false, 6000); return; }
+  if(!name || !email){ setMsg("❌ Please enter your name and email.", false, 6000); return; }
 
-    const btn = document.getElementById("bookBtn");
-    const original = btn.textContent;
-    btn.disabled = true; btn.textContent = STR_BOOKING_PROCESSING; setMsg("", false);
+  const btn = document.getElementById("bookBtn");
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Processing…";
+  setMsg("", false); // clear previous messages
 
-    try{
-      if(STRIPE_PK){
-        const piRes = await fetch("/api/public/create_intent/" + groupSlug, {
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({ start_date: startDate, end_date: endDate })
-        });
-        const pi = await piRes.json();
-        if(!piRes.ok || !pi.ok){ throw new Error(pi.error || "Failed to create payment"); }
-        const {error, paymentIntent} = await stripe.confirmCardPayment(pi.client_secret, {
-          payment_method: { card, billing_details: { name, email } }
-        });
-        if(error) throw error;
-        if(paymentIntent.status !== "succeeded") throw new Error("Payment not completed");
-      }
-
-      const postUrl = groupSlug ? `/api/public/book_group/${groupSlug}` : (isUnit ? `/api/public/book/${unitId}` : "/api/public/book");
-
-      const res = await fetch(postUrl, {
+  try{
+    // If Stripe configured: create PaymentIntent on server & confirm card payment
+    if(STRIPE_PK){
+      const piRes = await fetch("/api/public/create_intent/" + groupSlug, {
         method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ start_date:startDate, end_date:endDate, name, email })
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ start_date: startDate, end_date: endDate })
       });
-      const j = await res.json();
-      if(res.ok && j.ok){
-        setMsg(STR_BOOKING_CONF, true, 6000);
-        clearSelection();
-        if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
-        return;
-      }else{
-        throw new Error(j.error || "Unknown error");
-      }
-    }catch(err){
-      setMsg("❌ " + (err.message || err), false, 6000);
-    }finally{
-      btn.disabled = false; btn.textContent = original;
-    }
-  });
 
+      // network/server error -> throw with message
+      if(!piRes.ok){
+        const pj = await piRes.json().catch(()=>({error:"PaymentIntent creation failed"}));
+        throw new Error(pj.error || "Failed to create payment");
+      }
+      const pi = await piRes.json();
+      if(!pi.ok || !pi.client_secret){ throw new Error(pi.error || "Failed to create payment"); }
+
+      // confirm card payment (Stripe)
+      const {error, paymentIntent} = await stripe.confirmCardPayment(pi.client_secret, {
+        payment_method: { card, billing_details: { name, email } }
+      });
+      if(error) throw error;
+      if(paymentIntent && paymentIntent.status !== "succeeded"){
+        throw new Error("Payment not completed");
+      }
+    }
+
+    // Block dates (group or unit)
+    const postUrl = groupSlug ? `/api/public/book_group/${groupSlug}` : (isUnit ? `/api/public/book/${unitId}` : "/api/public/book");
+    const res = await fetch(postUrl, {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ start_date:startDate, end_date:endDate, name, email })
+    });
+
+    const j = await res.json().catch(()=>({error:"Invalid response"}));
+    if(res.ok && j.ok){
+      // Show a clear success message and KEEP it visible for a bit
+      setMsg("✅ Booking confirmed — dates blocked. Thank you!", true, 8000);
+
+      // Refresh availability (update calendar colors)
+      if(groupSlug){
+        await loadAvailabilityViaSlug(groupSlug);
+      } else if(isUnit){
+        // for unit-level booking, try to reload the parent group if possible
+        try{
+          const grp = await fetch(`/api/admin/find_group?unit_id=${unitId}`).then(r=>r.json());
+          if(grp && grp.ok && grp.slug) await loadAvailabilityViaSlug(grp.slug);
+        }catch(_){}
+      }
+
+      // Clear the selection visually after short delay, but keep message visible
+      setTimeout(()=>{ clearSelection({keepMsg:true}); }, 1200);
+
+      // Finally, remove selection and then keep message visible for the message duration
+      // (message auto-hides because we passed persistMs into setMsg)
+    }else{
+      throw new Error(j.error || "Unknown error");
+    }
+  }catch(err){
+    // Show meaningful error; keep visible longer
+    setMsg("❌ " + (err.message || err), false, 8000);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+});
   // init
   initPage();
   </script>
