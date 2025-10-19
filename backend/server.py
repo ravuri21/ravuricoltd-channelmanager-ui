@@ -479,11 +479,26 @@ def logout():
 
 @app.route("/lang/<code>")
 def lang(code):
-    if "user" not in session:
-        return redirect(url_for("login"))
-    if code in ("en","th"):
-        session["lang"] = code
-    return redirect(url_for("index"))
+    """
+    Set the UI language in session and redirect back to referring page.
+    Avoid redirecting to admin index by returning to referer or to public index.
+    """
+    # only allow known codes
+    if code not in ("en", "th"):
+        return redirect(request.headers.get("Referer") or url_for("index"))
+
+    session["lang"] = code
+
+    # Prefer to redirect back to where user came from (so public pages stay public).
+    referer = request.headers.get("Referer")
+    if referer:
+        return redirect(referer)
+
+    # Fallbacks
+    # If user is logged-in, return to admin index; otherwise public properties page
+    if "user" in session:
+        return redirect(url_for("index"))
+    return redirect(url_for("properties_index"))
 
 @app.route("/health")
 def health():
