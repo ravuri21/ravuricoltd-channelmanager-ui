@@ -625,27 +625,45 @@ def properties_index():
     """
     Show grouped public properties (title, image, unit_ids, price).
     For each group we use the first unit's RatePlan (if present) as the default price.
+
+    This endpoint will **hide** any unit IDs listed in the environment variable
+    IGNORE_PUBLIC_UNIT_IDS (comma-separated), while leaving the admin DB and
+    grouped metadata unchanged.
     """
     meta = _load_meta()
     groups = meta.get("groups", {})
 
-    # enrich groups with price info
+    # parse ignore list from env (safe)
+    ignore_env = os.environ.get("IGNORE_PUBLIC_UNIT_IDS", "").strip()
+    ignore_set = set()
+    if ignore_env:
+        try:
+            ignore_set = set(int(x.strip()) for x in ignore_env.split(",") if x.strip())
+        except Exception:
+            # if parsing fails, keep ignore_set empty (fail-safe)
+            ignore_set = set()
+
+    # enrich groups with price info, but filter unit_ids for public output
     out = {}
     db = SessionLocal()
     try:
         for slug, info in groups.items():
             unit_ids = info.get("unit_ids", []) or []
+            # filter out ignored unit ids for public page only
+            public_unit_ids = [uid for uid in unit_ids if uid not in ignore_set]
+
             price = None
             currency = "THB"
-            if unit_ids:
-                rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
+            if public_unit_ids:
+                rp = db.query(RatePlan).filter(RatePlan.unit_id == public_unit_ids[0]).first()
                 if rp and rp.base_rate:
                     price = float(rp.base_rate)
                     currency = rp.currency or "THB"
+
             out[slug] = {
                 "title": info.get("title", slug),
                 "image_url": info.get("image_url") or "https://source.unsplash.com/featured/?pattaya,villa",
-                "unit_ids": unit_ids,
+                "unit_ids": public_unit_ids,
                 "price": price,
                 "currency": currency
             }
@@ -655,7 +673,7 @@ def properties_index():
     ctx = {"groups": out, "lang": session.get("lang", APP_LANG_DEFAULT)}
     ctx.update(_template_context_extra())
     return render_template("properties.html", **ctx)
-
+    
 # ====== Public property page ======
 @app.route("/prop/<slug>")
 def property_page(slug):
