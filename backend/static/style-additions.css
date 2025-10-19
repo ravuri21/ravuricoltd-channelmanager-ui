@@ -1,118 +1,40 @@
-/* style-additions.css  —  adds Ravuri red/black branding & layout polish */
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
-
-:root {
-  --brand-red: #e11d48;   /* Ravuri red */
-  --brand-dark: #111827;  /* deep black */
-  --muted: #6b7280;
-  --teal: #0ea5a4;
-  --blue: #2563eb;
-}
-
-/* -------- Brand Header -------- */
-.brand, .brand-compact, .brand-logo {
-  font-family: 'Inter', system-ui, sans-serif;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-}
-
-.brand-red { color: var(--brand-red); }
-.brand-dark { color: var(--brand-dark); }
+/* style-additions.css - paste into backend/static/ or your static folder */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;800&display=swap');
 
 .brand-logo {
+  font-family: "Poppins", system-ui, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 1.18rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   text-decoration: none;
-  font-size: 1.4rem;
-}
-.brand-logo:hover .brand-red { color: #be123c; }
-
-/* Stripe badge & muted text */
-.stripe-badge {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 0.82rem;
-  color: #0b5cff;
+  line-height: 1;
 }
 
-/* -------- Trust cards -------- */
-.trust-row { display:flex; gap:10px; flex-wrap:wrap; margin:14px 0; }
-.trust-card {
-  background:#fff;
-  border:1px solid #f1f5f9;
-  border-radius:8px;
-  padding:12px;
-  min-width:180px;
-  box-shadow:0 6px 16px rgba(0,0,0,0.03);
-}
-.trust-card div:first-child { font-weight:700; margin-bottom:6px; }
-.trust-card .muted { color:var(--muted); }
-
-/* -------- Cards grid (public properties) -------- */
-.grid { 
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
-  gap:16px;
-  margin-top:14px;
-}
-.card {
-  background:#fff;
-  border-radius:12px;
-  overflow:hidden;
-  box-shadow:0 6px 18px rgba(0,0,0,0.06);
-  display:flex;
-  flex-direction:column;
-  transition:transform .12s, box-shadow .12s;
-}
-.card:hover {
-  transform:translateY(-6px);
-  box-shadow:0 12px 28px rgba(0,0,0,0.12);
-}
-.card img {
-  width:100%;
-  height:180px;
-  object-fit:cover;
-}
-.pad { padding:14px; flex:1; display:flex; flex-direction:column; justify-content:space-between; }
-.title { font-weight:800; color:var(--brand-dark); margin-bottom:6px; }
-.price { font-weight:800; font-size:1.05rem; margin-bottom:8px; }
-.meta { color:var(--muted); font-size:0.9rem; margin-bottom:6px; }
-
-.btn {
-  display:inline-block;
-  text-decoration:none;
-  font-weight:700;
-  border-radius:10px;
-  padding:10px;
-  text-align:center;
-}
-.btn.view { background:var(--teal); color:#fff; }
-.btn.book { background:var(--blue); color:#fff; }
-.btn.view:hover { background:#0d9488; }
-.btn.book:hover { background:#1d4ed8; }
-
-/* -------- Room page & booking -------- */
-.stripe-inline {
-  background:#f8fafc;
-  border:1px solid #e2e8f0;
-  color:#0b5cff;
-  padding:6px 8px;
-  border-radius:6px;
-  font-size:.9rem;
+.brand-logo .ravuri {
+  color: #d32f2f; /* Ravuri red */
+  font-weight: 800;
+  letter-spacing: 0.2px;
 }
 
-/* -------- Footer -------- */
-.page-footer {
-  margin-top:20px;
-  text-align:center;
-  font-size:0.9rem;
-  color:var(--muted);
-  padding-bottom:24px;
+.brand-logo .properties {
+  color: #111;
+  font-weight: 600;
 }
 
-/* -------- Responsive tweaks -------- */
+/* optional small accent under the logo */
+.brand-subtle {
+  display:block;
+  font-size:0.8rem;
+  color:#6b7280;
+  margin-top:2px;
+  font-weight:400;
+}
+
+/* make sure the existing topline layout keeps spacing */
+.topline .brand-wrap { display:flex; flex-direction:column; gap:2px; }
 @media (max-width:720px){
-  .grid { grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); }
-  .trust-card { min-width:140px; }
+  .brand-logo { font-size:1.0rem; }
+  .brand-subtle { font-size:0.75rem; }
 }
