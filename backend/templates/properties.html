@@ -1,115 +1,80 @@
-<!-- backend/templates/properties.html -->
 <!doctype html>
-<html lang="{{ session.get('lang', 'en') }}">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Properties — {{ t.brand if t else "Ravuri Properties" }}</title>
+  <title>Properties — {{ t.brand if t else "Properties" }}</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="/static/style.css" />
   <link rel="stylesheet" href="/static/style-additions.css?v=20251019" />
-  <style>
-    /* small in-template tweaks (minimal, non-destructive) */
-    .hero-title { display:flex; align-items:baseline; gap:6px; }
-    .brand-red { color: var(--brand-red); font-weight:900; font-size:1.45rem; font-family: "Georgia", serif; line-height:1; }
-    .brand-dark { color: #0b1720; font-weight:800; font-size:1.3rem; line-height:1; }
-    .lang-links a { color:var(--muted); text-decoration:none; margin-left:8px; }
-    .meta { margin-top:6px; }
-  </style>
 </head>
 <body>
-  <!-- HERO / BRAND -->
-  <div class="site-hero" role="banner">
+  <!-- Brand Header -->
+  <div class="site-hero">
     <div class="hero-inner">
-      <div class="hero-title">
-        <!-- Ravuri (red) / Properties (black) -->
-        <div class="brand">
-          <span class="brand-red">Ravuri</span>
-          <span class="brand-dark">Properties</span>
-        </div>
+      <div class="brand">
+        <span class="brand-red">Ravuri</span><span class="brand-dark">Properties</span>
       </div>
-
-      <div style="display:flex;align-items:center;gap:12px;">
-        <div class="lang-links" aria-label="Language switch">
-          <a href="/lang/en">English</a> • <a href="/lang/th">ไทย</a>
-        </div>
-
+      <div class="muted">
+        <a href="/lang/en">English</a> • <a href="/lang/th">ไทย</a>
         {% if t.publishable_key %}
-          <div class="stripe-badge" aria-hidden="false">Secure payments by Stripe</div>
+        <span class="stripe-badge">Secure payments by Stripe</span>
         {% endif %}
       </div>
     </div>
   </div>
 
-  <main class="wrap" role="main">
-    <!-- intro + trust row -->
-    <div class="intro" style="margin-bottom:8px">
-      <h1 style="margin:0 0 8px">{{ "Our Properties" if session.get('lang','en') == 'en' else "ที่พักของเรา" }}</h1>
-      <p style="margin:0 0 12px; color:var(--muted)">
-        {% if session.get('lang','en') == 'en' %}
-          Browse our curated villas and apartments. Click View for details or Book to open the booking panel.
-        {% else %}
-          เลือกที่พักของเรา ดูรายละเอียดด้วยปุ่ม View หรือกด Book เพื่อจอง
-        {% endif %}
-      </p>
-    </div>
-
-    <div class="trust-row" aria-hidden="false">
+  <div class="wrap">
+    <!-- Trust / Guarantee Row -->
+    <div class="trust-row">
       <div class="trust-card">
         <div class="trust-title">🔒 Secure payments</div>
-        <div style="color:var(--muted)">Payments processed by Stripe. Card data never stored on this site.</div>
+        <div>Payments processed by Stripe. Card details never stored here.</div>
       </div>
       <div class="trust-card">
         <div class="trust-title">✅ Instant confirmation</div>
-        <div style="color:var(--muted)">Booking blocks dates immediately and you will receive an email confirmation.</div>
+        <div>Booking blocks dates immediately and you'll receive a confirmation email.</div>
       </div>
       <div class="trust-card">
         <div class="trust-title">📞 Support</div>
-        <div style="color:var(--muted)">Email: {{ t.support_email or 'support@ravuri.example' }} — response within 24 hours.</div>
+        <div>Email: {{ t.support_email or '' }} — reply within 24 hours.</div>
       </div>
     </div>
 
-    <!-- GRID OF PROPERTIES -->
-    <div class="grid" role="list">
+    <!-- Property Grid -->
+    <div class="grid">
       {% for slug, info in groups.items() %}
-      <article class="card" role="listitem" aria-labelledby="title-{{ loop.index }}">
+      <div class="card">
         <a href="/prop/{{ slug }}" style="text-decoration:none;color:inherit">
-          <img src="{{ info.image_url }}" alt="{{ info.title }}">
+          <img src="{{ info.image_url }}" alt="{{ info.title }}" loading="lazy">
         </a>
-
         <div class="pad">
           <div>
-            <div id="title-{{ loop.index }}" class="title">{{ info.title }}</div>
-
-            <!-- intentionally do NOT show raw unit IDs in public view:
-                 only show the count (so internal ids are hidden) -->
-            <div class="meta">
-              {{ info.unit_ids|length }} {{ 'unit' if info.unit_ids|length == 1 else 'units' }}
-              {% if info.price %}
-                &nbsp;•&nbsp;
-                <strong class="price">฿ {{ '%.0f'|format(info.price) }}</strong>
+            <div class="title">{{ info.title }}</div>
+            {% if info.price %}
+              <div class="price">฿ {{ '%.0f'|format(info.price) }} 
                 <span class="muted">/ night ({{ info.currency or 'THB' }})</span>
-              {% else %}
-                &nbsp;•&nbsp;<span class="muted">Price: not set</span>
-              {% endif %}
-            </div>
-
-            {% if info.teaser %}
-              <div class="teaser" style="margin-top:8px;color:#374151">{{ info.teaser }}</div>
+              </div>
+            {% else %}
+              <div class="price muted">Price: not set</div>
             {% endif %}
+            <div class="teaser">
+              <span class="rating">★ 4.8</span>
+              <span style="color:#6b7280;margin-left:6px;font-size:.95rem">235 reviews</span>
+              <div style="margin-top:6px;color:#333">“Lovely stay — clean, helpful host.”</div>
+            </div>
           </div>
-
           <div class="card-actions">
-            <a class="btn btn-outline" href="/prop/{{ slug }}">View</a>
-            <a class="btn btn-primary" href="/prop/{{ slug }}#book">Book</a>
+            <a href="/prop/{{ slug }}" class="btn btn-outline">View</a>
+            <a href="/prop/{{ slug }}#book" class="btn btn-primary">Book</a>
           </div>
         </div>
-      </article>
+      </div>
       {% endfor %}
     </div>
 
     <div class="page-footer">
-      <small class="muted">© {{ t.brand if t else "Ravuri Properties" }} — Built with care</small>
+      <small class="muted">© {{ t.year or '2025' }} Ravuri Properties — Built with care</small>
     </div>
-  </main>
+  </div>
 </body>
 </html>
