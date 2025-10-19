@@ -35,17 +35,19 @@
     .d-bad{background:var(--bad);border:1px solid var(--badb)}
     .d-sel{background:var(--sel);border:1px solid var(--selb)}
 
+    /* Buttons small */
+    .btn { padding:8px 10px; border-radius:8px; border:none; background:var(--blue); color:#fff; cursor:pointer; font-weight:600; }
+    .btn.secondary { background:#6b7280; }
+    .btn.small { padding:6px 8px; font-size:.9rem; }
+
     /* Form */
     label { display:block; font-size:.9rem; margin:10px 0 4px; color:#333; }
     input, button { width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; font-size:1rem; }
     input[readonly]{ background:#f9fafb }
     input:focus { outline:none; border-color: var(--blue); }
     .actions { display:flex; gap:10px; align-items:center; margin-top:10px; }
-    button { background:var(--blue); color:#fff; border:none; font-weight:600; cursor:pointer; }
-    button:hover { background:var(--blue-d); }
-    button.secondary { background:#6b7280; }
     button[disabled] { opacity:.65; cursor:not-allowed; }
-    .msg { margin-top:10px; padding:12px; border-radius:10px; font-size:1.05rem; display:none; transition:opacity .25s; }
+    .msg { margin-top:10px; padding:12px; border-radius:10px; font-size:1.05rem; display:none; transition:opacity .25s; text-align:center; }
     .ok { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-weight:700; font-size:1.05rem; padding:14px; }
     .err { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; font-weight:700; font-size:1.05rem; padding:14px; }
     .footer { text-align:center; font-size:.8rem; color:#777; margin:16px 0 10px; }
@@ -62,46 +64,47 @@
       <div>
         <h1>{{ title }}</h1>
         {% if price %}
-          <div class="price">฿ {{ '%.0f'|format(price) }} <span class="muted">/ night {{ currency or 'THB' }}</span></div>
+          <div class="price">฿ {{ '%.0f'|format(price) }} <span class="muted">{{ _tr('price_per_night') }} {{ currency or 'THB' }}</span></div>
         {% endif %}
-          <div style="margin-top:8px;">
+        <div style="margin-top:8px;">
           <img src="https://stripe.com/img/v3/home/twitter.png" alt="Stripe" style="height:20px; display:inline-block; vertical-align:middle; margin-right:8px;">
           <span style="font-size:0.9rem;color:#666;">Payments powered by Stripe</span>
         </div>
-        <p class="muted">Tap the calendar to choose check-in and check-out. <b>Red</b> = booked, <b>Green</b> = available.</p>
+
+        <p class="muted">{{ _tr('tap_calendar')|safe }}</p>
 
         <div class="panel">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-    <div style="font-weight:600">Availability (click green days to select)</div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button id="prevMonth" class="btn secondary small" type="button">← Prev</button>
-      <button id="nextMonth" class="btn small" type="button">Next →</button>
-    </div>
-  </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div style="font-weight:600">{{ _tr('availability_title') }}</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button id="prevMonth" class="btn secondary small" type="button" title="{{ _tr('view_button') }}">←</button>
+              <button id="nextMonth" class="btn small" type="button" title="{{ _tr('view_button') }}">→</button>
+            </div>
+          </div>
 
-  <div id="calwrap" class="calwrap"></div>
-  <div class="legend">
-    <span class="dot d-ok"></span> Available
-    <span class="dot d-bad"></span> Booked
-    <span class="dot d-sel"></span> Selected
-  </div>
+          <div id="calwrap" class="calwrap"></div>
+          <div class="legend">
+            <span class="dot d-ok"></span> {{ _tr('view_public') }}: <span style="margin-right:10px;color:#065f46">Available</span>
+            <span class="dot d-bad"></span> <span style="margin-right:10px;color:#b91c1c">Booked</span>
+            <span class="dot d-sel"></span> Selected
+          </div>
+        </div>
 
-</div>
         <div class="footer">Powered by RavuriCo Ltd</div>
       </div>
 
       <div>
         <form id="bookForm" class="panel" novalidate>
-          <label>Check-in</label>
+          <label>{{ 'Check-in' }}</label>
           <input id="start" type="date" required>
-          <label>Check-out</label>
+          <label>{{ 'Check-out' }}</label>
           <input id="end" type="date" required>
-          <label>Your Name</label>
+          <label>{{ 'Your Name' }}</label>
           <input id="name" type="text" placeholder="Full name" required>
-          <label>Your Email</label>
+          <label>{{ 'Your Email' }}</label>
           <input id="email" type="email" placeholder="Email address" required>
 
-          <div id="cardWrap" style="display:none;">
+          <div id="cardWrap" style="display:none;margin-top:8px;">
             <label>Card</label>
             <div id="card-element" style="padding:10px;border:1px solid #ddd;border-radius:8px;"></div>
           </div>
@@ -109,8 +112,8 @@
           <div id="priceCalc" style="margin-top:10px;font-weight:700;"></div>
 
           <div class="actions">
-            <button id="bookBtn" type="submit" disabled>Book & Pay</button>
-            <button type="button" class="secondary" onclick="clearSelection()">Clear</button>
+            <button id="bookBtn" type="submit" disabled>{{ _tr('book_button') }}</button>
+            <button id="clearBtn" type="button" class="secondary">{{ _tr('clear_button') }}</button>
           </div>
           <div id="msg" class="msg"></div>
         </form>
@@ -119,7 +122,7 @@
   </div>
 
   <script>
-  // --------- Context ----------
+  // --------- Context & localized JS strings ----------
   const path = location.pathname;
   const isGroup = path.startsWith("/prop/");
   const isUnit  = path.startsWith("/r/");
@@ -131,6 +134,14 @@
 
   const STRIPE_PK = "{{ publishable_key or '' }}".trim();
   let stripe, card;
+
+  // Localized JS strings injected safely
+  const STR_BOOKING_CONF = {{ _tr('booking_confirmed')|tojson }};
+  const STR_BOOKING_PROCESSING = {{ _tr('booking_processing')|tojson }};
+  const STR_BOOKING_FAILED = {{ _tr('booking_failed')|tojson }};
+  const STR_PLEASE_SELECT = {{ ("Please select dates from the calendar.")|tojson }};
+  const STR_CHECKOUT_AFTER = {{ ("Check-out must be after check-in.")|tojson }};
+  const STR_FILL_FIELDS = {{ ("Please enter your name and email.")|tojson }};
 
   function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}` }
   function addDays(dt, n){ const d=new Date(dt); d.setDate(d.getDate()+n); return d; }
@@ -157,12 +168,13 @@
     }
   }
 
+  // Calendar / booking state
   let blocked = new Set();
   let monthsToShow = 2;
   let selStart = null;
   let selEnd   = null;
-  // track current base month index for navigation (0 = this month)
   let baseMonthOffset = 0;
+  const MAX_OFFSET = 11; // allow navigation up to 12 months ahead (0..11)
 
   function clearSelection(){
     selStart = selEnd = null;
@@ -227,6 +239,9 @@
       const offset = baseMonthOffset + m;
       holder.appendChild(buildMonthForOffset(offset));
     }
+    // update prev button disabled state
+    document.getElementById("prevMonth").disabled = baseMonthOffset <= 0;
+    document.getElementById("nextMonth").disabled = baseMonthOffset >= MAX_OFFSET;
   }
 
   function isAllAvailable(startStr, endStr){
@@ -299,20 +314,22 @@
 
   async function initPage(){
     if(STRIPE_PK){
-      stripe = Stripe(STRIPE_PK);
-      const elements = stripe.elements();
-      card = elements.create('card');
-      card.mount('#card-element');
-      document.getElementById("cardWrap").style.display = "block";
+      try{
+        stripe = Stripe(STRIPE_PK);
+        const elements = stripe.elements();
+        card = elements.create('card');
+        card.mount('#card-element');
+        document.getElementById("cardWrap").style.display = "block";
+      }catch(e){
+        console.warn("Stripe init failed:", e);
+      }
     }
 
-    // default to showing 2 columns but allow user to increase months easily:
+    // default months to show (columns)
     monthsToShow = 2;
 
-    // For /prop/<slug>, slug already known
     if(isGroup){ await loadAvailabilityViaSlug(groupSlug); return; }
 
-    // For /r/<id>, find its group, then use group availability + group booking
     if(isUnit){
       try{
         const r = await fetch(`/api/admin/find_group?unit_id=${unitId}`);
@@ -329,15 +346,19 @@
     }
   }
 
-  // Calendar navigation handlers (Prev / Next)
+  // Calendar navigation handlers
   document.getElementById("prevMonth").addEventListener("click", ()=>{
     baseMonthOffset = Math.max(baseMonthOffset - 1, 0);
     renderCalendars();
   });
   document.getElementById("nextMonth").addEventListener("click", ()=>{
-    baseMonthOffset = baseMonthOffset + 1;
-    // allow unlimited forward navigation — user can move forward up to 12 months visually by clicking repeatedly
+    baseMonthOffset = Math.min(baseMonthOffset + 1, MAX_OFFSET);
     renderCalendars();
+  });
+
+  // Clear button handler
+  document.getElementById("clearBtn").addEventListener("click", ()=>{
+    clearSelection();
   });
 
   document.getElementById("bookForm").addEventListener("submit", async (e) => {
@@ -347,13 +368,13 @@
     const name      = document.getElementById("name").value.trim();
     const email     = document.getElementById("email").value.trim();
 
-    if(!startDate || !endDate){ setMsg("❌ Please select dates from the calendar.", false, 5000); return; }
-    if(endDate <= startDate){ setMsg("❌ Check-out must be after check-in.", false, 5000); return; }
-    if(!name || !email){ setMsg("❌ Please enter your name and email.", false, 5000); return; }
+    if(!startDate || !endDate){ setMsg(STR_PLEASE_SELECT, false, 5000); return; }
+    if(endDate <= startDate){ setMsg(STR_CHECKOUT_AFTER, false, 5000); return; }
+    if(!name || !email){ setMsg(STR_FILL_FIELDS, false, 5000); return; }
 
     const btn = document.getElementById("bookBtn");
     const original = btn.textContent;
-    btn.disabled = true; btn.textContent = "Processing…"; setMsg("", false);
+    btn.disabled = true; btn.textContent = STR_BOOKING_PROCESSING; setMsg("", false);
 
     try{
       if(STRIPE_PK){
@@ -380,10 +401,10 @@
       });
       const j = await res.json();
       if(res.ok && j.ok){
-        // show larger confirmation and persist for 6 seconds
-        setMsg("✅ Booking confirmed — dates blocked. Thank you!", true, 6000);
+        setMsg(STR_BOOKING_CONF, true, 6000);
         clearSelection();
         if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
+        return;
       }else{
         throw new Error(j.error || "Unknown error");
       }
