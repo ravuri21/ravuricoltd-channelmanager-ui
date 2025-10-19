@@ -1,66 +1,73 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ session.get('lang','en') }}">
 <head>
   <meta charset="utf-8" />
-  <title>Properties — {{ t.brand if t else "Properties" }}</title>
+  <title>Properties — {{ t.brand if t else "Ravuri Properties" }}</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <!-- Main app styles -->
   <link rel="stylesheet" href="/static/style.css" />
-  <link rel="stylesheet" href="/static/style-additions.css?v=20251019" />
-  <!-- Inline theme override: paste after your link rel CSS tags -->
-<style>
-/* Inline theme override (temporary, high-specificity rules) */
-:root{ --brand-red:#e11d48; --brand-dark:#111827; --card-radius:12px; --muted:#6b7280; --primary:#2563eb; --teal:#0ea5a4; }
-.site-hero{ background:linear-gradient(180deg,#ffffff,#f9fafb); border-bottom:1px solid #eee; padding:20px 0; }
-.hero-inner{ max-width:1100px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; padding:0 12px; }
-.brand{ font-weight:800; font-size:1.4rem; letter-spacing:-0.5px; }
-.brand-red{ color:var(--brand-red); font-family:"Helvetica Neue",system-ui,Arial,sans-serif; }
-.brand-dark{ color:var(--brand-dark); margin-left:4px; }
-.wrap{ max-width:1100px; margin:18px auto; padding:20px; box-sizing:border-box; }
-.trust-row{ display:flex; gap:10px; margin:12px 0 18px; flex-wrap:wrap; }
-.trust-card{ background:#fff; border:1px solid #f1f5f9; padding:10px 12px; border-radius:8px; min-width:180px; box-shadow:0 6px 16px rgba(15,23,42,0.03); }
-.trust-title{ font-weight:700; margin-bottom:6px; }
-.grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; margin-top:14px; }
-.card{ background:#fff; border-radius:var(--card-radius); overflow:hidden; box-shadow:0 6px 20px rgba(2,6,23,0.06); display:flex; flex-direction:column; transition:transform .12s ease, box-shadow .12s ease; }
-.card:hover{ transform:translateY(-6px); box-shadow:0 18px 40px rgba(2,6,23,0.08); }
-.card img{ width:100%; height:180px; object-fit:cover; display:block; }
-.pad{ padding:14px; display:flex; flex-direction:column; justify-content:space-between; flex:1; }
-.title{ font-weight:800; font-size:1.05rem; margin-bottom:6px; color:var(--brand-dark); }
-.meta{ color:var(--muted); font-size:.95rem; margin-bottom:8px; }
-.price{ font-size:1.05rem; font-weight:800; color:var(--brand-dark); margin-bottom:6px; }
-.card-actions{ display:flex; gap:8px; margin-top:10px; }
-.btn{ display:inline-block; padding:10px 12px; border-radius:10px; font-weight:700; text-decoration:none; color:#fff; background:var(--primary); text-align:center; }
-.btn.btn-outline{ background:transparent; color:var(--teal); border:1px solid #dbeafe; }
-.btn.btn-primary{ background:var(--primary); }
-.page-footer{ margin-top:18px; text-align:center; color:var(--muted); font-size:.9rem; padding-bottom:24px; }
-@media (max-width:720px){ .hero-inner{ flex-direction:column; gap:12px; align-items:flex-start; } .trust-card{ min-width:140px; } }
-</style>
+  <!-- Theme additions (cache-busted) -->
+  <link rel="stylesheet" href="/static/style-additions.css?v=20251020" />
+
+  <!-- Inline overrides (keeps things robust even if external CSS caches) -->
+  <style>
+  :root{ --brand-red:#e11d48; --brand-dark:#111827; --card-radius:12px; --muted:#6b7280; --primary:#2563eb; --teal:#0ea5a4; }
+  .site-hero{ background:linear-gradient(180deg,#ffffff,#f9fafb); border-bottom:1px solid #eee; padding:18px 0; }
+  .hero-inner{ max-width:1100px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; padding:0 12px; gap:12px; }
+  .brand{ font-weight:800; font-size:1.35rem; letter-spacing:-0.5px; display:flex; align-items:center; gap:6px; }
+  .brand-red{ color:var(--brand-red); font-family:"Helvetica Neue",system-ui,Arial,sans-serif; }
+  .brand-dark{ color:var(--brand-dark); }
+  .wrap{ max-width:1100px; margin:18px auto; padding:20px; box-sizing:border-box; }
+  .trust-row{ display:flex; gap:10px; margin:12px 0 18px; flex-wrap:wrap; }
+  .trust-card{ background:#fff; border:1px solid #f1f5f9; padding:10px 12px; border-radius:8px; min-width:160px; box-shadow:0 6px 16px rgba(15,23,42,0.03); }
+  .trust-title{ font-weight:700; margin-bottom:6px; }
+  .grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; margin-top:14px; }
+  .card{ background:#fff; border-radius:var(--card-radius); overflow:hidden; box-shadow:0 6px 20px rgba(2,6,23,0.06); display:flex; flex-direction:column; transition:transform .12s ease,box-shadow .12s ease; }
+  .card:hover{ transform:translateY(-6px); box-shadow:0 18px 40px rgba(2,6,23,0.08); }
+  .card img{ width:100%; height:180px; object-fit:cover; display:block; }
+  .pad{ padding:14px; display:flex; flex-direction:column; justify-content:space-between; flex:1; }
+  .title{ font-weight:800; font-size:1.05rem; margin-bottom:6px; color:var(--brand-dark); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .meta{ color:var(--muted); font-size:.95rem; margin-bottom:8px; }
+  .price{ font-size:1.05rem; font-weight:800; color:var(--brand-dark); margin-bottom:6px; }
+  .card-actions{ display:flex; gap:8px; margin-top:10px; }
+  .btn{ display:inline-block; padding:10px 12px; border-radius:10px; font-weight:700; text-decoration:none; color:#fff; background:var(--primary); text-align:center; }
+  .btn.btn-outline{ background:transparent; color:var(--teal); border:1px solid #dbeafe; }
+  .btn.btn-primary{ background:var(--primary); }
+  .page-footer{ margin-top:18px; text-align:center; color:var(--muted); font-size:.9rem; padding-bottom:24px; }
+  .stripe-badge{display:inline-block;background:#f8fafc;border-radius:8px;padding:6px 8px;font-size:.82rem;color:#0b5cff;margin-left:8px;border:1px solid #e6eefc}
+  @media (max-width:720px){ .hero-inner{ flex-direction:column; align-items:flex-start; gap:8px; } .trust-card{ min-width:140px; } }
+  </style>
 </head>
 <body>
   <!-- Brand Header -->
-  <div class="site-hero">
+  <div class="site-hero" role="banner">
     <div class="hero-inner">
-      <div class="brand">
+      <div class="brand" aria-label="Ravuri Properties">
         <span class="brand-red">Ravuri</span><span class="brand-dark">Properties</span>
       </div>
-      <div class="muted">
-        <a href="/lang/en">English</a> • <a href="/lang/th">ไทย</a>
+
+      <div style="display:flex;gap:10px;align-items:center">
+        <nav style="font-size:.95rem;color:var(--muted)">
+          <a href="/lang/en">English</a> • <a href="/lang/th">ไทย</a>
+        </nav>
         {% if t.publishable_key %}
-        <span class="stripe-badge">Secure payments by Stripe</span>
+        <span class="stripe-badge" aria-hidden="true">Secure payments by Stripe</span>
         {% endif %}
       </div>
     </div>
   </div>
 
   <div class="wrap">
-    <!-- Trust / Guarantee Row -->
-    <div class="trust-row">
+    <!-- Trust / Guarantees -->
+    <div class="trust-row" aria-hidden="false">
       <div class="trust-card">
         <div class="trust-title">🔒 Secure payments</div>
-        <div>Payments processed by Stripe. Card details never stored here.</div>
+        <div>Payments processed by Stripe — card details never stored here.</div>
       </div>
       <div class="trust-card">
         <div class="trust-title">✅ Instant confirmation</div>
-        <div>Booking blocks dates immediately and you'll receive a confirmation email.</div>
+        <div>Bookings block dates immediately and you'll receive a confirmation email.</div>
       </div>
       <div class="trust-card">
         <div class="trust-title">📞 Support</div>
@@ -69,34 +76,42 @@
     </div>
 
     <!-- Property Grid -->
-    <div class="grid">
+    <div class="grid" role="list">
       {% for slug, info in groups.items() %}
-      <div class="card">
+      <article class="card" role="listitem" aria-labelledby="title-{{ loop.index }}">
         <a href="/prop/{{ slug }}" style="text-decoration:none;color:inherit">
-          <img src="{{ info.image_url }}" alt="{{ info.title }}" loading="lazy">
+          <img src="{{ info.image_url }}" alt="{{ info.title }}">
         </a>
+
         <div class="pad">
           <div>
-            <div class="title">{{ info.title }}</div>
+            <div id="title-{{ loop.index }}" class="title">{{ info.title }}</div>
+
+            <!-- HIDE internal unit IDs on public page -->
+            <div class="meta">Units: {{ info.unit_ids|length }}</div>
+
             {% if info.price %}
-              <div class="price">฿ {{ '%.0f'|format(info.price) }} 
-                <span class="muted">/ night ({{ info.currency or 'THB' }})</span>
+              <div class="price">฿ {{ '%.0f'|format(info.price) }}
+                <span class="meta">/ night ({{ info.currency or 'THB' }})</span>
               </div>
             {% else %}
-              <div class="price muted">Price: not set</div>
+              <div class="price meta">Price: not set</div>
             {% endif %}
-            <div class="teaser">
-              <span class="rating">★ 4.8</span>
-              <span style="color:#6b7280;margin-left:6px;font-size:.95rem">235 reviews</span>
+
+            <!-- optional teaser / rating -->
+            <div style="margin-top:8px;color:#374151">
+              <strong style="color:#b45309">★ 4.8</strong>
+              <span style="color:var(--muted);margin-left:8px;font-size:.95rem">235 reviews</span>
               <div style="margin-top:6px;color:#333">“Lovely stay — clean, helpful host.”</div>
             </div>
           </div>
+
           <div class="card-actions">
-            <a href="/prop/{{ slug }}" class="btn btn-outline">View</a>
-            <a href="/prop/{{ slug }}#book" class="btn btn-primary">Book</a>
+            <a class="btn btn-outline" href="/prop/{{ slug }}">View</a>
+            <a class="btn btn-primary" href="/prop/{{ slug }}#book">Book</a>
           </div>
         </div>
-      </div>
+      </article>
       {% endfor %}
     </div>
 
