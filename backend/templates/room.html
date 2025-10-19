@@ -35,22 +35,22 @@
     .d-bad{background:var(--bad);border:1px solid var(--badb)}
     .d-sel{background:var(--sel);border:1px solid var(--selb)}
 
-    /* Buttons small */
-    .btn { padding:8px 10px; border-radius:8px; border:none; background:var(--blue); color:#fff; cursor:pointer; font-weight:600; }
-    .btn.secondary { background:#6b7280; }
-    .btn.small { padding:6px 8px; font-size:.9rem; }
-
     /* Form */
     label { display:block; font-size:.9rem; margin:10px 0 4px; color:#333; }
     input, button { width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; font-size:1rem; }
     input[readonly]{ background:#f9fafb }
     input:focus { outline:none; border-color: var(--blue); }
     .actions { display:flex; gap:10px; align-items:center; margin-top:10px; }
+    button { background:var(--blue); color:#fff; border:none; font-weight:600; cursor:pointer; }
+    button:hover { background:var(--blue-d); }
+    button.secondary { background:#6b7280; }
     button[disabled] { opacity:.65; cursor:not-allowed; }
-    .msg { margin-top:10px; padding:12px; border-radius:10px; font-size:1.05rem; display:none; transition:opacity .25s; text-align:center; }
+    .msg { margin-top:10px; padding:12px; border-radius:10px; font-size:1.05rem; display:none; transition:opacity .25s; }
     .ok { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-weight:700; font-size:1.05rem; padding:14px; }
     .err { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; font-weight:700; font-size:1.05rem; padding:14px; }
     .footer { text-align:center; font-size:.8rem; color:#777; margin:16px 0 10px; }
+    .langlinks { margin-left:10px; }
+    .langlinks a { margin-left:8px;color:#0b5cff;text-decoration:none;font-weight:600 }
   </style>
   <script src="https://js.stripe.com/v3/"></script>
 </head>
@@ -64,56 +64,71 @@
       <div>
         <h1>{{ title }}</h1>
         {% if price %}
-          <div class="price">฿ {{ '%.0f'|format(price) }} <span class="muted">{{ _tr('price_per_night') }} {{ currency or 'THB' }}</span></div>
+          <div class="price">฿ {{ '%.0f'|format(price) }} <span class="muted">/ night {{ currency or 'THB' }}</span></div>
         {% endif %}
         <div style="margin-top:8px;">
           <img src="https://stripe.com/img/v3/home/twitter.png" alt="Stripe" style="height:20px; display:inline-block; vertical-align:middle; margin-right:8px;">
           <span style="font-size:0.9rem;color:#666;">Payments powered by Stripe</span>
+          <span class="langlinks">
+            <a href="/lang/en">English</a> • <a href="/lang/th">ไทย</a>
+          </span>
         </div>
 
-        <p class="muted">{{ _tr('tap_calendar')|safe }}</p>
+        <p class="muted">
+          {% if session.get('lang','en') == 'th' %}
+            แตะปฏิทินเพื่อเลือกวันเช็คอินและเช็คเอาต์ สีแดง = ถูกจองแล้ว สีเขียว = ว่าง
+          {% else %}
+            Tap the calendar to choose check-in and check-out. <b>Red</b> = booked, <b>Green</b> = available.
+          {% endif %}
+        </p>
 
         <div class="panel">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <div style="font-weight:600">{{ _tr('availability_title') }}</div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <button id="prevMonth" class="btn secondary small" type="button" title="{{ _tr('view_button') }}">←</button>
-              <button id="nextMonth" class="btn small" type="button" title="{{ _tr('view_button') }}">→</button>
-            </div>
-          </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <div style="font-weight:600">
+      {% if session.get('lang','en') == 'th' %}ความพร้อมใช้งาน (คลิกวันที่สีเขียวเพื่อเลือก){% else %}Availability (click green days to select){% endif %}
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="prevMonth" class="btn secondary small" type="button">← {% if session.get('lang','en')=='th' %}ก่อนหน้า{% else %}Prev{% endif %}</button>
+      <button id="nextMonth" class="btn small" type="button">{% if session.get('lang','en')=='th' %}ถัดไป{% else %}Next{% endif %} →</button>
+    </div>
+  </div>
 
-          <div id="calwrap" class="calwrap"></div>
-          <div class="legend">
-            <span class="dot d-ok"></span> {{ _tr('view_public') }}: <span style="margin-right:10px;color:#065f46">Available</span>
-            <span class="dot d-bad"></span> <span style="margin-right:10px;color:#b91c1c">Booked</span>
-            <span class="dot d-sel"></span> Selected
-          </div>
-        </div>
+  <div id="calwrap" class="calwrap"></div>
+  <div class="legend">
+    <span class="dot d-ok"></span> {% if session.get('lang','en')=='th' %}ว่าง{% else %}Available{% endif %}
+    <span class="dot d-bad" style="margin-left:12px"></span> {% if session.get('lang','en')=='th' %}จองแล้ว{% else %}Booked{% endif %}
+    <span class="dot d-sel" style="margin-left:12px"></span> {% if session.get('lang','en')=='th' %}เลือกแล้ว{% else %}Selected{% endif %}
+  </div>
 
+</div>
         <div class="footer">Powered by RavuriCo Ltd</div>
       </div>
 
       <div>
         <form id="bookForm" class="panel" novalidate>
-          <label>{{ 'Check-in' }}</label>
+          <label>{% if session.get('lang','en')=='th' %}เช็คอิน{% else %}Check-in{% endif %}</label>
           <input id="start" type="date" required>
-          <label>{{ 'Check-out' }}</label>
+          <label>{% if session.get('lang','en')=='th' %}เช็คเอาต์{% else %}Check-out{% endif %}</label>
           <input id="end" type="date" required>
-          <label>{{ 'Your Name' }}</label>
-          <input id="name" type="text" placeholder="Full name" required>
-          <label>{{ 'Your Email' }}</label>
+          <label>{% if session.get('lang','en')=='th' %}ชื่อของคุณ{% else %}Your Name{% endif %}</label>
+          <input id="name" type="text" placeholder="{% if session.get('lang','en')=='th' %}ชื่อเต็ม{% else %}Full name{% endif %}" required>
+          <label>{% if session.get('lang','en')=='th' %}อีเมลของคุณ{% else %}Your Email{% endif %}</label>
           <input id="email" type="email" placeholder="Email address" required>
 
-          <div id="cardWrap" style="display:none;margin-top:8px;">
-            <label>Card</label>
+          <div id="cardWrap" style="display:none;">
+            <label>{% if session.get('lang','en')=='th' %}บัตรเครดิต{% else %}Card{% endif %}</label>
             <div id="card-element" style="padding:10px;border:1px solid #ddd;border-radius:8px;"></div>
           </div>
 
           <div id="priceCalc" style="margin-top:10px;font-weight:700;"></div>
 
           <div class="actions">
-            <button id="bookBtn" type="submit" disabled>{{ _tr('book_button') }}</button>
-            <button id="clearBtn" type="button" class="secondary">{{ _tr('clear_button') }}</button>
+            <button id="bookBtn" type="submit" disabled>
+              {% if session.get('lang','en')=='th' %}จองและชำระเงิน{% else %}Book & Pay{% endif %}
+            </button>
+            <button type="button" class="secondary" onclick="clearSelection()">
+              {% if session.get('lang','en')=='th' %}ล้าง{% else %}Clear{% endif %}
+            </button>
           </div>
           <div id="msg" class="msg"></div>
         </form>
@@ -122,7 +137,7 @@
   </div>
 
   <script>
-  // --------- Context & localized JS strings ----------
+  // --------- Context ----------
   const path = location.pathname;
   const isGroup = path.startsWith("/prop/");
   const isUnit  = path.startsWith("/r/");
@@ -134,14 +149,6 @@
 
   const STRIPE_PK = "{{ publishable_key or '' }}".trim();
   let stripe, card;
-
-  // Localized JS strings injected safely
-  const STR_BOOKING_CONF = {{ _tr('booking_confirmed')|tojson }};
-  const STR_BOOKING_PROCESSING = {{ _tr('booking_processing')|tojson }};
-  const STR_BOOKING_FAILED = {{ _tr('booking_failed')|tojson }};
-  const STR_PLEASE_SELECT = {{ ("Please select dates from the calendar.")|tojson }};
-  const STR_CHECKOUT_AFTER = {{ ("Check-out must be after check-in.")|tojson }};
-  const STR_FILL_FIELDS = {{ ("Please enter your name and email.")|tojson }};
 
   function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}` }
   function addDays(dt, n){ const d=new Date(dt); d.setDate(d.getDate()+n); return d; }
@@ -168,28 +175,21 @@
     }
   }
 
-  // Calendar / booking state
   let blocked = new Set();
   let monthsToShow = 2;
   let selStart = null;
   let selEnd   = null;
   let baseMonthOffset = 0;
-  const MAX_OFFSET = 11; // allow navigation up to 12 months ahead (0..11)
 
-  function clearSelection(options){
-  // options: { keepMsg: false } - if keepMsg true, don't hide the current message
-  options = options || {};
-  selStart = selEnd = null;
-  document.getElementById("start").value = "";
-  document.getElementById("end").value = "";
-  // only clear message if keepMsg is NOT true
-  if(!options.keepMsg){
+  function clearSelection(){
+    selStart = selEnd = null;
+    document.getElementById("start").value = "";
+    document.getElementById("end").value = "";
     setMsg("");
+    renderCalendars();
+    document.getElementById("bookBtn").disabled = true;
+    updatePriceCalc();
   }
-  renderCalendars();
-  document.getElementById("bookBtn").disabled = true;
-  updatePriceCalc();
- }
 
   function buildMonthForOffset(offset){
     const now = new Date();
@@ -244,9 +244,6 @@
       const offset = baseMonthOffset + m;
       holder.appendChild(buildMonthForOffset(offset));
     }
-    // update prev button disabled state
-    document.getElementById("prevMonth").disabled = baseMonthOffset <= 0;
-    document.getElementById("nextMonth").disabled = baseMonthOffset >= MAX_OFFSET;
   }
 
   function isAllAvailable(startStr, endStr){
@@ -283,7 +280,7 @@
       return;
     }
     if(!isAllAvailable(selStart, dateStr)){
-      setMsg("❌ Some dates in between are already booked (red). Please pick different dates.", false, 5000);
+      setMsg("{% if session.get('lang','en')=='th' %}❌ มีวันที่ถูกจองในช่วงวันที่เลือกอยู่ กรุณาเลือกใหม่{% else %}❌ Some dates in between are already booked (red). Please pick different dates.{% endif %}", false, 5000);
       return;
     }
     selEnd = dateStr;
@@ -319,18 +316,13 @@
 
   async function initPage(){
     if(STRIPE_PK){
-      try{
-        stripe = Stripe(STRIPE_PK);
-        const elements = stripe.elements();
-        card = elements.create('card');
-        card.mount('#card-element');
-        document.getElementById("cardWrap").style.display = "block";
-      }catch(e){
-        console.warn("Stripe init failed:", e);
-      }
+      stripe = Stripe(STRIPE_PK);
+      const elements = stripe.elements();
+      card = elements.create('card');
+      card.mount('#card-element');
+      document.getElementById("cardWrap").style.display = "block";
     }
 
-    // default months to show (columns)
     monthsToShow = 2;
 
     if(isGroup){ await loadAvailabilityViaSlug(groupSlug); return; }
@@ -351,106 +343,77 @@
     }
   }
 
-  // Calendar navigation handlers
   document.getElementById("prevMonth").addEventListener("click", ()=>{
     baseMonthOffset = Math.max(baseMonthOffset - 1, 0);
     renderCalendars();
   });
   document.getElementById("nextMonth").addEventListener("click", ()=>{
-    baseMonthOffset = Math.min(baseMonthOffset + 1, MAX_OFFSET);
+    baseMonthOffset = baseMonthOffset + 1;
     renderCalendars();
   });
 
-  // Clear button handler
-  document.getElementById("clearBtn").addEventListener("click", ()=>{
-    clearSelection();
+  document.getElementById("bookForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const startDate = document.getElementById("start").value;
+    const endDate   = document.getElementById("end").value;
+    const name      = document.getElementById("name").value.trim();
+    const email     = document.getElementById("email").value.trim();
+
+    if(!startDate || !endDate){
+      setMsg("{% if session.get('lang','en')=='th' %}❌ กรุณาเลือกวันที่จากปฏิทิน{% else %}❌ Please select dates from the calendar.{% endif %}", false, 5000);
+      return;
+    }
+    if(endDate <= startDate){
+      setMsg("{% if session.get('lang','en')=='th' %}❌ เช็คเอาต์ต้องหลังเช็คอิน{% else %}❌ Check-out must be after check-in.{% endif %}", false, 5000);
+      return;
+    }
+    if(!name || !email){
+      setMsg("{% if session.get('lang','en')=='th' %}❌ กรุณากรอกชื่อและอีเมล{% else %}❌ Please enter your name and email.{% endif %}", false, 5000);
+      return;
+    }
+
+    const btn = document.getElementById("bookBtn");
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = "{% if session.get('lang','en')=='th' %}กำลังประมวลผล…{% else %}Processing…{% endif %}"; setMsg("", false);
+
+    try{
+      if(STRIPE_PK){
+        const piRes = await fetch("/api/public/create_intent/" + groupSlug, {
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({ start_date: startDate, end_date: endDate })
+        });
+        const pi = await piRes.json();
+        if(!piRes.ok || !pi.ok){ throw new Error(pi.error || "Failed to create payment"); }
+        const {error, paymentIntent} = await stripe.confirmCardPayment(pi.client_secret, {
+          payment_method: { card, billing_details: { name, email } }
+        });
+        if(error) throw error;
+        if(paymentIntent.status !== "succeeded") throw new Error("Payment not completed");
+      }
+
+      const postUrl = groupSlug ? `/api/public/book_group/${groupSlug}` : (isUnit ? `/api/public/book/${unitId}` : "/api/public/book");
+
+      const res = await fetch(postUrl, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ start_date:startDate, end_date:endDate, name, email })
+      });
+      const j = await res.json();
+      if(res.ok && j.ok){
+        setMsg("{% if session.get('lang','en')=='th' %}✅ การจองยืนยันแล้ว — ขอบคุณ{% else %}✅ Booking confirmed — thank you!{% endif %}", true, 6000);
+        clearSelection();
+        if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
+      }else{
+        throw new Error(j.error || "Unknown error");
+      }
+    }catch(err){
+      setMsg("❌ " + (err.message || err), false, 6000);
+    }finally{
+      btn.disabled = false; btn.textContent = original;
+    }
   });
 
-  document.getElementById("bookForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const startDate = document.getElementById("start").value;
-  const endDate   = document.getElementById("end").value;
-  const name      = document.getElementById("name").value.trim();
-  const email     = document.getElementById("email").value.trim();
-
-  if(!startDate || !endDate){ setMsg("❌ Please select dates from the calendar.", false, 6000); return; }
-  if(endDate <= startDate){ setMsg("❌ Check-out must be after check-in.", false, 6000); return; }
-  if(!name || !email){ setMsg("❌ Please enter your name and email.", false, 6000); return; }
-
-  const btn = document.getElementById("bookBtn");
-  const original = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = "Processing…";
-  setMsg("", false); // clear previous messages
-
-  try{
-    // If Stripe configured: create PaymentIntent on server & confirm card payment
-    if(STRIPE_PK){
-      const piRes = await fetch("/api/public/create_intent/" + groupSlug, {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ start_date: startDate, end_date: endDate })
-      });
-
-      // network/server error -> throw with message
-      if(!piRes.ok){
-        const pj = await piRes.json().catch(()=>({error:"PaymentIntent creation failed"}));
-        throw new Error(pj.error || "Failed to create payment");
-      }
-      const pi = await piRes.json();
-      if(!pi.ok || !pi.client_secret){ throw new Error(pi.error || "Failed to create payment"); }
-
-      // confirm card payment (Stripe)
-      const {error, paymentIntent} = await stripe.confirmCardPayment(pi.client_secret, {
-        payment_method: { card, billing_details: { name, email } }
-      });
-      if(error) throw error;
-      if(paymentIntent && paymentIntent.status !== "succeeded"){
-        throw new Error("Payment not completed");
-      }
-    }
-
-    // Block dates (group or unit)
-    const postUrl = groupSlug ? `/api/public/book_group/${groupSlug}` : (isUnit ? `/api/public/book/${unitId}` : "/api/public/book");
-    const res = await fetch(postUrl, {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ start_date:startDate, end_date:endDate, name, email })
-    });
-
-    const j = await res.json().catch(()=>({error:"Invalid response"}));
-    if(res.ok && j.ok){
-      // Show a clear success message and KEEP it visible for a bit
-      setMsg("✅ Booking confirmed — dates blocked. Thank you!", true, 8000);
-
-      // Refresh availability (update calendar colors)
-      if(groupSlug){
-        await loadAvailabilityViaSlug(groupSlug);
-      } else if(isUnit){
-        // for unit-level booking, try to reload the parent group if possible
-        try{
-          const grp = await fetch(`/api/admin/find_group?unit_id=${unitId}`).then(r=>r.json());
-          if(grp && grp.ok && grp.slug) await loadAvailabilityViaSlug(grp.slug);
-        }catch(_){}
-      }
-
-      // Clear the selection visually after short delay, but keep message visible
-      setTimeout(()=>{ clearSelection({keepMsg:true}); }, 1200);
-
-      // Finally, remove selection and then keep message visible for the message duration
-      // (message auto-hides because we passed persistMs into setMsg)
-    }else{
-      throw new Error(j.error || "Unknown error");
-    }
-  }catch(err){
-    // Show meaningful error; keep visible longer
-    setMsg("❌ " + (err.message || err), false, 8000);
-  }finally{
-    btn.disabled = false;
-    btn.textContent = original;
-  }
-});
-  // init
   initPage();
   </script>
 </body>
