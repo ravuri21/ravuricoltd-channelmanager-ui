@@ -68,8 +68,9 @@
           <div>
             <div id="title-{{ loop.index }}" class="title">{{ info.title }}</div>
 
-            <!-- NOTE: We intentionally hide raw unit ids & internal text on public page for simplicity -->
-            <div class="meta">Units: {{ info.unit_ids|length }}</div>
+            <!-- NOTE: raw internal unit IDs and 'ID: <code>slug</code>' intentionally hidden on public page -->
+            <!-- Keep the public UI clean — only show price and a short meta line (no internal IDs). -->
+            <div class="meta">{{ info.short_description if info.short_description is defined else '' }}</div>
 
             {% if info.price %}
               <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="muted">/ night ({{ info.currency or 'THB' }})</span></div>
