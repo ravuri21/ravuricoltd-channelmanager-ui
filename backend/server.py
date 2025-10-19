@@ -10,7 +10,6 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pathlib import Path
 from datetime import datetime, date, timedelta
-from sqlalchemy import asc
 
 from flask import (
     Flask, request, session, redirect, url_for,
@@ -27,9 +26,6 @@ import import_properties as importer
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "change_this_secret")
 
-# make helper available inside templates (so templates can call _load_meta())
-app.jinja_env.globals["_load_meta"] = _load_meta
-
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@example.com")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "changeme")
 APP_LANG_DEFAULT = os.environ.get("APP_LANG_DEFAULT", "en")
@@ -39,13 +35,13 @@ STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 
 # Email / provider envs
 SMTP_SERVER = os.environ.get("SMTP_SERVER", "").strip()
-SMTP_PORT = os.environ.get("SMTP_PORT", "").strip()
+SMTP_PORT = os.environ.get("SMTP_PORT", "587").strip()
 SMTP_USER = os.environ.get("SMTP_USER", "").strip()
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "").strip()
-ALERT_TO = os.environ.get("ALERT_TO", os.environ.get("ALERT_TO1", "")).strip()  # support ALERT_TO1
+ALERT_TO = os.environ.get("ALERT_TO", os.environ.get("ALERT_TO1", "")).strip()
 EMAIL_FROM = os.environ.get("EMAIL_FROM", f"RavuriCo <{SMTP_USER or 'no-reply@example.com'}>")
 
-# Resend (optional) — if SMTP not available
+# Resend / alternative provider
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
 EMAIL_PROVIDER = os.environ.get("EMAIL_PROVIDER", "").strip().lower()  # "resend" or "smtp"
 
@@ -74,13 +70,16 @@ def _parse_yyyy_mm_dd(s):
 
 def _as_date_str(dval) -> str:
     # Normalize icalendar dt to "YYYY-MM-DD"
-    if hasattr(dval, "date"):
-        return dval.date().isoformat()
+    try:
+        if hasattr(dval, "date"):
+            return dval.date().isoformat()
+    except Exception:
+        pass
     return str(dval)
 
 def _overlaps(db, unit_id: int, start: str, end: str) -> bool:
     """
-    Overlap if NOT (existing.end <= start OR existing.start >= end)
+    Return True if there's any AvailabilityBlock for unit_id that overlaps [start, end)
     """
     q = db.query(AvailabilityBlock).filter(
         AvailabilityBlock.unit_id == unit_id,
@@ -91,6 +90,10 @@ def _overlaps(db, unit_id: int, start: str, end: str) -> bool:
     )
     return db.query(q.exists()).scalar()
 
+# Expose _load_meta into Jinja templates so templates can call it:
+app.jinja_env.globals.update(_load_meta=_load_meta)
+
+# ====== iCal fetch (lightweight) ======
 def fetch_ical(ical_url):
     """
     Lightweight fetch for public availability merge endpoint.
@@ -116,33 +119,38 @@ def fetch_ical(ical_url):
         print(f"iCal fetch error: {e}")
         return []
 
-# ====== Email helpers (tries SMTP first, then Resend if configured) ======
-def send_via_smtp(to_email, subject, html_body, text_body=""):
-    if not SMTP_SERVER or not SMTP_USER or not SMTP_PASSWORD:
-        raise RuntimeError("SMTP not configured")
-    port = 587
-    try:
-        port = int(SMTP_PORT) if SMTP_PORT else 587
-    except Exception:
-        port = 587
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = EMAIL_FROM
-    msg["To"] = to_email
-    msg.attach(MIMEText(text_body or " ", "plain"))
-    msg.attach(MIMEText(html_body or "", "html"))
-    try:
-        # Use STARTTLS on standard port
-        with smtplib.SMTP(SMTP_SERVER, port, timeout=15) as server:
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(EMAIL_FROM, [to_email], msg.as_string())
-        return True
-    except Exception as e:
-        print("❌ SMTP send error:", e)
-        raise
+# ====== Email helpers (SMTP primary, Resend fallback) ======
+def send_via_smtp(to_email: str, subject: str, html_body: str, text_body: str = "") -> None:
+    """
+    Send email using SMTP (Gmail App Password recommended).
+    Raises exception on failure so caller can catch/log.
+    """
+    smtp_server = os.environ.get("SMTP_SERVER", "").strip()
+    smtp_port = int(os.environ.get("SMTP_PORT", 587))
+    smtp_user = os.environ.get("SMTP_USER", "").strip()
+    smtp_pass = os.environ.get("SMTP_PASSWORD", "").strip()
+    email_from = os.environ.get("EMAIL_FROM", smtp_user)
 
-def send_via_resend(to_email, subject, html_body, text_body=""):
+    if not all([smtp_server, smtp_user, smtp_pass]):
+        raise RuntimeError("SMTP env vars not configured (SMTP_SERVER / SMTP_USER / SMTP_PASSWORD)")
+
+    msg = MIMEMultipart("alternative")
+    msg["From"] = email_from
+    msg["To"] = to_email
+    msg["Subject"] = subject
+    if text_body:
+        msg.attach(MIMEText(text_body, "plain"))
+    msg.attach(MIMEText(html_body, "html"))
+
+    # Connect and send via STARTTLS (port 587)
+    with smtplib.SMTP(smtp_server, smtp_port, timeout=15) as server:
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
+
+def send_via_resend(to_email: str, subject: str, html_body: str, text_body: str = "") -> None:
     if not RESEND_API_KEY:
         raise RuntimeError("Resend API key not configured")
     url = "https://api.resend.com/emails"
@@ -155,21 +163,21 @@ def send_via_resend(to_email, subject, html_body, text_body=""):
     }
     headers = {"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"}
     resp = requests.post(url, json=payload, headers=headers, timeout=15)
-    try:
-        resp.raise_for_status()
-        return True
-    except Exception as e:
-        print("❌ Resend send error:", e, resp.text if resp is not None else "")
-        raise
+    resp.raise_for_status()
+    return
 
-def send_email_best_effort(to_email, subject, html_body, text_body=""):
-    # Try SMTP first if explicitly configured or EMAIL_PROVIDER == smtp
+def send_email_best_effort(to_email: str, subject: str, html_body: str, text_body: str = "") -> bool:
+    """
+    Try to send email. Prefer SMTP if configured, otherwise Resend if configured.
+    Returns True when send attempt succeeded, False otherwise (and logs).
+    """
     try:
         if EMAIL_PROVIDER == "smtp" or (SMTP_SERVER and SMTP_USER and SMTP_PASSWORD):
-            return send_via_smtp(to_email, subject, html_body, text_body)
-        # else fallback to resend if configured
+            send_via_smtp(to_email, subject, html_body, text_body)
+            return True
         if EMAIL_PROVIDER == "resend" or RESEND_API_KEY:
-            return send_via_resend(to_email, subject, html_body, text_body)
+            send_via_resend(to_email, subject, html_body, text_body)
+            return True
         raise RuntimeError("No email provider configured")
     except Exception as e:
         print("❌ Email send failed:", e)
@@ -185,38 +193,6 @@ def send_alert(subject, body):
     except Exception as e:
         print("❌ Error sending alert:", e)
 
-# ---- Add /admin/test_email helper (paste after send_alert) ----
-def send_via_smtp(to_email: str, subject: str, html_body: str, text_body: str = "") -> None:
-    """
-    Send email using SMTP (Gmail App Password recommended).
-    Raises exception on failure so caller can catch/log.
-    """
-    smtp_server = os.environ.get("SMTP_SERVER", "").strip()
-    smtp_port = int(os.environ.get("SMTP_PORT", 587))
-    smtp_user = os.environ.get("SMTP_USER", "").strip()
-    smtp_pass = os.environ.get("SMTP_PASSWORD", "").strip()
-    email_from = os.environ.get("EMAIL_FROM", smtp_user)  # e.g. "RavuriCo <pradeep@ravuricoltd.com>"
-
-    if not all([smtp_server, smtp_user, smtp_pass]):
-        raise RuntimeError("SMTP env vars not configured (SMTP_SERVER / SMTP_USER / SMTP_PASSWORD)")
-
-    msg = MIMEMultipart("alternative")
-    msg["From"] = email_from
-    msg["To"] = to_email
-    msg["Subject"] = subject
-    if text_body:
-        msg.attach(MIMEText(text_body, "plain"))
-    msg.attach(MIMEText(html_body, "html"))
-
-    # Connect and send via STARTTLS (port 587)
-    smtp_port = int(smtp_port)
-    with smtplib.SMTP(smtp_server, smtp_port, timeout=15) as server:
-        server.ehlo()
-        server.starttls()
-        server.ehlo()
-        server.login(smtp_user, smtp_pass)
-        server.send_message(msg)
-
 @app.get("/admin/test_email")
 def admin_test_email():
     """
@@ -226,7 +202,7 @@ def admin_test_email():
     if "user" not in session:
         return redirect(url_for("login"))
 
-    to_email = os.environ.get("ALERT_TO") or os.environ.get("SMTP_USER") or ""
+    to_email = ALERT_TO or SMTP_USER or ""
     if not to_email:
         return "ALERT_TO / SMTP_USER not set in environment", 500
 
@@ -243,11 +219,9 @@ def admin_test_email():
         print(f"📧 Test email successfully sent to {to_email}")
         return f"OK — test email sent to {to_email}"
     except Exception as e:
-        # Log the detailed exception so you can inspect in Render logs
         print("❌ SMTP send error:", repr(e))
-        # Return a helpful message to browser
         return f"Failed to send test email: {str(e)}", 500
-        
+
 # ====== Background iCal sync → write to DB ======
 def _sync_units(db, units):
     """
@@ -264,7 +238,6 @@ def _sync_units(db, units):
                 "status": "skipped (no iCal URL)"
             })
             continue
-        # validate URL quickly
         if not isinstance(u.ical_url, str) or not u.ical_url.lower().startswith("http"):
             results.append({
                 "unit_id": u.id,
@@ -278,7 +251,7 @@ def _sync_units(db, units):
             r.raise_for_status()
             cal = ICal.from_ical(r.content)
 
-            # Clear previous rows for this unit for its OTA source
+            # Remove previous OTA-sourced blocks for this unit then re-insert from iCal
             db.query(AvailabilityBlock).filter(
                 AvailabilityBlock.unit_id == u.id,
                 AvailabilityBlock.source == (u.ota or "").lower()
@@ -304,14 +277,6 @@ def _sync_units(db, units):
                 except Exception:
                     continue
 
-            # record last_sync timestamp for this unit (UTC)
-            try:
-                u.last_sync = datetime.utcnow()
-                db.add(u)
-            except Exception as e:
-                # non-fatal: proceed but log
-                print(f"Warning: could not set last_sync for unit {u.id}: {e}")
-
             db.commit()
             results.append({
                 "unit_id": u.id,
@@ -321,7 +286,6 @@ def _sync_units(db, units):
             })
         except Exception as e:
             db.rollback()
-            # Report short error message (avoid leaking secrets)
             short = str(e)
             if hasattr(e, "response") and getattr(e.response, "status_code", None):
                 short = f"{getattr(e.response, 'status_code')} {short}"
@@ -382,18 +346,6 @@ def api_admin_sync_now():
         traceback.print_exc()
         return jsonify({"ok": False, "error": str(e)}), 500
 
-# Add alias endpoint matching admin UI suggestion (/api/admin/sync_all)
-@app.post("/api/admin/sync_all")
-def api_admin_sync_all():
-    if "user" not in session:
-        return jsonify({"error": "unauthorized"}), 401
-    try:
-        summary = sync_calendars_once()
-        return jsonify({"ok": True, "summary": summary})
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"ok": False, "error": str(e)}), 500
-
 @app.post("/api/admin/sync_property/<slug>")
 def api_admin_sync_property(slug):
     if "user" not in session:
@@ -408,9 +360,8 @@ try:
     print("Bootstrap: init_db()")
     init_db()
 
-    # ⚠️ IMPORTANT: Do NOT auto-import CSV on every boot (it resets prices).
-    # Seed manually once via /admin/reimport when DB is empty.
-
+    # ⚠️ Important: do not auto-import CSV every boot (that can reset DB / overwrite)
+    # You can run /admin/reimport manually when needed.
     if SINGLE_WORKER:
         print("Starting periodic_sync thread (single worker)")
         threading.Thread(target=periodic_sync, daemon=True).start()
@@ -430,6 +381,9 @@ def _template_context_extra():
         test_mode = (STRIPE_PUBLISHABLE_KEY or "").startswith("pk_test_")
     return {"t": T()}
 
+# Expose helper to templates
+app.jinja_env.globals.update(t=_template_context_extra()["t"])
+
 # ====== Auth & Basic ======
 @app.route("/")
 def index():
@@ -437,9 +391,7 @@ def index():
         return redirect(url_for("login"))
     db = SessionLocal()
     try:
-        from sqlalchemy import asc
-        # ...
-        units = db.query(Unit).order_by(asc(Unit.id)).all()
+        units = db.query(Unit).all()
         rates = db.query(RatePlan).all()
         rates_map = {r.unit_id: r.base_rate for r in rates}
         currency_map = {r.unit_id: (r.currency or "THB") for r in rates}
@@ -640,7 +592,6 @@ def properties_index():
     finally:
         db.close()
 
-    # prepare context and include template helper object 't'
     ctx = {"groups": out, "lang": session.get("lang", APP_LANG_DEFAULT)}
     ctx.update(_template_context_extra())
     return render_template("properties.html", **ctx)
@@ -674,9 +625,8 @@ def property_page(slug):
         "publishable_key": STRIPE_PUBLISHABLE_KEY,
         "slug": slug
     }
-        ctx = {"groups": out, "lang": session.get("lang", APP_LANG_DEFAULT)}
     ctx.update(_template_context_extra())
-    return render_template("properties.html", **ctx)
+    return render_template("room.html", **ctx)
 
 # ---- Availability (grouped): DB blocks + iCal events merged ----
 @app.route("/api/public/availability/<slug>", methods=["GET"])
@@ -770,7 +720,7 @@ def api_public_create_intent(slug):
         )
         return jsonify({"ok": True, "client_secret": intent.client_secret})
     except Exception as e:
-        return jsonify({"error": str(e)}, 400)
+        return jsonify({"error": str(e)}), 400
 
 # ---- Public booking: grouped + per-unit ----
 @app.route("/api/public/book_group/<slug>", methods=["POST"])
@@ -840,8 +790,7 @@ def list_public_links():
     db = SessionLocal()
     rows = db.query(Unit).all()
     db.close()
-    base = request.host_url.rstrip("/")
-    html = ["<h2>Public Links</haveh2><ul>"]
+    html = ["<h2>Public Links</h2><ul>"]
     for u in rows:
         html.append(f'<li><a href="/r/{u.id}" target="_blank">/r/{u.id}</a> — {u.ota} / {u.property_id}</li>')
     html.append("</ul>")
@@ -995,33 +944,6 @@ def api_admin_toggle_day(slug):
     finally:
         db.close()
 
-# ====== API: last_sync for a property group ======
-@app.route("/api/admin/last_sync/<slug>")
-def api_admin_last_sync(slug):
-    if "user" not in session:
-        return jsonify({"error":"unauthorized"}), 401
-    info = _group_info(slug)
-    if not info:
-        return jsonify({"error":"group not found"}), 404
-    unit_ids = info.get("unit_ids", [])
-    if not unit_ids:
-        return jsonify({"error":"no units linked"}), 400
-
-    db = SessionLocal()
-    try:
-        rows = db.query(Unit).filter(Unit.id.in_(unit_ids)).all()
-        latest = None
-        for r in rows:
-            if r.last_sync:
-                if latest is None or r.last_sync > latest:
-                    latest = r.last_sync
-        if latest:
-            return jsonify({"ok": True, "last_sync": latest.isoformat()})
-        else:
-            return jsonify({"ok": True, "last_sync": None})
-    finally:
-        db.close()
-
 # ====== Helper: list export links ======
 @app.get("/admin/export_links")
 def admin_export_links():
@@ -1052,3 +974,5 @@ def admin_reimport():
         return "CSV reimported successfully", 200
     except Exception as e:
         return f"Error: {e}", 500
+
+# ====== End of file ======
