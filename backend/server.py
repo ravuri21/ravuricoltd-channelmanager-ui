@@ -428,20 +428,38 @@ app.jinja_env.globals.update(t=_template_context_extra()["t"])
 # ====== Auth & Basic ======
 @app.route("/")
 def index():
+    # require login
     if "user" not in session:
         return redirect(url_for("login"))
-        db = SessionLocal()
+
+    db = None
     try:
-        # Order units by id so admin shows r/1, r/2, r/3...
+        db = SessionLocal()
+        # Fetch units in stable order
         units = db.query(Unit).order_by(Unit.id.asc()).all()
         rates = db.query(RatePlan).all()
         rates_map = {r.unit_id: r.base_rate for r in rates}
         currency_map = {r.unit_id: (r.currency or "THB") for r in rates}
+
+        ctx = dict(
+            units=units,
+            rates_map=rates_map,
+            currency_map=currency_map,
+            lang=session.get("lang", APP_LANG_DEFAULT)
+        )
+        ctx.update(_template_context_extra())
+        return render_template("dashboard.html", **ctx)
+    except Exception:
+        # Log so you see the real exception in Render logs
+        traceback.print_exc()
+        # Optionally show a friendly page instead of crashing
+        return "Internal server error", 500
     finally:
-        db.close()
-    ctx = dict(units=units, rates_map=rates_map, currency_map=currency_map, lang=session.get("lang", APP_LANG_DEFAULT))
-    ctx.update(_template_context_extra())
-    return render_template("dashboard.html", **ctx)
+        if db is not None:
+            try:
+                db.close()
+            except Exception:
+                pass
 
 @app.route("/login", methods=["GET","POST"])
 def login():
