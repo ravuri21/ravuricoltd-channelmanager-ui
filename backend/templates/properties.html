@@ -45,7 +45,11 @@
         <div class="pad">
           <div>
             <div class="title">{{ info.title }}</div>
-            <div class="meta">Units: {{ info.unit_ids|length }} &nbsp;•&nbsp; ID: <code>{{ slug }}</code></div>
+
+            <!-- REMOVED public exposure of raw unit IDs / slug.
+                 Show only a harmless rooms count for guests. -->
+            <div class="meta">Rooms: {{ (info.unit_ids|length) if info.unit_ids is defined else '—' }}</div>
+
             {% if info.price %}
               <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="muted">/ night ({{ info.currency or 'THB' }})</span></div>
             {% else %}
