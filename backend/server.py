@@ -655,35 +655,43 @@ def properties_index():
         except Exception:
             ignore_set = set()
 
-    out = {}
+    # enrich groups with price + allow ordering via `order` key in unit_meta.json
+    enriched = []
     db = SessionLocal()
     try:
         for slug, info in groups.items():
             unit_ids = info.get("unit_ids", []) or []
-            # Filter unit list only for internal price lookup — public view will not print unit IDs
-            visible_unit_ids_for_price = [uid for uid in unit_ids if uid not in ignore_set]
             price = None
             currency = "THB"
-            if visible_unit_ids_for_price:
-                rp = db.query(RatePlan).filter(RatePlan.unit_id == visible_unit_ids_for_price[0]).first()
+            if unit_ids:
+                rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
                 if rp and rp.base_rate:
                     price = float(rp.base_rate)
                     currency = rp.currency or "THB"
-            out[slug] = {
+
+            enriched.append({
+                "slug": slug,
                 "title": info.get("title", slug),
                 "image_url": info.get("image_url") or "https://source.unsplash.com/featured/?pattaya,villa",
-                # Do NOT include unit_ids in public JSON/template
-                "unit_count": len([uid for uid in unit_ids if uid not in ignore_set]),
+                "unit_ids": unit_ids,
                 "price": price,
-                "currency": currency
-            }
+                "currency": currency,
+                # optional fields from unit_meta.json
+                "short_description": info.get("short_description", ""),
+                "order": int(info.get("order", 999))
+            })
     finally:
         db.close()
+
+    # sort by order (ascending) and then title
+    enriched.sort(key=lambda x: (x.get("order", 999), x.get("title","")))
+
+    # convert to dict keyed by slug (templates expect groups.items() iteration)
+    out = { item["slug"]: item for item in enriched }
 
     ctx = {"groups": out, "lang": session.get("lang", APP_LANG_DEFAULT)}
     ctx.update(_template_context_extra())
     return render_template("properties.html", **ctx)
-
 
 # ====== Public property page ======
 @app.route("/prop/<slug>")
