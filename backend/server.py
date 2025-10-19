@@ -48,6 +48,47 @@ EMAIL_PROVIDER = os.environ.get("EMAIL_PROVIDER", "").strip().lower()  # "resend
 # Run background sync thread only once
 SINGLE_WORKER = os.getenv("WEB_CONCURRENCY", "1") == "1"
 
+# ----------------- Simple translations -----------------
+# small static map — add keys you need below
+LANG_MAP = {
+    "en": {
+        "tap_calendar": "Tap the calendar to choose check-in and check-out. <b>Red</b> = booked, <b>Green</b> = available.",
+        "availability_title": "Availability (click green days to select)",
+        "view_button": "View",
+        "book_button": "Book & Pay",
+        "clear_button": "Clear",
+        "booking_confirmed": "✅ Booking confirmed — dates blocked.",
+        "booking_processing": "Processing…",
+        "booking_failed": "❌ Booking failed",
+        "price_per_night": "/ night",
+        "view_public": "View",
+        "book": "Book"
+    },
+    "th": {
+        "tap_calendar": "แตะปฏิทินเพื่อเลือกวันเช็คอินและเช็คเอาต์ <b>สีแดง</b> = จองแล้ว, <b>สีเขียว</b> = ว่าง",
+        "availability_title": "สถานะว่าง (คลิกวันที่สีเขียวเพื่อเลือก)",
+        "view_button": "ดู",
+        "book_button": "จองและชำระ",
+        "clear_button": "ล้าง",
+        "booking_confirmed": "✅ การจองเสร็จสมบูรณ์ — วันถูกล็อคแล้ว",
+        "booking_processing": "กำลังทำรายการ…",
+        "booking_failed": "❌ การจองล้มเหลว",
+        "price_per_night": "/ คืน",
+        "view_public": "ดูหน้า",
+        "book": "จอง"
+    }
+}
+
+from flask import session as _flask_session
+
+def _tr(key):
+    """Jinja helper: return localized string by key (falls back to key itself)."""
+    lang = _flask_session.get("lang", APP_LANG_DEFAULT)
+    return LANG_MAP.get(lang, LANG_MAP.get(APP_LANG_DEFAULT, {})).get(key, key)
+
+# make available in templates
+app.jinja_env.globals["_tr"] = _tr
+
 # ====== Helpers ======
 def _load_meta():
     """Read backend/unit_meta.json to get grouped properties."""
@@ -389,9 +430,10 @@ app.jinja_env.globals.update(t=_template_context_extra()["t"])
 def index():
     if "user" not in session:
         return redirect(url_for("login"))
-    db = SessionLocal()
+        db = SessionLocal()
     try:
-        units = db.query(Unit).all()
+        # Order units by id so admin shows r/1, r/2, r/3...
+        units = db.query(Unit).order_by(Unit.id.asc()).all()
         rates = db.query(RatePlan).all()
         rates_map = {r.unit_id: r.base_rate for r in rates}
         currency_map = {r.unit_id: (r.currency or "THB") for r in rates}
