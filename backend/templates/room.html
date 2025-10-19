@@ -64,6 +64,10 @@
         {% if price %}
           <div class="price">฿ {{ '%.0f'|format(price) }} <span class="muted">/ night {{ currency or 'THB' }}</span></div>
         {% endif %}
+          <div style="margin-top:8px;">
+          <img src="https://stripe.com/img/v3/home/twitter.png" alt="Stripe" style="height:20px; display:inline-block; vertical-align:middle; margin-right:8px;">
+          <span style="font-size:0.9rem;color:#666;">Payments powered by Stripe</span>
+        </div>
         <p class="muted">Tap the calendar to choose check-in and check-out. <b>Red</b> = booked, <b>Green</b> = available.</p>
 
         <div class="panel">
