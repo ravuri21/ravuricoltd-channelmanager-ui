@@ -9,39 +9,15 @@
   <link rel="stylesheet" href="/static/style.css" />
   <!-- optional theme additions — keep this file in backend/static/style-additions.css -->
   <link rel="stylesheet" href="/static/style-additions.css?v=20251021" />
-
-  <!-- Inline fallback styles (high specificity) so small theme tweaks show up immediately -->
   <style>
-    :root{ --brand-red:#e11d48; --brand-dark:#111827; --muted:#6b7280; --primary:#2563eb; --teal:#0ea5a4; --card-radius:12px; }
-    body{font-family:system-ui,Arial,Helvetica,sans-serif;background:#f6f8fa;margin:0;color:#222}
-    .site-hero{ background:linear-gradient(180deg,#ffffff,#f9fafb); border-bottom:1px solid #eee; padding:18px 0; }
-    .hero-inner{ max-width:1100px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; padding:0 12px; gap:12px; }
-    .brand { font-weight:900; font-size:1.35rem; line-height:1; display:flex; align-items:center; }
-    .brand-red{ color:var(--brand-red); font-family:"Helvetica Neue",system-ui,Arial,sans-serif; }
-    .brand-dark{ color:var(--brand-dark); margin-left:8px; }
-    .wrap{ max-width:1100px; margin:18px auto; padding:18px; box-sizing:border-box; }
-    .topline{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px}
-    .muted{color:var(--muted)}
-    .stripe-badge{display:inline-block;background:#f8fafc;border-radius:8px;padding:6px 8px;font-size:.82rem;color:#0b5cff;margin-left:8px;border:1px solid #e6eefc}
-    .trust-row{display:flex;gap:10px;margin:12px 0 18px;flex-wrap:wrap}
-    .trust-card{padding:10px;border-radius:8px;background:#fff;border:1px solid #eee;min-width:160px;flex:1;box-shadow:0 6px 18px rgba(2,6,23,0.04)}
-    .trust-title{font-weight:700;margin-bottom:6px}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:14px}
-    .card{background:#fff;border-radius:var(--card-radius);overflow:hidden;box-shadow:0 6px 18px rgba(2,6,23,0.06);display:flex;flex-direction:column;transition:transform .12s,box-shadow .12s}
-    .card:hover{transform:translateY(-6px);box-shadow:0 18px 40px rgba(2,6,23,0.08)}
-    .card img{width:100%;height:180px;object-fit:cover;display:block}
-    .pad{padding:14px;display:flex;flex-direction:column;justify-content:space-between;flex:1}
-    .title{font-weight:800;font-size:1.05rem;color:var(--brand-dark);margin-bottom:6px}
-    .meta{color:var(--muted);font-size:.95rem;margin-bottom:8px}
-    .price{font-size:1.05rem;font-weight:800;color:var(--brand-dark);margin-bottom:6px}
-    .teaser{color:#374151;margin-top:8px}
-    .card-actions{display:flex;gap:8px;margin-top:10px}
-    .btn{display:inline-block;padding:10px 12px;border-radius:10px;font-weight:700;text-decoration:none;color:#fff;background:var(--primary);text-align:center}
-    .btn.btn-outline{background:transparent;color:var(--teal);border:1px solid #dbeafe}
-    .btn.btn-primary{background:var(--primary)}
-    .page-footer{text-align:center;color:var(--muted);font-size:.9rem;margin-top:18px;padding-bottom:24px}
-    @media (max-width:720px){ .hero-inner{flex-direction:column;align-items:flex-start;gap:10px} .trust-card{min-width:140px} .card img{height:140px} }
-  </style>
+/* Quick, high-priority overrides to force the new theme look */
+.brand-red{ color: #e11d48 !important; }
+.brand-dark{ color: #111827 !important; }
+.site-hero{ background: linear-gradient(180deg,#ffffff,#f9fafb) !important; border-bottom:1px solid #eee !important; }
+.trust-card{ background:#fff !important; border:1px solid #f1f5f9 !important; }
+.card{ box-shadow: 0 6px 20px rgba(2,6,23,0.06) !important; border-radius: 12px !important; }
+.title{ color: var(--brand-dark) !important; font-weight:800 !important; }
+</style>
 </head>
 <body>
   <!-- brand header -->
