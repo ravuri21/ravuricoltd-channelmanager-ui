@@ -1,38 +1,41 @@
-/* style-luxury.css — luxury card/grid theme (improved) */
+/* style-luxury.css — luxury magazine / villa theme (updated to match mock) */
+/* Fonts imported for luxury serif + crisp UI sans */
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Poppins:wght@300;400;600;700;900&display=swap');
 
 :root{
   --brand-red: #e11d48;
   --brand-dark: #0f1724;
   --muted: #6b7280;
-  --bg: #fbf7f5;
+  --bg: #faf6f4;
   --card-bg: #ffffff;
   --card-radius: 16px;
   --shadow-1: 0 10px 30px rgba(2,6,23,0.08);
-  --shadow-2: 0 18px 48px rgba(2,6,23,0.10);
-  --transition-fast: 180ms;
+  --shadow-2: 0 20px 50px rgba(2,6,23,0.12);
+  --transition-fast: 200ms;
+  --overlay-grad: linear-gradient(180deg, rgba(0,0,0,0.0) 45%, rgba(0,0,0,0.40) 100%);
 }
 
-/* Global reset / base */
-*, *::before, *::after { box-sizing: border-box; }
-html, body {
-  margin: 0;
-  padding: 0;
+/* Base reset + body */
+* { box-sizing: border-box; }
+html,body { height:100%; }
+body{
+  margin:0;
   background: var(--bg);
   color: var(--brand-dark);
   font-family: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  -webkit-text-size-adjust:100%;
 }
 
-/* HERO */
+/* HERO / header */
 .site-hero{
-  background: linear-gradient(135deg, #fff 0%, #fff7f2 100%);
-  border-bottom: 1px solid #efe8e6;
-  padding: 32px 0;
+  background: linear-gradient(160deg, #fff 0%, #fff7f3 100%);
+  border-bottom: 1px solid rgba(15,23,42,0.04);
+  padding: 28px 0;
 }
 .hero-inner{
-  max-width: 1100px;
+  max-width: 1180px;
   margin: 0 auto;
   padding: 0 14px;
   display:flex;
@@ -41,19 +44,41 @@ html, body {
   gap:16px;
 }
 .brand{
-  font-family: "Playfair Display", serif;
-  font-weight:700;
-  font-size:1.7rem;
-  line-height:1;
   display:flex;
-  align-items:center;
+  align-items:baseline;
+  gap:8px;
+  font-family:"Playfair Display", serif;
+  line-height:1;
 }
-.brand-red{ color: var(--brand-red); margin-right:6px; }
-.brand-dark{ color: var(--brand-dark); font-family: "Poppins", system-ui, sans-serif; font-weight:700; margin-left:4px; font-size:1.1rem; }
+.brand-red{
+  color: var(--brand-red);
+  font-weight:700;
+  font-size:1.65rem;
+  letter-spacing:-0.8px;
+}
+.brand-dark{
+  color: var(--brand-dark);
+  font-family:"Poppins",system-ui, sans-serif;
+  font-size:1.05rem;
+  font-weight:700;
+  margin-left:4px;
+}
 
-/* WRAP & TRUST */
-.wrap{ max-width:1100px; margin:28px auto; padding:18px; box-sizing:border-box; }
-.trust-row{ display:flex; gap:12px; margin:16px 0 22px; flex-wrap:wrap; }
+/* top-right elements */
+.hero-right { display:flex; align-items:center; gap:12px; }
+.stripe-badge{
+  background:#fff;
+  border:1px solid rgba(15,23,42,0.04);
+  padding:6px 10px;
+  border-radius:8px;
+  font-size:.85rem;
+  color:#0b5cff;
+  box-shadow: 0 6px 16px rgba(2,6,23,0.03);
+}
+
+/* content wrap and trust */
+.wrap{ max-width:1180px; margin:28px auto; padding:18px; box-sizing:border-box; }
+.trust-row{ display:flex; gap:12px; margin:16px 0 22px; flex-wrap:wrap; align-items:stretch; }
 .trust-card{
   background: var(--card-bg);
   border-radius: 12px;
@@ -61,15 +86,18 @@ html, body {
   border: 1px solid rgba(15,23,42,0.04);
   box-shadow: var(--shadow-1);
   min-width:180px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
 }
-.trust-title{ font-weight:700; }
+.trust-title{ font-weight:700; margin-bottom:6px; font-family:"Poppins",sans-serif; }
 
-/* GRID / CARDS */
+/* Grid & cards */
 .grid{
   display:grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px,1fr));
-  gap:22px;
-  margin-top:12px;
+  grid-template-columns: repeat(auto-fit, minmax(320px,1fr));
+  gap:26px;
+  margin-top:14px;
 }
 .card{
   background: var(--card-bg);
@@ -81,48 +109,60 @@ html, body {
   flex-direction:column;
 }
 .card:hover{
-  transform: translateY(-8px);
+  transform: translateY(-10px);
   box-shadow: var(--shadow-2);
 }
 
-/* Image area with overlay */
-.media-link{ position:relative; display:block; overflow:hidden; border-radius: 6px 6px 0 0; }
+/* media area: big image + centered overlay title like mock */
+.media-link{ position:relative; display:block; overflow:hidden; border-radius: 10px 10px 0 0; }
 .card-image{
   width:100%;
-  max-width:100%;
-  height:260px;
+  height:320px;                   /* larger, cinematic */
   object-fit:cover;
   display:block;
-  transition: transform .28s ease;
+  transition: transform .32s ease;
+  will-change: transform;
 }
-.card:hover .card-image { transform: scale(1.03); }
+.card:hover .card-image{ transform: scale(1.03); }
+
+/* overlay (dark gradient) with centered villa title and quote label */
 .card-image-overlay{
-  position:absolute;
-  inset:0;
-  background: linear-gradient(180deg, rgba(0,0,0,0.0) 50%, rgba(0,0,0,0.28) 100%);
-  pointer-events:none;
+  position:absolute; inset:0; pointer-events:none;
+  background: var(--overlay-grad);
   display:flex;
   align-items:flex-end;
-  padding:14px;
-  z-index: 2;
+  justify-content:center;
+  padding:22px;
 }
 .overlay-title{
   color:#fff;
   font-family:"Playfair Display", serif;
-  font-weight:600;
-  font-size:1.05rem;
-  text-shadow: 0 6px 18px rgba(0,0,0,0.36);
+  font-weight:700;
+  font-size:1.15rem;
+  text-align:center;
+  padding:8px 12px;
+  text-shadow: 0 8px 22px rgba(0,0,0,0.48);
+  border-radius:6px;
+  /* slight translucent backing to increase contrast but keep soft */
+  background: linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.18));
 }
 
-/* PAD / TEXT */
-.pad{ padding:18px; display:flex; flex-direction:column; justify-content:space-between; gap:10px; }
-.title{ font-weight:700; font-family:"Poppins",sans-serif; font-size:1.05rem; color:var(--brand-dark); margin-bottom:4px; }
+/* pad / content */
+.pad{ padding:18px; display:flex; flex-direction:column; justify-content:space-between; gap:12px; min-height:160px; }
+.title{ font-weight:700; font-family:"Poppins",sans-serif; font-size:1.08rem; color:var(--brand-dark); margin-bottom:6px; }
 .meta{ color:var(--muted); font-size:.95rem; margin-bottom:6px; }
 .price{ font-size:1.08rem; font-weight:800; color:var(--brand-red); margin-bottom:6px; }
-.teaser{ color:#374151; font-size:.95rem; }
+.teaser{
+  color:#374151;
+  font-style:italic;
+  font-size:0.98rem;
+  margin-top:6px;
+  max-width:90%;
+  line-height:1.35;
+}
 
-/* Actions */
-.card-actions{ display:flex; gap:12px; margin-top:6px; }
+/* actions */
+.card-actions{ display:flex; gap:12px; margin-top:8px; }
 .btn{
   padding:11px 14px;
   border-radius:10px;
@@ -133,24 +173,32 @@ html, body {
   flex:1;
   text-decoration:none;
   -webkit-tap-highlight-color: transparent;
-  transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
 }
-.btn.btn-outline{ background:transparent; color:var(--brand-dark); border:1px solid rgba(15,23,42,0.06); }
-.btn.btn-primary{ background:var(--brand-red); color:#fff; box-shadow: 0 8px 22px rgba(225,29,72,0.18); }
+.btn.btn-outline{
+  background:transparent;
+  color:var(--brand-dark);
+  border:1px solid rgba(15,23,42,0.06);
+}
+.btn.btn-primary{
+  background:var(--brand-red);
+  color:#fff;
+  box-shadow: 0 10px 28px rgba(225,29,72,0.16);
+}
 
-.btn:focus, .media-link:focus { outline: none; }
-.btn:focus-visible, .media-link:focus-visible { outline: 3px solid rgba(14,165,164,0.18); outline-offset: 2px; }
+/* footer */
+.page-footer{ text-align:center; margin-top:26px; color:var(--muted); font-size:.95rem; padding-bottom:28px; }
 
-/* Responsive tweaks */
-@media (max-width:920px){
-  .card-image{ height:220px; }
+/* responsive */
+@media (max-width:980px){
+  .card-image{ height:260px; }
+  .grid{ gap:20px; grid-template-columns: repeat(auto-fit, minmax(300px,1fr)); }
 }
 @media (max-width:720px){
-  .hero-inner{ flex-direction:column; align-items:flex-start; gap:10px; }
-  .card-image{ height:160px; }
-  .pad{ padding:12px; gap:8px; }
-  .trust-card{ min-width:140px; }
+  .hero-inner{ flex-direction:column; align-items:flex-start; gap:12px; padding:0 12px; }
+  .card-image{ height:180px; }
+  .pad{ padding:14px; min-height:150px; }
+  .overlay-title{ font-size:1rem; padding:6px 10px; }
 }
 
-/* helpers */
-.site-hero, .brand, .card, .card-image, .btn.btn-primary { will-change: transform, box-shadow; }
+/* small accessibility/interaction helpers */
+a:focus-visible, .btn:focus-visible { outline: 3px solid rgba(14,165,164,0.18); outline-offset: 2px; }
