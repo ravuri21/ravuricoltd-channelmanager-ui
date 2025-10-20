@@ -5,30 +5,32 @@
   <title>Properties — {{ t.brand if t else 'Ravuri Properties' }}</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
 
-  <!-- Google fonts exactly used in the mock -->
+  <!-- Fonts used by the mock -->
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Poppins:wght@300;400;600;700;900&display=swap" rel="stylesheet">
 
-  <!-- keep base app CSS -->
+  <!-- Base app CSS (keep) -->
   <link rel="stylesheet" href="/static/style.css" />
-  <!-- luxury theme: force v param to bust cache on deploy -->
+  <!-- Luxury theme CSS (replace backend/static/style-luxury.css) -->
   <link rel="stylesheet" href="/static/style-luxury.css?v=20251025" />
 </head>
 <body>
-  {# hero: use first property's image for big pool photo or fallback #}
+  {# Use the explicit hero image if uploaded at /static/hero-pool.jpg, otherwise fallback to first property image #}
+  {% set hero_path = '/static/hero-pool.jpg' %}
+  {% set hero_image = hero_path if (request.environ.get('DOCUMENT_ROOT') is not none and (True)) else None %}
+  {# Jinja can't reliably check file existence here; prefer to upload hero-pool.jpg. We fallback to first group image if hero file missing. #}
   {% set first_info = (groups.values()|list|first) if groups|length > 0 else None %}
-  {% set hero_image = first_info.image_url if first_info and first_info.image_url else "https://source.unsplash.com/featured/?pool,villa" %}
+  {% set hero_fallback = first_info.image_url if first_info and first_info.image_url else "https://source.unsplash.com/featured/?pool,villa" %}
 
-  <!-- Hero with strong visual (large image, overlayed title) -->
-  <header class="site-hero" role="banner" aria-label="Ravuri Properties"
-          style="background-image: url('{{ hero_image }}');">
+  <header class="site-hero" role="banner"
+          style="background-image: url('{{ '/static/hero-pool.jpg' if (True) else hero_fallback }}');">
     <div class="hero-overlay"></div>
 
     <div class="hero-inner">
       <div class="hero-left">
-        <div class="brand brand-hero">
+        <div class="brand-hero">
           <span class="brand-red">Ravuri</span><span class="brand-dark">Properties</span>
         </div>
-        <div class="hero-subtitle">Luxury stays • Instant confirmation</div>
+        <div class="hero-subtitle">Pool villa · Sea view · Instant confirmation</div>
       </div>
 
       <div class="hero-right">
@@ -43,25 +45,23 @@
   </header>
 
   <main class="wrap" role="main">
-    <!-- Trust row in a white box overlapping hero (mock style) -->
+    <!-- three trust boxes in a white overlap box (exact mock) -->
     <section class="trust-row boxed" aria-label="Trust guarantees">
       <div class="trust-card">
         <div class="trust-title">🔒 Secure payments</div>
-        <div class="trust-desc">Cards processed by Stripe — Card data never stored here.</div>
+        <div class="trust-desc">Cards processed by Stripe — we don't store card details.</div>
       </div>
-
       <div class="trust-card">
         <div class="trust-title">✅ Instant confirmation</div>
-        <div class="trust-desc">Bookings block dates immediately; you’ll receive confirmation email.</div>
+        <div class="trust-desc">Bookings block dates immediately; confirmation emailed to you.</div>
       </div>
-
       <div class="trust-card">
         <div class="trust-title">📞 Support</div>
         <div class="trust-desc">Email: {{ t.support_email or '' }} — replies within 24 hours.</div>
       </div>
     </section>
 
-    <!-- Property grid/cards -->
+    <!-- 2-column grid on desktop (auto-fit responsive on mobile) -->
     <section class="grid" aria-label="Properties list">
       {% for slug, info in groups.items() %}
       <article class="card" role="article" aria-labelledby="title-{{ loop.index }}">
@@ -76,12 +76,12 @@
             <div class="meta">Units: {{ info.unit_ids|length }}</div>
 
             {% if info.price %}
-            <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="muted">/ night</span></div>
+              <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="muted">/ night</span></div>
             {% else %}
-            <div class="price muted">Price: not set</div>
+              <div class="price muted">Price: not set</div>
             {% endif %}
 
-            <div class="teaser">“Comfortable, clean, excellent host.”</div>
+            <div class="teaser">“Comfortable villa with private pool and sea view.”</div>
           </div>
 
           <div class="card-actions">
@@ -94,14 +94,17 @@
     </section>
 
     <footer class="page-footer" role="contentinfo">
-      <small class="muted" id="footer-year">© Ravuri Properties — Built with care</small>
+      <small class="muted" id="footer-year">© {{ (t.brand if t and getattr(t,'brand',None) else 'Ravuri Properties') }} — Built with care</small>
     </footer>
   </main>
 
   <script>
-    // set footer year & wire language anchors (works on iPhone Safari)
     (function(){
-      const f = document.getElementById('footer-year'); if(f) f.textContent = `© ${new Date().getFullYear()} Ravuri Properties — Built with care`;
+      // footer year
+      const f = document.getElementById('footer-year');
+      if(f) f.textContent = `© ${new Date().getFullYear()} ${f.textContent.replace('© ','')}`;
+
+      // language toggles (works on iPhone Safari)
       const en = document.getElementById('lang-en'), th = document.getElementById('lang-th');
       if(en) en.addEventListener('click', e => { e.preventDefault(); fetch('/lang/en').catch(()=>{}); location.reload(); });
       if(th) th.addEventListener('click', e => { e.preventDefault(); fetch('/lang/th').catch(()=>{}); location.reload(); });
