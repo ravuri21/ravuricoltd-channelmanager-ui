@@ -1,4 +1,4 @@
-/* style-luxury.css — tuned to the Drive mock */
+/* style-luxury.css — match the Drive mock exactly (hero pool + boxed trust row + grid) */
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Poppins:wght@300;400;600;700;900&display=swap');
 
 :root{
@@ -13,88 +13,74 @@
   --transition-fast: 200ms;
 }
 
-/* base */
+/* base and reset */
 *,*::before,*::after{box-sizing:border-box}
-html,body{margin:0;padding:0;background:var(--bg);color:var(--brand-dark);font-family:"Poppins",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--brand-dark);font-family:"Poppins",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
 
-/* HERO - big and cinematic like mock */
+/* HERO (big pool image with overlay and title) */
 .site-hero{
   height:420px;
   background-size:cover;
   background-position:center;
   position:relative;
-  display:flex;
-  align-items:flex-end;
-  border-bottom:0;
 }
 .hero-overlay{
   position:absolute; inset:0;
-  background: linear-gradient(180deg, rgba(0,0,0,0.22), rgba(0,0,0,0.22));
-  pointer-events:none;
-  z-index:1;
+  background: linear-gradient(180deg, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.28) 100%);
+  pointer-events:none; z-index:1;
 }
 .hero-inner{
-  max-width:1200px;
-  width:100%;
-  margin:0 auto;
-  padding:28px 18px;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  position:relative;
-  z-index:2;
+  max-width:1200px; margin:0 auto; padding:28px 18px; display:flex; align-items:flex-end; justify-content:space-between; position:relative; z-index:2;
 }
-.brand-hero{ font-family:"Playfair Display",serif; font-weight:700; font-size:2.1rem; color:#fff; text-shadow:0 10px 30px rgba(0,0,0,0.5); display:flex; align-items:center }
+.brand-hero{ font-family:"Playfair Display",serif; font-weight:700; font-size:2.1rem; color:#fff; display:flex; align-items:center; text-shadow:0 10px 30px rgba(0,0,0,0.55) }
 .brand-red{ color:var(--brand-red); margin-right:8px }
 .brand-dark{ color:#fff; margin-left:6px; font-weight:700; font-size:1.05rem }
-
-/* hero subtitle under brand */
-.hero-subtitle{ color:rgba(255,255,255,0.95); margin-top:6px; font-size:0.95rem; opacity:0.95 }
+.hero-subtitle{ color:rgba(255,255,255,0.95); margin-top:6px; font-size:0.95rem }
 
 /* small right area */
 .hero-right{ display:flex; gap:12px; align-items:center; color:#fff }
-.lang a{ color:rgba(255,255,255,0.95); text-decoration:none; font-weight:600; margin-right:6px }
+.lang a{ color:rgba(255,255,255,0.95); text-decoration:none; font-weight:600 }
 
-/* trust box: overlapping hero bottom — same look as mock */
+/* OVERLAPPING TRUST BOX (mock) */
 .wrap{ max-width:1200px; margin:0 auto; padding:28px 18px 40px; box-sizing:border-box }
-.trust-row{ display:flex; gap:12px; flex-wrap:wrap; margin-top: -64px; }
-.trust-row.boxed{ background: rgba(255,255,255,0.97); border-radius:12px; padding:12px; box-shadow:0 10px 30px rgba(2,6,23,0.06); border:1px solid rgba(0,0,0,0.04); }
+.trust-row{ display:flex; gap:12px; flex-wrap:wrap; margin-top:-64px; }
+.trust-row.boxed{ background: rgba(255,255,255,0.98); border-radius:12px; padding:12px; box-shadow:0 10px 30px rgba(2,6,23,0.06); border:1px solid rgba(0,0,0,0.04); }
 .trust-card{ min-width:180px; padding:12px 14px; border-radius:10px; background:var(--card-bg); border:1px solid rgba(15,23,42,0.04); box-shadow:0 6px 18px rgba(2,6,23,0.04) }
 .trust-title{ font-weight:700; color:var(--brand-dark) }
 .trust-desc{ color:var(--muted); margin-top:6px }
 
-/* grid / cards match mock spacing/size */
+/* GRID & CARDS (two per row visually on medium screens) */
 .grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(320px,1fr)); gap:26px; margin-top:18px }
 .card{ background:var(--card-bg); border-radius:var(--card-radius); overflow:hidden; box-shadow:var(--shadow-1); transition: transform var(--transition-fast), box-shadow var(--transition-fast); display:flex; flex-direction:column }
 .card:hover{ transform:translateY(-8px); box-shadow:var(--shadow-2) }
 
-/* image & overlay like mock (slightly darker overlay so text pops) */
+/* image & overlay (title over image) */
 .media-link{ position:relative; display:block; overflow:hidden; border-radius:12px 12px 0 0 }
 .card-image{ width:100%; height:300px; object-fit:cover; transition: transform .28s ease }
 .card:hover .card-image{ transform:scale(1.03) }
 .card-image-overlay{ position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:flex-start; padding:18px; background: linear-gradient(180deg, rgba(0,0,0,0.0) 50%, rgba(0,0,0,0.52) 100%); pointer-events:none }
 .overlay-title{ font-family:"Playfair Display",serif; color:#fff; font-size:1.2rem; font-weight:700; text-shadow: 0 8px 22px rgba(0,0,0,0.5) }
 
-/* pad / body */
+/* PAD / TEXT */
 .pad{ padding:20px; display:flex; flex-direction:column; gap:8px }
 .title{ font-weight:700; font-size:1.05rem; color:var(--brand-dark) }
 .meta{ color:var(--muted); font-size:0.95rem }
 .price{ font-weight:800; color:var(--brand-red); margin-top:6px }
-.teaser{ color:#374151; margin-top:8px; }
+.teaser{ color:#374151; margin-top:8px }
 
-/* actions */
+/* ACTIONS */
 .card-actions{ display:flex; gap:12px; margin-top:12px }
 .btn{ padding:11px 14px; border-radius:10px; font-weight:700; text-decoration:none; text-align:center; flex:1 }
 .btn.btn-outline{ border:1px solid rgba(15,23,42,0.06); background:transparent; color:var(--brand-dark) }
 .btn.btn-primary{ background:var(--brand-red); color:#fff; box-shadow:0 10px 24px rgba(225,29,72,0.16) }
 
-/* footer */
+/* FOOTER */
 .page-footer{ text-align:center; margin-top:28px; color:var(--muted); padding-bottom:28px }
 
-/* responsive */
+/* RESPONSIVE TWEAKS (mobile first) */
 @media (max-width:920px){ .card-image{ height:220px } }
 @media (max-width:720px){
-  .site-hero{ height:300px }
+  .site-hero{ height:300px; background-position:center 30% }
   .card-image{ height:160px }
   .trust-row.boxed{ margin-top:-48px; padding:10px }
 }
