@@ -2,46 +2,101 @@
 <html lang="{{ session.get('lang','en') }}">
 <head>
   <meta charset="utf-8" />
-  <title>Ravuri <span style="display:none">Properties</span> — Luxury Stays</title>
+  <title>{{ t.brand if t else 'Ravuri Properties' }} — Luxury Stays</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <!-- main/base CSS (keep as-is) -->
+
+  <!-- Base + Additions -->
   <link rel="stylesheet" href="/static/style.css" />
-  <!-- smaller additions -->
   <link rel="stylesheet" href="/static/style-additions.css?v=20251021" />
 
-  <!-- Force luxury theme LAST (cache-busted) so it overrides older CSS -->
-  <link rel="stylesheet" href="/static/style-luxury.css?v=20251021" />
+  <!-- Luxury Theme LAST (forces new design) -->
+  <link rel="stylesheet" href="/static/style-luxury.css?v=20251022" />
 
-  <!-- === Inline critical luxury-theme CSS (high priority) ===
-       This guarantees the luxury mock styling appears immediately.
-       You can later move this to /static/style-luxury.css once confirmed.
-  -->
+  <!-- Inline high-priority overrides (mobile-safe) -->
   <style>
-  /* high priority overrides — small, safe set for brand and card look */
-  .brand-red{ color: #e11d48 !important; }
-  .brand-dark{ color: #111827 !important; }
-  .site-hero{ background: linear-gradient(180deg,#fff,#f9fafb) !important; border-bottom:1px solid #eee !important; }
-  .trust-card{ background:#fff !important; border:1px solid #f1f5f9 !important; }
-  .card{ box-shadow: 0 6px 20px rgba(2,6,23,0.06) !important; border-radius: 12px !important; }
-  .title{ color: #111827 !important; font-weight:800 !important; }
-</style>
+    :root{
+      --brand-red:#e11d48;
+      --brand-dark:#111827;
+      --muted:#6b7280;
+      --accent:#0ea5a4;
+      --bg:#faf9f7;
+      --card:#ffffff;
+      --primary:#2563eb;
+      --card-radius:14px;
+    }
+    body{
+      margin:0;
+      font-family:"Poppins",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+      background:var(--bg);
+      color:var(--brand-dark);
+      -webkit-font-smoothing:antialiased;
+      line-height:1.4;
+    }
+    a{color:inherit;text-decoration:none}
+    img{display:block;width:100%;height:auto;border:0}
+    .site-hero{
+      background:linear-gradient(135deg,#fff 0%,#fef7f4 100%);
+      border-bottom:1px solid #eee;
+      padding:22px 0;
+    }
+    .hero-inner{
+      max-width:1100px;margin:0 auto;
+      display:flex;justify-content:space-between;align-items:center;
+      padding:0 14px;gap:12px;
+    }
+    .brand{font-size:1.6rem;font-weight:900;letter-spacing:-0.5px;display:flex;align-items:center}
+    .brand-red{color:var(--brand-red)}
+    .brand-dark{color:var(--brand-dark);margin-left:8px}
+    .lang{color:var(--muted);font-weight:600;display:flex;gap:10px;align-items:center}
+    .stripe-badge{background:#fff;padding:6px 8px;border-radius:8px;border:1px solid #eee;margin-left:8px;font-size:.85rem;color:#0b5cff}
+
+    .wrap{max-width:1100px;margin:18px auto;padding:18px;box-sizing:border-box}
+    .trust-row{display:flex;gap:12px;margin:12px 0 20px;flex-wrap:wrap}
+    .trust-card{flex:1;min-width:180px;background:var(--card);border-radius:10px;padding:12px;border:1px solid #f1f5f9;box-shadow:0 8px 20px rgba(2,6,23,0.04)}
+    .trust-title{font-weight:700;margin-bottom:6px}
+
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin-top:6px}
+    .card{background:var(--card);border-radius:var(--card-radius);overflow:hidden;box-shadow:0 10px 28px rgba(0,0,0,0.06);transition:transform .18s,box-shadow .18s}
+    .card:hover{transform:translateY(-8px);box-shadow:0 18px 48px rgba(0,0,0,0.12)}
+    .card img{width:100%;height:200px;object-fit:cover;display:block}
+    .pad{padding:16px;display:flex;flex-direction:column;justify-content:space-between;gap:10px}
+    .title{font-weight:800;font-size:1.06rem;color:var(--brand-dark);margin-bottom:6px}
+    .meta{color:var(--muted);font-size:.95rem;margin-bottom:6px}
+    .price{font-size:1.05rem;font-weight:800;color:var(--brand-red);margin-bottom:6px}
+    .teaser{color:#374151;font-size:.95rem}
+    .card-actions{display:flex;gap:10px;margin-top:6px}
+    .btn{padding:10px 12px;border-radius:10px;font-weight:700;cursor:pointer;text-align:center;flex:1;display:inline-block}
+    .btn-outline{background:transparent;border:1px solid var(--accent);color:var(--accent)}
+    .btn-outline:hover{background:var(--accent);color:#fff}
+    .btn-primary{background:var(--brand-red);color:#fff;box-shadow:0 6px 18px rgba(225,29,72,0.28)}
+    .btn-primary:hover{background:#c40d40}
+    .page-footer{text-align:center;color:var(--muted);font-size:.9rem;margin-top:18px;padding-bottom:18px}
+    @media (max-width:720px){
+      .hero-inner{flex-direction:column;align-items:flex-start;gap:10px}
+      .card img{height:150px}
+      .trust-card{min-width:140px}
+    }
+  </style>
 </head>
 <body>
-  <!-- Hero -->
-  <div class="site-hero" role="banner">
+  <!-- Brand Header -->
+  <div class="site-hero">
     <div class="hero-inner">
-      <div class="brand" aria-label="Ravuri Properties branding">
+      <div class="brand">
         <span class="brand-red">Ravuri</span><span class="brand-dark">Properties</span>
       </div>
-      <div class="lang" aria-hidden="false">
+      <div class="lang">
         <a href="/lang/en">English</a> • <a href="/lang/th">ไทย</a>
-        {% if t.publishable_key %}<span class="stripe-badge">Secure payments by Stripe</span>{% endif %}
+        {% if t.publishable_key %}
+          <span class="stripe-badge">Secure payments by Stripe</span>
+        {% endif %}
       </div>
     </div>
   </div>
 
   <div class="wrap">
-    <div class="trust-row" role="region" aria-label="Trust features">
+    <!-- Trust Row -->
+    <div class="trust-row">
       <div class="trust-card">
         <div class="trust-title">🔒 Secure payments</div>
         <div style="color:var(--muted)">Payments processed by Stripe. Card details never stored here.</div>
@@ -56,10 +111,11 @@
       </div>
     </div>
 
-    <div class="grid" role="list">
+    <!-- Property Grid -->
+    <div class="grid">
       {% for slug, info in groups.items() %}
-      <article class="card" role="listitem" aria-labelledby="title-{{ loop.index }}">
-        <a href="/prop/{{ slug }}" aria-label="Open {{ info.title }}" style="text-decoration:none;color:inherit">
+      <article class="card" aria-labelledby="title-{{ loop.index }}">
+        <a href="/prop/{{ slug }}">
           <img src="{{ info.image_url }}" alt="{{ info.title }}" loading="lazy">
         </a>
         <div class="pad">
@@ -83,21 +139,16 @@
     </div>
 
     <div class="page-footer">
-      <small class="muted">© {{ (t.year if t and getattr(t,'year',None) else '') or (now().year if now is defined else '') or '2025' }} Ravuri Properties — Built with care</small>
+      <small class="muted">© 2025 Ravuri Properties — Built with care</small>
     </div>
   </div>
 
   <script>
-    // Force footer year without depending on Jinja helper
     (function(){
       try{
-        const el = document.querySelector('.page-footer small');
-        if(el){ const y = new Date().getFullYear(); el.textContent = `© ${y} Ravuri Properties — Built with care`; }
-      }catch(_){}
-      // make lang links switch quickly (client + server)
-      document.querySelectorAll('a[href^="/lang/"]').forEach(a=>{
-        a.addEventListener('click', function(ev){ ev.preventDefault(); fetch(this.getAttribute('href')).catch(()=>{}); location.reload(); });
-      });
+        const footer = document.querySelector('.page-footer small');
+        if(footer){ footer.textContent = `© ${new Date().getFullYear()} Ravuri Properties — Built with care`; }
+      }catch(e){}
     })();
   </script>
 </body>
