@@ -5,22 +5,23 @@
   <title>Properties — {{ t.brand if t else 'Ravuri Properties' }}</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
 
-  <!-- Google fonts for the luxury look -->
+  <!-- Google fonts (luxury look) -->
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Poppins:wght@300;400;600;700;900&display=swap" rel="stylesheet">
 
-  <!-- Base CSS (keep) -->
+  <!-- Base app CSS (keep) -->
   <link rel="stylesheet" href="/static/style.css" />
-  <!-- Luxury theme (replace file backend/static/style-luxury.css with the CSS below) -->
-  <link rel="stylesheet" href="/static/style-luxury.css?v=20251023" />
-  <!-- TEMP INLINE OVERRIDE — REMOVE after verification -->
-<style>
-:root{ --brand-red:#e11d48; --brand-dark:#0f1724; }
-.site-hero{ background:linear-gradient(135deg,#fff,#fff7f2) !important; border-bottom:1px solid #efe8e6 !important; padding:32px 0 !important; }
-.brand{ font-family:'Playfair Display',serif !important; font-weight:700 !important; font-size:1.7rem !important; }
-.card{ box-shadow: 0 10px 30px rgba(2,6,23,0.08) !important; border-radius:16px !important; }
-.card-image{ height:260px !important; object-fit:cover !important; }
-.btn.btn-primary{ background:#e11d48 !important; color:#fff !important; }
-</style>
+  <!-- Luxury theme file you uploaded -->
+  <link rel="stylesheet" href="/static/style-luxury.css?v=20251024" />
+
+  <!-- Small inline fallbacks / high-priority tweaks -->
+  <style>
+    /* Ensure brand color visible even if cached CSS differs */
+    .brand-red{ color:#e11d48 !important; }
+    .brand-dark{ color:#0f1724 !important; }
+    .stripe-badge{ font-size:0.88rem; margin-left:8px; padding:6px 8px; border-radius:8px; border:1px solid #eee; background:#fff; color:#0b5cff; display:inline-block; }
+    /* Accessibility: ensure focus outlines on keyboard/voiceover */
+    a:focus-visible { outline: 3px solid rgba(14,165,164,0.18); outline-offset: 2px; }
+  </style>
 </head>
 <body>
   <!-- Hero / brand -->
@@ -30,18 +31,19 @@
         <span class="brand-red">Ravuri</span><span class="brand-dark">Properties</span>
       </div>
 
-      <div class="hero-right">
-        <nav class="lang" aria-label="Language">
-          <a href="/lang/en">English</a> • <a href="/lang/th">ไทย</a>
+      <div class="hero-right" style="display:flex;align-items:center;gap:12px">
+        <nav class="lang" aria-label="Language switch">
+          <a id="lang-en" href="/lang/en">English</a> • <a id="lang-th" href="/lang/th">ไทย</a>
         </nav>
+
         {% if t.publishable_key %}
-          <div class="stripe-badge">Secure payments · Stripe</div>
+          <div class="stripe-badge" aria-hidden="false">Secure payments · Stripe</div>
         {% endif %}
       </div>
     </div>
   </header>
 
-  <main class="wrap" role="main">
+  <main class="wrap" role="main" aria-live="polite">
     <!-- Trust / guarantees -->
     <section class="trust-row" aria-label="Trust guarantees">
       <div class="trust-card">
@@ -51,20 +53,19 @@
 
       <div class="trust-card">
         <div class="trust-title">✅ Instant confirmation</div>
-        <div class="trust-desc">Bookings block dates immediately and you’ll receive an email confirmation.</div>
+        <div class="trust-desc">Bookings block dates immediately and you’ll receive a confirmation email.</div>
       </div>
 
       <div class="trust-card">
         <div class="trust-title">📞 Support</div>
-        <div class="trust-desc">Email: {{ t.support_email or '' }} — reply typically within 24 hours.</div>
+        <div class="trust-desc">Email: {{ t.support_email or '' }} — typical reply within 24 hours.</div>
       </div>
     </section>
 
-    <!-- Grid -->
+    <!-- Properties grid -->
     <section class="grid" aria-label="Properties list">
       {% for slug, info in groups.items() %}
       <article class="card" role="article" aria-labelledby="title-{{ loop.index }}">
-        <!-- image area with overlay title (this produces the mock look) -->
         <a class="media-link" href="/prop/{{ slug }}" aria-label="Open {{ info.title }}">
           <img class="card-image" src="{{ info.image_url }}" alt="{{ info.title }}" loading="lazy">
           <div class="card-image-overlay">
@@ -74,12 +75,13 @@
 
         <div class="pad">
           <div class="card-main">
-            <!-- Title below image (keeps SEO & accessibility) -->
             <div id="title-{{ loop.index }}" class="title">{{ info.title }}</div>
+
+            <!-- Public page intentionally hides internal unit ids & raw slug -->
             <div class="meta">Units: {{ info.unit_ids|length }}</div>
 
             {% if info.price %}
-            <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="muted">/ night ({{ info.currency or 'THB' }})</span></div>
+            <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="muted">/ night</span></div>
             {% else %}
             <div class="price muted">Price: not set</div>
             {% endif %}
@@ -96,16 +98,24 @@
       {% endfor %}
     </section>
 
-    <footer class="page-footer" role="contentinfo">
-      <small class="muted">© {{ new_year if (locals().get('new_year')) else (t.year if (t and getattr(t,'year',None)) else '') or (2025) }} Ravuri Properties — Built with care</small>
+    <footer class="page-footer" role="contentinfo" style="margin-top:20px">
+      <small class="muted" id="footer-year">© Ravuri Properties — Built with care</small>
     </footer>
   </main>
 
+  <!-- Small client JS: set footer year and handle language toggles without relying on Jinja helpers -->
   <script>
-    // ensure year shows even if template helper not present
     (function(){
-      const el = document.querySelector('.page-footer .muted');
-      if(el) el.textContent = `© ${new Date().getFullYear()} Ravuri Properties — Built with care`;
+      // footer year (safe fallback if server template doesn't provide)
+      try {
+        const el = document.getElementById('footer-year');
+        if(el) el.textContent = `© ${new Date().getFullYear()} Ravuri Properties — Built with care`;
+      } catch (e) {}
+
+      // Language links: prefer server-side /lang endpoints but do a fetch then reload for fast switch
+      const en = document.getElementById('lang-en'), th = document.getElementById('lang-th');
+      if(en) en.addEventListener('click', function(e){ e.preventDefault(); fetch('/lang/en', {method:'GET'}).finally(()=>location.reload()); });
+      if(th) th.addEventListener('click', function(e){ e.preventDefault(); fetch('/lang/th', {method:'GET'}).finally(()=>location.reload()); });
     })();
   </script>
 </body>
