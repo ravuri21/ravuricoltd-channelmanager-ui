@@ -146,15 +146,11 @@ html, body {
   .card-image{ height:220px; }
 }
 @media (max-width:720px){
-  .hero-inner{ flex-direction:column; align-items:flex-start; gap:10px; padding:0 12px; }
+  .hero-inner{ flex-direction:column; align-items:flex-start; gap:10px; }
   .card-image{ height:160px; }
-  .pad{ padding:12px; }
+  .pad{ padding:12px; gap:8px; }
+  .trust-card{ min-width:140px; }
 }
 
-/* reduced motion respect */
-@media (prefers-reduced-motion: reduce) {
-  .card, .card-image, .card:hover { transition: none !important; transform: none !important; }
-}
-
-/* helpers / performance hint */
+/* helpers */
 .site-hero, .brand, .card, .card-image, .btn.btn-primary { will-change: transform, box-shadow; }
