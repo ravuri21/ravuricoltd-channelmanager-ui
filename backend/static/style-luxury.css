@@ -1,21 +1,21 @@
-/* style-luxury.css — luxury magazine / villa theme (updated to match mock) */
-/* Fonts imported for luxury serif + crisp UI sans */
+/* style-luxury.css — FINAL matching the Drive mock */
+/* import luxury fonts */
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Poppins:wght@300;400;600;700;900&display=swap');
 
 :root{
-  --brand-red: #e11d48;
+  --brand-red: #d81b45;          /* slightly warmer red for luxury */
   --brand-dark: #0f1724;
   --muted: #6b7280;
-  --bg: #faf6f4;
+  --bg: #fbf7f3;
   --card-bg: #ffffff;
-  --card-radius: 16px;
+  --card-radius: 18px;
   --shadow-1: 0 10px 30px rgba(2,6,23,0.08);
-  --shadow-2: 0 20px 50px rgba(2,6,23,0.12);
-  --transition-fast: 200ms;
-  --overlay-grad: linear-gradient(180deg, rgba(0,0,0,0.0) 45%, rgba(0,0,0,0.40) 100%);
+  --shadow-2: 0 20px 48px rgba(2,6,23,0.12);
+  --transition: 220ms;
+  --overlay-grad: linear-gradient(180deg, rgba(0,0,0,0.0) 45%, rgba(0,0,0,0.48) 100%);
 }
 
-/* Base reset + body */
+/* Reset/base */
 * { box-sizing: border-box; }
 html,body { height:100%; }
 body{
@@ -28,16 +28,16 @@ body{
   -webkit-text-size-adjust:100%;
 }
 
-/* HERO / header */
+/* HERO */
 .site-hero{
-  background: linear-gradient(160deg, #fff 0%, #fff7f3 100%);
+  background: linear-gradient(160deg,#fff 0%, #fff7f2 100%);
   border-bottom: 1px solid rgba(15,23,42,0.04);
-  padding: 28px 0;
+  padding: 36px 0;
 }
 .hero-inner{
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 0 14px;
+  max-width:1200px;
+  margin:0 auto;
+  padding:0 16px;
   display:flex;
   align-items:center;
   justify-content:space-between;
@@ -53,46 +53,46 @@ body{
 .brand-red{
   color: var(--brand-red);
   font-weight:700;
-  font-size:1.65rem;
+  font-size:1.8rem;
   letter-spacing:-0.8px;
 }
 .brand-dark{
   color: var(--brand-dark);
-  font-family:"Poppins",system-ui, sans-serif;
-  font-size:1.05rem;
+  font-family:"Poppins", sans-serif;
   font-weight:700;
-  margin-left:4px;
+  font-size:1.05rem;
+  margin-left:6px;
 }
 
-/* top-right elements */
-.hero-right { display:flex; align-items:center; gap:12px; }
+/* top-right */
+.hero-right{ display:flex; align-items:center; gap:12px; }
 .stripe-badge{
   background:#fff;
   border:1px solid rgba(15,23,42,0.04);
-  padding:6px 10px;
-  border-radius:8px;
-  font-size:.85rem;
+  padding:7px 10px;
+  border-radius:9px;
+  font-size:0.88rem;
   color:#0b5cff;
-  box-shadow: 0 6px 16px rgba(2,6,23,0.03);
+  box-shadow:0 8px 20px rgba(2,6,23,0.03);
 }
 
-/* content wrap and trust */
-.wrap{ max-width:1180px; margin:28px auto; padding:18px; box-sizing:border-box; }
-.trust-row{ display:flex; gap:12px; margin:16px 0 22px; flex-wrap:wrap; align-items:stretch; }
+/* CONTENT WRAP */
+.wrap{ max-width:1200px; margin:28px auto; padding:18px; box-sizing:border-box; }
+.trust-row{ display:flex; gap:12px; margin:18px 0 22px; flex-wrap:wrap; align-items:stretch; }
 .trust-card{
-  background: var(--card-bg);
-  border-radius: 12px;
+  background:var(--card-bg);
+  border-radius:12px;
   padding:12px 14px;
-  border: 1px solid rgba(15,23,42,0.04);
-  box-shadow: var(--shadow-1);
+  border:1px solid rgba(15,23,42,0.04);
+  box-shadow:var(--shadow-1);
   min-width:180px;
   display:flex;
   flex-direction:column;
   justify-content:center;
 }
-.trust-title{ font-weight:700; margin-bottom:6px; font-family:"Poppins",sans-serif; }
+.trust-title{ font-weight:700; font-family:"Poppins",sans-serif; }
 
-/* Grid & cards */
+/* GRID & CARDS */
 .grid{
   display:grid;
   grid-template-columns: repeat(auto-fit, minmax(320px,1fr));
@@ -100,68 +100,65 @@ body{
   margin-top:14px;
 }
 .card{
-  background: var(--card-bg);
-  border-radius: var(--card-radius);
+  background:var(--card-bg);
+  border-radius:var(--card-radius);
   overflow:hidden;
-  box-shadow: var(--shadow-1);
-  transition: transform var(--transition-fast) ease, box-shadow var(--transition-fast) ease;
+  box-shadow:var(--shadow-1);
+  transition: transform var(--transition) ease, box-shadow var(--transition) ease;
   display:flex;
   flex-direction:column;
 }
-.card:hover{
-  transform: translateY(-10px);
-  box-shadow: var(--shadow-2);
-}
+.card:hover{ transform: translateY(-10px); box-shadow:var(--shadow-2); }
 
-/* media area: big image + centered overlay title like mock */
-.media-link{ position:relative; display:block; overflow:hidden; border-radius: 10px 10px 0 0; }
+/* IMAGE AREA: cinematic, centered overlay (mock) */
+.media-link{ position:relative; display:block; overflow:hidden; border-radius: 12px 12px 0 0; }
 .card-image{
   width:100%;
-  height:320px;                   /* larger, cinematic */
+  height:360px;               /* taller for dramatic hero-style */
   object-fit:cover;
   display:block;
-  transition: transform .32s ease;
+  transition: transform 320ms ease;
   will-change: transform;
 }
-.card:hover .card-image{ transform: scale(1.03); }
+.card:hover .card-image{ transform: scale(1.035); }
 
-/* overlay (dark gradient) with centered villa title and quote label */
+/* overlay: centered box with slight translucent backing */
 .card-image-overlay{
   position:absolute; inset:0; pointer-events:none;
   background: var(--overlay-grad);
   display:flex;
-  align-items:flex-end;
+  align-items:center;
   justify-content:center;
-  padding:22px;
+  padding:20px;
 }
 .overlay-title{
   color:#fff;
   font-family:"Playfair Display", serif;
   font-weight:700;
-  font-size:1.15rem;
+  font-size:1.25rem;
   text-align:center;
-  padding:8px 12px;
-  text-shadow: 0 8px 22px rgba(0,0,0,0.48);
-  border-radius:6px;
-  /* slight translucent backing to increase contrast but keep soft */
-  background: linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.18));
+  padding:10px 16px;
+  border-radius:8px;
+  text-shadow: 0 10px 28px rgba(0,0,0,0.45);
+  backdrop-filter: blur(2px);
+  background: linear-gradient(180deg, rgba(0,0,0,0.14), rgba(0,0,0,0.22));
 }
 
-/* pad / content */
+/* CARD CONTENT */
 .pad{ padding:18px; display:flex; flex-direction:column; justify-content:space-between; gap:12px; min-height:160px; }
 .title{ font-weight:700; font-family:"Poppins",sans-serif; font-size:1.08rem; color:var(--brand-dark); margin-bottom:6px; }
-.meta{ color:var(--muted); font-size:.95rem; margin-bottom:6px; }
+.meta{ color:var(--muted); font-size:0.95rem; margin-bottom:6px; }
 .price{ font-size:1.08rem; font-weight:800; color:var(--brand-red); margin-bottom:6px; }
 .teaser{
-  color:#374151;
+  color:#2b2b2b;
   font-style:italic;
   font-size:0.98rem;
+  line-height:1.36;
   margin-top:6px;
-  max-width:90%;
-  line-height:1.35;
+  max-width:92%;
 }
 
-/* actions */
+/* ACTIONS & BUTTONS */
 .card-actions{ display:flex; gap:12px; margin-top:8px; }
 .btn{
   padding:11px 14px;
@@ -173,6 +170,7 @@ body{
   flex:1;
   text-decoration:none;
   -webkit-tap-highlight-color: transparent;
+  transition: background var(--transition), color var(--transition), box-shadow var(--transition);
 }
 .btn.btn-outline{
   background:transparent;
@@ -182,23 +180,23 @@ body{
 .btn.btn-primary{
   background:var(--brand-red);
   color:#fff;
-  box-shadow: 0 10px 28px rgba(225,29,72,0.16);
+  box-shadow:0 10px 28px rgba(216,27,64,0.16);
 }
 
-/* footer */
-.page-footer{ text-align:center; margin-top:26px; color:var(--muted); font-size:.95rem; padding-bottom:28px; }
+/* FOOTER */
+.page-footer{ text-align:center; margin-top:28px; color:var(--muted); font-size:0.95rem; padding-bottom:34px; }
 
-/* responsive */
+/* RESPONSIVE */
 @media (max-width:980px){
-  .card-image{ height:260px; }
-  .grid{ gap:20px; grid-template-columns: repeat(auto-fit, minmax(300px,1fr)); }
+  .card-image{ height:300px; }
+  .grid{ gap:22px; grid-template-columns: repeat(auto-fit, minmax(300px,1fr)); }
 }
 @media (max-width:720px){
   .hero-inner{ flex-direction:column; align-items:flex-start; gap:12px; padding:0 12px; }
   .card-image{ height:180px; }
   .pad{ padding:14px; min-height:150px; }
-  .overlay-title{ font-size:1rem; padding:6px 10px; }
+  .overlay-title{ font-size:1rem; padding:8px 12px; }
 }
 
-/* small accessibility/interaction helpers */
-a:focus-visible, .btn:focus-visible { outline: 3px solid rgba(14,165,164,0.18); outline-offset: 2px; }
+/* accessibility helpers */
+a:focus-visible, .btn:focus-visible { outline: 3px solid rgba(14,165,164,0.18); outline-offset:2px; }
