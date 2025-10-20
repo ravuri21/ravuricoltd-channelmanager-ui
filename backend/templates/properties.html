@@ -93,22 +93,22 @@
       {% endfor %}
     </section>
 
-    <footer class="page-footer" role="contentinfo">
-      <small class="muted" id="footer-year">© {{ (t.brand if t and getattr(t,'brand',None) else 'Ravuri Properties') }} — Built with care</small>
+        <footer class="page-footer" role="contentinfo">
+      <small class="muted" id="footer-year">
+        © {{ (t.brand|default('Ravuri Properties')) if t else 'Ravuri Properties' }} — Built with care
+      </small>
     </footer>
-  </main>
 
-  <script>
-    (function(){
-      // footer year
-      const f = document.getElementById('footer-year');
-      if(f) f.textContent = `© ${new Date().getFullYear()} ${f.textContent.replace('© ','')}`;
-
-      // language toggles (works on iPhone Safari)
-      const en = document.getElementById('lang-en'), th = document.getElementById('lang-th');
-      if(en) en.addEventListener('click', e => { e.preventDefault(); fetch('/lang/en').catch(()=>{}); location.reload(); });
-      if(th) th.addEventListener('click', e => { e.preventDefault(); fetch('/lang/th').catch(()=>{}); location.reload(); });
-    })();
-  </script>
+    <script>
+      // ensure footer has current year without using template helpers
+      (function(){
+        const el = document.getElementById('footer-year');
+        if(!el) return;
+        // el.textContent currently contains the brand text, e.g. "© Ravuri Properties — Built with care"
+        // We replace only the leading © part with the current year + brand text:
+        const brandText = el.textContent.replace(/^©\s*/, '').trim();
+        el.textContent = `© ${new Date().getFullYear()} ${brandText}`;
+      })();
+    </script>
 </body>
 </html>
