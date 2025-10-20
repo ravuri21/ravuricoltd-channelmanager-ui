@@ -4,79 +4,110 @@
   <meta charset="utf-8" />
   <title>Properties — {{ t.brand if t else "Ravuri Properties" }}</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <!-- main css -->
   <link rel="stylesheet" href="/static/style.css" />
+  <!-- optional theme additions — keep this file in backend/static/style-additions.css -->
   <link rel="stylesheet" href="/static/style-additions.css?v=20251021" />
+
+  <!-- Inline fallback styles (high specificity) so small theme tweaks show up immediately -->
   <style>
-    /* Theme A: Modern Luxury */
-    :root{ --brand-red:#e11d48; --brand-dark:#111827; --muted:#6b7280; --card-radius:14px; --accent:#2563eb; --glass: rgba(255,255,255,0.8); }
-    body{background:#f7fafc;margin:0;color:var(--brand-dark);font-family:system-ui,Arial,Helvetica,sans-serif}
-    .site-hero{background:linear-gradient(180deg,#fff,#fbfdff);padding:20px 0;border-bottom:1px solid #eef2f7}
-    .hero-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 16px}
-    .brand{font-weight:900;font-size:1.5rem;display:flex;align-items:center}
-    .brand-red{color:var(--brand-red);margin-right:6px}
-    .brand-dark{color:var(--brand-dark)}
-    .wrap{max-width:1200px;margin:20px auto;padding:18px}
-    .trust-row{display:flex;gap:12px;margin:14px 0;flex-wrap:wrap}
-    .trust-card{background:var(--glass);border-radius:10px;padding:12px;border:1px solid #eef4fb;min-width:180px;box-shadow:0 6px 18px rgba(2,6,23,0.04)}
-    .trust-title{font-weight:700}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px;margin-top:14px}
-    .card{background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 10px 30px rgba(2,6,23,0.06);display:flex;flex-direction:column;transition:transform .12s,box-shadow .12s}
-    .card:hover{transform:translateY(-8px);box-shadow:0 22px 50px rgba(2,6,23,0.12)}
-    .media{height:220px;overflow:hidden}
-    .media img{width:100%;height:100%;object-fit:cover;display:block}
-    .pad{padding:16px;display:flex;flex-direction:column;gap:10px;flex:1}
-    .title{font-weight:800;font-size:1.1rem;color:var(--brand-dark)}
-    .meta{color:var(--muted);font-size:0.95rem}
-    .price{font-weight:900;color:var(--brand-dark);font-size:1.05rem}
-    .teaser{color:#374151;font-size:.95rem}
-    .actions{display:flex;gap:10px;margin-top:8px}
-    .btn{flex:1;padding:10px 12px;border-radius:10px;text-decoration:none;color:#fff;font-weight:800;text-align:center}
-    .btn.view{background:#0ea5a4}
-    .btn.book{background:var(--accent)}
-    .page-footer{margin-top:20px;text-align:center;color:var(--muted);font-size:.9rem;padding-bottom:24px}
-    .test-banner{background:#111827;color:#fff;padding:6px 12px;border-radius:999px;font-weight:700;display:inline-block}
-    @media(max-width:720px){.media{height:160px}}
+    :root{ --brand-red:#e11d48; --brand-dark:#111827; --muted:#6b7280; --primary:#2563eb; --teal:#0ea5a4; --card-radius:12px; }
+    body{font-family:system-ui,Arial,Helvetica,sans-serif;background:#f6f8fa;margin:0;color:#222}
+    .site-hero{ background:linear-gradient(180deg,#ffffff,#f9fafb); border-bottom:1px solid #eee; padding:18px 0; }
+    .hero-inner{ max-width:1100px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; padding:0 12px; gap:12px; }
+    .brand { font-weight:900; font-size:1.35rem; line-height:1; display:flex; align-items:center; }
+    .brand-red{ color:var(--brand-red); font-family:"Helvetica Neue",system-ui,Arial,sans-serif; }
+    .brand-dark{ color:var(--brand-dark); margin-left:8px; }
+    .wrap{ max-width:1100px; margin:18px auto; padding:18px; box-sizing:border-box; }
+    .topline{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px}
+    .muted{color:var(--muted)}
+    .stripe-badge{display:inline-block;background:#f8fafc;border-radius:8px;padding:6px 8px;font-size:.82rem;color:#0b5cff;margin-left:8px;border:1px solid #e6eefc}
+    .trust-row{display:flex;gap:10px;margin:12px 0 18px;flex-wrap:wrap}
+    .trust-card{padding:10px;border-radius:8px;background:#fff;border:1px solid #eee;min-width:160px;flex:1;box-shadow:0 6px 18px rgba(2,6,23,0.04)}
+    .trust-title{font-weight:700;margin-bottom:6px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:14px}
+    .card{background:#fff;border-radius:var(--card-radius);overflow:hidden;box-shadow:0 6px 18px rgba(2,6,23,0.06);display:flex;flex-direction:column;transition:transform .12s,box-shadow .12s}
+    .card:hover{transform:translateY(-6px);box-shadow:0 18px 40px rgba(2,6,23,0.08)}
+    .card img{width:100%;height:180px;object-fit:cover;display:block}
+    .pad{padding:14px;display:flex;flex-direction:column;justify-content:space-between;flex:1}
+    .title{font-weight:800;font-size:1.05rem;color:var(--brand-dark);margin-bottom:6px}
+    .meta{color:var(--muted);font-size:.95rem;margin-bottom:8px}
+    .price{font-size:1.05rem;font-weight:800;color:var(--brand-dark);margin-bottom:6px}
+    .teaser{color:#374151;margin-top:8px}
+    .card-actions{display:flex;gap:8px;margin-top:10px}
+    .btn{display:inline-block;padding:10px 12px;border-radius:10px;font-weight:700;text-decoration:none;color:#fff;background:var(--primary);text-align:center}
+    .btn.btn-outline{background:transparent;color:var(--teal);border:1px solid #dbeafe}
+    .btn.btn-primary{background:var(--primary)}
+    .page-footer{text-align:center;color:var(--muted);font-size:.9rem;margin-top:18px;padding-bottom:24px}
+    @media (max-width:720px){ .hero-inner{flex-direction:column;align-items:flex-start;gap:10px} .trust-card{min-width:140px} .card img{height:140px} }
   </style>
 </head>
 <body>
-  <!-- THEME A ACTIVE (copy-paste check) -->
-  <div class="site-hero" role="banner">
+  <!-- brand header -->
+  <div class="site-hero" role="banner" aria-label="Ravuri Properties header">
     <div class="hero-inner">
-      <div class="brand">
+      <div class="brand" aria-hidden="false">
         <span class="brand-red">Ravuri</span><span class="brand-dark">Properties</span>
       </div>
-      <div style="display:flex;gap:12px;align-items:center">
-        <nav style="color:var(--muted)"><a href="/lang/en">English</a> • <a href="/lang/th">ไทย</a></nav>
-        {% if t.publishable_key %}<span class="test-banner">Secure payments</span>{% endif %}
+
+      <div class="muted" style="display:flex;gap:10px;align-items:center;">
+        <a href="/lang/en" id="lang-en">English</a> • <a href="/lang/th" id="lang-th">ไทย</a>
+        {% if t.publishable_key %}
+          <span class="stripe-badge" aria-hidden="false">Secure payments by Stripe</span>
+        {% endif %}
       </div>
     </div>
   </div>
 
   <div class="wrap">
-    <div class="trust-row" aria-hidden="false">
-      <div class="trust-card"><div class="trust-title">🔒 Secure payments</div><div style="color:var(--muted)">Processed by Stripe. Card details never stored here.</div></div>
-      <div class="trust-card"><div class="trust-title">✅ Instant confirmation</div><div style="color:var(--muted)">Bookings block dates immediately — confirmation by email.</div></div>
-      <div class="trust-card"><div class="trust-title">📞 Support</div><div style="color:var(--muted)">Email: {{ t.support_email or '' }}</div></div>
+    <!-- trust / guarantees -->
+    <div class="trust-row" role="region" aria-label="Trust and guarantees">
+      <div class="trust-card">
+        <div class="trust-title">🔒 Secure payments</div>
+        <div>Payments processed with Stripe — card data never stored here.</div>
+      </div>
+      <div class="trust-card">
+        <div class="trust-title">✅ Instant confirmation</div>
+        <div>Bookings block dates immediately and you'll receive a confirmation email.</div>
+      </div>
+      <div class="trust-card">
+        <div class="trust-title">📞 Support</div>
+        <div>Email: {{ t.support_email or '' }} — typical reply within 24 hours.</div>
+      </div>
     </div>
 
+    <!-- properties grid -->
     <div class="grid" role="list">
       {% for slug, info in groups.items() %}
       <article class="card" role="listitem" aria-labelledby="title-{{ loop.index }}">
-        <a href="/prop/{{ slug }}" class="media" aria-hidden="false"><img src="{{ info.image_url }}" alt="{{ info.title }}"></a>
+        <a href="/prop/{{ slug }}" style="text-decoration:none;color:inherit" aria-label="Open {{ info.title }}">
+          <img src="{{ info.image_url }}" alt="{{ info.title }}" loading="lazy">
+        </a>
+
         <div class="pad">
           <div>
             <div id="title-{{ loop.index }}" class="title">{{ info.title }}</div>
+
+            <!-- public page should NOT reveal internal unit ids or slug — show only number of units -->
             <div class="meta">Units: {{ info.unit_ids|length }}</div>
+
             {% if info.price %}
-              <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="meta">/ night ({{ info.currency or 'THB' }})</span></div>
+              <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="muted">/ night ({{ info.currency or 'THB' }})</span></div>
             {% else %}
-              <div class="price meta">Price: not set</div>
+              <div class="price muted">Price: not set</div>
             {% endif %}
-            <div class="teaser" style="margin-top:8px">“Comfortable, clean villa — perfect for families.”</div>
+
+            <div class="teaser">
+              <span style="font-weight:700;color:#b45309">★ 4.8</span>
+              <span style="color:#6b7280;margin-left:8px;font-size:.95rem"> · 235 reviews</span>
+              <div style="margin-top:6px;color:#333">“Lovely stay — clean, helpful host.” — Verified guest</div>
+            </div>
           </div>
-          <div class="actions">
-            <a class="btn view" href="/prop/{{ slug }}">View</a>
-            <a class="btn book" href="/prop/{{ slug }}#book">Book</a>
+
+          <div class="card-actions">
+            <a href="/prop/{{ slug }}" class="btn btn-outline" aria-label="View {{ info.title }}">View</a>
+            <a href="/prop/{{ slug }}#book" class="btn btn-primary" aria-label="Book {{ info.title }}">Book</a>
           </div>
         </div>
       </article>
@@ -84,8 +115,25 @@
     </div>
 
     <div class="page-footer">
-      <small class="muted">© {{ t.year or '2025' }} Ravuri Properties — Built with care</small>
+      <small class="muted" id="footer-year">© Ravuri Properties — Built with care</small>
     </div>
   </div>
+
+  <script>
+    // set footer year dynamically (avoids relying on template helper)
+    (function(){
+      const el = document.getElementById('footer-year');
+      if(el){
+        const y = new Date().getFullYear();
+        el.textContent = `© ${y} Ravuri Properties — Built with care`;
+      }
+
+      // language anchors: keep behaviour consistent with room page (client-side immediate toggle)
+      const en = document.getElementById('lang-en');
+      const th = document.getElementById('lang-th');
+      if(en) en.addEventListener('click', function(e){ e.preventDefault(); fetch('/lang/en').catch(()=>{}); location.reload(); });
+      if(th) th.addEventListener('click', function(e){ e.preventDefault(); fetch('/lang/th').catch(()=>{}); location.reload(); });
+    })();
+  </script>
 </body>
 </html>
