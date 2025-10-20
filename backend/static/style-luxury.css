@@ -1,4 +1,4 @@
-/* style-luxury.css — luxury card/grid theme (replace file) */
+/* style-luxury.css — luxury card/grid theme (improved) */
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Poppins:wght@300;400;600;700;900&display=swap');
 
 :root{
@@ -10,6 +10,19 @@
   --card-radius: 16px;
   --shadow-1: 0 10px 30px rgba(2,6,23,0.08);
   --shadow-2: 0 18px 48px rgba(2,6,23,0.10);
+  --transition-fast: 180ms;
+}
+
+/* Global reset / base */
+*, *::before, *::after { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--brand-dark);
+  font-family: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* HERO */
@@ -63,7 +76,7 @@
   border-radius: var(--card-radius);
   overflow:hidden;
   box-shadow: var(--shadow-1);
-  transition: transform .18s ease, box-shadow .18s ease;
+  transition: transform var(--transition-fast) ease, box-shadow var(--transition-fast) ease;
   display:flex;
   flex-direction:column;
 }
@@ -73,9 +86,10 @@
 }
 
 /* Image area with overlay */
-.media-link{ position:relative; display:block; overflow:hidden; }
+.media-link{ position:relative; display:block; overflow:hidden; border-radius: 6px 6px 0 0; }
 .card-image{
   width:100%;
+  max-width:100%;
   height:260px;
   object-fit:cover;
   display:block;
@@ -90,6 +104,7 @@
   display:flex;
   align-items:flex-end;
   padding:14px;
+  z-index: 2;
 }
 .overlay-title{
   color:#fff;
@@ -108,9 +123,23 @@
 
 /* Actions */
 .card-actions{ display:flex; gap:12px; margin-top:6px; }
-.btn{ padding:11px 14px; border-radius:10px; font-weight:700; cursor:pointer; text-align:center; display:inline-block; flex:1; text-decoration:none; }
+.btn{
+  padding:11px 14px;
+  border-radius:10px;
+  font-weight:700;
+  cursor:pointer;
+  text-align:center;
+  display:inline-block;
+  flex:1;
+  text-decoration:none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+}
 .btn.btn-outline{ background:transparent; color:var(--brand-dark); border:1px solid rgba(15,23,42,0.06); }
 .btn.btn-primary{ background:var(--brand-red); color:#fff; box-shadow: 0 8px 22px rgba(225,29,72,0.18); }
+
+.btn:focus, .media-link:focus { outline: none; }
+.btn:focus-visible, .media-link:focus-visible { outline: 3px solid rgba(14,165,164,0.18); outline-offset: 2px; }
 
 /* Responsive tweaks */
 @media (max-width:920px){
@@ -122,5 +151,10 @@
   .pad{ padding:12px; }
 }
 
-/* helpers */
+/* reduced motion respect */
+@media (prefers-reduced-motion: reduce) {
+  .card, .card-image, .card:hover { transition: none !important; transform: none !important; }
+}
+
+/* helpers / performance hint */
 .site-hero, .brand, .card, .card-image, .btn.btn-primary { will-change: transform, box-shadow; }
