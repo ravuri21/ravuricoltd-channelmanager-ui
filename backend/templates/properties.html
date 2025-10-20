@@ -8,14 +8,13 @@
   <!-- Google fonts (luxury look) -->
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Poppins:wght@300;400;600;700;900&display=swap" rel="stylesheet">
 
-  <!-- Base app CSS (keep) -->
+  <!-- Base stylesheet -->
   <link rel="stylesheet" href="/static/style.css" />
-  <!-- Luxury theme file you uploaded -->
+  <!-- Luxury theme (must be LAST) -->
   <link rel="stylesheet" href="/static/style-luxury.css?v=20251024" />
 
-  <!-- IMMEDIATE THEME OVERRIDE: paste this into <head> of properties.html -->
+  <!-- 🔥 Immediate inline override to force luxury theme (works even if cache old) -->
   <style>
-    /* High-priority overrides to force luxury theme while caches update */
     :root{
       --brand-red:#e11d48 !important;
       --brand-dark:#0f1724 !important;
@@ -23,21 +22,25 @@
       --card-bg:#ffffff !important;
       --card-radius:16px !important;
     }
-    body { background: var(--bg) !important; color: var(--brand-dark) !important; font-family: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important; }
+    body { background: var(--bg) !important; color: var(--brand-dark) !important;
+      font-family: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+      margin:0;
+    }
     .site-hero { background: linear-gradient(135deg,#fff 0%,#fff7f2 100%) !important; border-bottom:1px solid #efe8e6 !important; }
     .brand-red { color: var(--brand-red) !important; font-family:"Playfair Display", serif !important; }
     .brand-dark { color: var(--brand-dark) !important; margin-left:6px !important; }
-    .grid, .card, .trust-row, .trust-card, .pad, .title, .price, .btn { /* promote key visuals */ box-shadow: 0 10px 28px rgba(0,0,0,0.06) !important; border-radius: 12px !important; }
-    .card-image { height: 260px !important; object-fit: cover !important; }
-    .btn.btn-primary { background: var(--brand-red) !important; color: #fff !important; }
-    /* keep this small and safe — remove after CSS cache clears */
+    .trust-card, .card { box-shadow:0 10px 30px rgba(2,6,23,0.08)!important; border-radius:12px!important; }
+    .btn.btn-primary { background:var(--brand-red)!important; color:#fff!important; }
+    .card-image { height:260px!important; object-fit:cover!important; }
+    a:focus-visible { outline:3px solid rgba(14,165,164,0.18); outline-offset:2px; }
   </style>
 </head>
+
 <body>
-  <!-- Hero / brand -->
-  <header class="site-hero" role="banner" aria-label="Ravuri Properties">
+  <!-- Header / Brand -->
+  <header class="site-hero" role="banner">
     <div class="hero-inner">
-      <div class="brand" aria-hidden="false">
+      <div class="brand">
         <span class="brand-red">Ravuri</span><span class="brand-dark">Properties</span>
       </div>
 
@@ -45,38 +48,37 @@
         <nav class="lang" aria-label="Language switch">
           <a id="lang-en" href="/lang/en">English</a> • <a id="lang-th" href="/lang/th">ไทย</a>
         </nav>
-
         {% if t.publishable_key %}
-          <div class="stripe-badge" aria-hidden="false">Secure payments · Stripe</div>
+          <div class="stripe-badge" style="background:#fff;border:1px solid #eee;padding:6px 8px;border-radius:8px;font-size:.85rem;color:#0b5cff">
+            Secure payments · Stripe
+          </div>
         {% endif %}
       </div>
     </div>
   </header>
 
-  <main class="wrap" role="main" aria-live="polite">
+  <main class="wrap" role="main">
     <!-- Trust / guarantees -->
     <section class="trust-row" aria-label="Trust guarantees">
       <div class="trust-card">
         <div class="trust-title">🔒 Secure payments</div>
-        <div class="trust-desc">Payments processed by Stripe — card details are never stored here.</div>
+        <div class="trust-desc">Payments processed by Stripe — card details never stored here.</div>
       </div>
-
       <div class="trust-card">
         <div class="trust-title">✅ Instant confirmation</div>
         <div class="trust-desc">Bookings block dates immediately and you’ll receive a confirmation email.</div>
       </div>
-
       <div class="trust-card">
         <div class="trust-title">📞 Support</div>
-        <div class="trust-desc">Email: {{ t.support_email or '' }} — typical reply within 24 hours.</div>
+        <div class="trust-desc">Email: {{ t.support_email or '' }} — reply within 24 hours.</div>
       </div>
     </section>
 
-    <!-- Properties grid -->
+    <!-- Property grid -->
     <section class="grid" aria-label="Properties list">
       {% for slug, info in groups.items() %}
       <article class="card" role="article" aria-labelledby="title-{{ loop.index }}">
-        <a class="media-link" href="/prop/{{ slug }}" aria-label="Open {{ info.title }}">
+        <a class="media-link" href="/prop/{{ slug }}" aria-label="View {{ info.title }}">
           <img class="card-image" src="{{ info.image_url }}" alt="{{ info.title }}" loading="lazy">
           <div class="card-image-overlay">
             <div class="overlay-title">{{ info.title }}</div>
@@ -86,16 +88,12 @@
         <div class="pad">
           <div class="card-main">
             <div id="title-{{ loop.index }}" class="title">{{ info.title }}</div>
-
-            <!-- Public page intentionally hides internal unit ids & raw slug -->
             <div class="meta">Units: {{ info.unit_ids|length }}</div>
-
             {% if info.price %}
-            <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="muted">/ night</span></div>
+              <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="muted">/ night</span></div>
             {% else %}
-            <div class="price muted">Price: not set</div>
+              <div class="price muted">Price: not set</div>
             {% endif %}
-
             <div class="teaser">“A beautiful stay — comfortable, clean, and friendly host.”</div>
           </div>
 
@@ -108,24 +106,22 @@
       {% endfor %}
     </section>
 
-    <footer class="page-footer" role="contentinfo" style="margin-top:20px">
-      <small class="muted" id="footer-year">© Ravuri Properties — Built with care</small>
+    <footer class="page-footer" style="text-align:center;margin-top:24px;padding-bottom:24px;">
+      <small id="footer-year" class="muted">© Ravuri Properties — Built with care</small>
     </footer>
   </main>
 
-  <!-- Small client JS: set footer year and handle language toggles without relying on Jinja helpers -->
+  <!-- Small helper script -->
   <script>
     (function(){
-      // footer year (safe fallback if server template doesn't provide)
-      try {
+      try{
         const el = document.getElementById('footer-year');
-        if(el) el.textContent = `© ${new Date().getFullYear()} Ravuri Properties — Built with care`;
-      } catch (e) {}
-
-      // Language links: prefer server-side /lang endpoints but do a fetch then reload for fast switch
-      const en = document.getElementById('lang-en'), th = document.getElementById('lang-th');
-      if(en) en.addEventListener('click', function(e){ e.preventDefault(); fetch('/lang/en', {method:'GET'}).finally(()=>location.reload()); });
-      if(th) th.addEventListener('click', function(e){ e.preventDefault(); fetch('/lang/th', {method:'GET'}).finally(()=>location.reload()); });
+        if(el){ el.textContent = `© ${new Date().getFullYear()} Ravuri Properties — Built with care`; }
+      }catch(e){}
+      // Language quick switch
+      const en=document.getElementById('lang-en'),th=document.getElementById('lang-th');
+      if(en) en.addEventListener('click',e=>{e.preventDefault();fetch('/lang/en').finally(()=>location.reload());});
+      if(th) th.addEventListener('click',e=>{e.preventDefault();fetch('/lang/th').finally(()=>location.reload());});
     })();
   </script>
 </body>
