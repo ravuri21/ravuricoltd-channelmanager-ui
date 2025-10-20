@@ -5,24 +5,30 @@
   <title>Properties — {{ t.brand if t else 'Ravuri Properties' }}</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
 
-  <!-- Google fonts for a luxury look -->
+  <!-- Google fonts exactly used in the mock -->
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Poppins:wght@300;400;600;700;900&display=swap" rel="stylesheet">
 
-  <!-- main app CSS -->
+  <!-- keep base app CSS -->
   <link rel="stylesheet" href="/static/style.css" />
-  <!-- luxury theme (replace backend/static/style-luxury.css) -->
-  <link rel="stylesheet" href="/static/style-luxury.css?v=20251024" />
+  <!-- luxury theme: force v param to bust cache on deploy -->
+  <link rel="stylesheet" href="/static/style-luxury.css?v=20251025" />
 </head>
 <body>
-  {# Choose a hero image: first property's image if available, fallback to generic #}
+  {# hero: use first property's image for big pool photo or fallback #}
   {% set first_info = (groups.values()|list|first) if groups|length > 0 else None %}
   {% set hero_image = first_info.image_url if first_info and first_info.image_url else "https://source.unsplash.com/featured/?pool,villa" %}
 
-  <!-- Hero with big background image and overlay title -->
-  <header class="site-hero" role="banner" aria-label="Ravuri Properties" style="background-image: linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0.22)), url('{{ hero_image }}');">
+  <!-- Hero with strong visual (large image, overlayed title) -->
+  <header class="site-hero" role="banner" aria-label="Ravuri Properties"
+          style="background-image: url('{{ hero_image }}');">
+    <div class="hero-overlay"></div>
+
     <div class="hero-inner">
-      <div class="brand" aria-hidden="false">
-        <span class="brand-red">Ravuri</span><span class="brand-dark">Properties</span>
+      <div class="hero-left">
+        <div class="brand brand-hero">
+          <span class="brand-red">Ravuri</span><span class="brand-dark">Properties</span>
+        </div>
+        <div class="hero-subtitle">Luxury stays • Instant confirmation</div>
       </div>
 
       <div class="hero-right">
@@ -30,40 +36,38 @@
           <a href="/lang/en" id="lang-en">English</a> • <a href="/lang/th" id="lang-th">ไทย</a>
         </nav>
         {% if t.publishable_key %}
-          <div class="stripe-badge">Secure payments · Stripe</div>
+        <div class="stripe-badge">Secure payments · Stripe</div>
         {% endif %}
       </div>
     </div>
   </header>
 
   <main class="wrap" role="main">
-    <!-- Trust / guarantees row inside a subtle box to the same row -->
+    <!-- Trust row in a white box overlapping hero (mock style) -->
     <section class="trust-row boxed" aria-label="Trust guarantees">
       <div class="trust-card">
         <div class="trust-title">🔒 Secure payments</div>
-        <div class="trust-desc">Payments processed by Stripe — card details are never stored here.</div>
+        <div class="trust-desc">Cards processed by Stripe — Card data never stored here.</div>
       </div>
 
       <div class="trust-card">
         <div class="trust-title">✅ Instant confirmation</div>
-        <div class="trust-desc">Booking blocks dates immediately and you’ll receive a confirmation email.</div>
+        <div class="trust-desc">Bookings block dates immediately; you’ll receive confirmation email.</div>
       </div>
 
       <div class="trust-card">
         <div class="trust-title">📞 Support</div>
-        <div class="trust-desc">Email: {{ t.support_email or '' }} — reply typically within 24 hours.</div>
+        <div class="trust-desc">Email: {{ t.support_email or '' }} — replies within 24 hours.</div>
       </div>
     </section>
 
-    <!-- Grid -->
+    <!-- Property grid/cards -->
     <section class="grid" aria-label="Properties list">
       {% for slug, info in groups.items() %}
       <article class="card" role="article" aria-labelledby="title-{{ loop.index }}">
         <a class="media-link" href="/prop/{{ slug }}" aria-label="Open {{ info.title }}">
           <img src="{{ info.image_url }}" alt="{{ info.title }}" loading="lazy" class="card-image">
-          <div class="card-image-overlay">
-            <div class="overlay-title">{{ info.title }}</div>
-          </div>
+          <div class="card-image-overlay"><div class="overlay-title">{{ info.title }}</div></div>
         </a>
 
         <div class="pad">
@@ -72,12 +76,12 @@
             <div class="meta">Units: {{ info.unit_ids|length }}</div>
 
             {% if info.price %}
-            <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="muted">/ night ({{ info.currency or 'THB' }})</span></div>
+            <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="muted">/ night</span></div>
             {% else %}
             <div class="price muted">Price: not set</div>
             {% endif %}
 
-            <div class="teaser">“A beautiful stay — comfortable, clean, and friendly host.”</div>
+            <div class="teaser">“Comfortable, clean, excellent host.”</div>
           </div>
 
           <div class="card-actions">
@@ -94,17 +98,13 @@
     </footer>
   </main>
 
-  <!-- small script to set year and wire language toggles (works on iPhone Safari) -->
   <script>
+    // set footer year & wire language anchors (works on iPhone Safari)
     (function(){
-      try{
-        const s = document.getElementById('footer-year');
-        if(s){ s.textContent = `© ${new Date().getFullYear()} Ravuri Properties — Built with care`; }
-      }catch(e){}
-      // make language links work via GET and reload page
+      const f = document.getElementById('footer-year'); if(f) f.textContent = `© ${new Date().getFullYear()} Ravuri Properties — Built with care`;
       const en = document.getElementById('lang-en'), th = document.getElementById('lang-th');
-      if(en) en.addEventListener('click', function(e){ e.preventDefault(); fetch('/lang/en').catch(()=>{}); location.reload(); });
-      if(th) th.addEventListener('click', function(e){ e.preventDefault(); fetch('/lang/th').catch(()=>{}); location.reload(); });
+      if(en) en.addEventListener('click', e => { e.preventDefault(); fetch('/lang/en').catch(()=>{}); location.reload(); });
+      if(th) th.addEventListener('click', e => { e.preventDefault(); fetch('/lang/th').catch(()=>{}); location.reload(); });
     })();
   </script>
 </body>
