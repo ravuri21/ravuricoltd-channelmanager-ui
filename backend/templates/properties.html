@@ -87,5 +87,17 @@
     // fallback to ensure footer has year if not set server-side
     (function(){ try{ const s = document.querySelector('.page-footer small'); if(s && !s.textContent.trim().match(/\d{4}/)) s.textContent = `© ${new Date().getFullYear()} Ravuri Properties — Built with care`; }catch(e){} })();
   </script>
+
+  <script>
+  // quick theme tester: toggles a body class so you can test different CSS rules quickly
+  // Usage: open console on mobile (Safari Web Inspector) and run: toggleTheme('luxury')
+  window.toggleTheme = function(name){
+    document.body.classList.toggle('theme-'+name);
+    // persists locally if you want
+    try{ localStorage.setItem('site_theme', name); }catch(e){}
+  };
+  // auto-apply saved theme
+  try{ const t=localStorage.getItem('site_theme'); if(t) document.body.classList.add('theme-'+t); }catch(e){}
+</script>
 </body>
 </html>
