@@ -5,85 +5,70 @@
   <title>Properties — {{ t.brand if t else 'Ravuri Properties' }}</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
 
-  <!-- Fonts used by the mock -->
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Poppins:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+  <!-- Google fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;900&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
 
-  <!-- Base app CSS (keep) -->
+  <!-- main app CSS -->
   <link rel="stylesheet" href="/static/style.css" />
-  <!-- Luxury theme CSS (replace backend/static/style-luxury.css) -->
-  <link rel="stylesheet" href="/static/style-luxury.css?v=20251025" />
+  <!-- luxury theme -->
+  <link rel="stylesheet" href="/static/style-luxury.css?v=20251022" />
+  <style>
+    /* quick inline fallback for immediate effect if static file cached */
+    .brand-red{ color:#e11d48; }
+  </style>
 </head>
 <body>
-  {# Use the explicit hero image if uploaded at /static/hero-pool.jpg, otherwise fallback to first property image #}
-  {% set hero_path = '/static/hero-pool.jpg' %}
-  {% set hero_image = hero_path if (request.environ.get('DOCUMENT_ROOT') is not none and (True)) else None %}
-  {# Jinja can't reliably check file existence here; prefer to upload hero-pool.jpg. We fallback to first group image if hero file missing. #}
-  {% set first_info = (groups.values()|list|first) if groups|length > 0 else None %}
-  {% set hero_fallback = first_info.image_url if first_info and first_info.image_url else "https://source.unsplash.com/featured/?pool,villa" %}
-
-  <header class="site-hero" role="banner"
-          style="background-image: url('{{ '/static/hero-pool.jpg' if (True) else hero_fallback }}');">
-    <div class="hero-overlay"></div>
-
+  <!-- HERO -->
+  <div class="site-hero" role="banner" aria-label="Ravuri Properties hero">
     <div class="hero-inner">
-      <div class="hero-left">
-        <div class="brand-hero">
-          <span class="brand-red">Ravuri</span><span class="brand-dark">Properties</span>
+      <div class="hero-visual" style="background-image: url('/static/hero-pool.jpg?v=20251022');">
+        <div class="hero-overlay"></div>
+        <div class="brand-text" aria-hidden="false">
+          <div class="ravuri">Ravuri</div>
+          <div class="properties">Properties</div>
         </div>
-        <div class="hero-subtitle">Pool villa · Sea view · Instant confirmation</div>
       </div>
 
-      <div class="hero-right">
-        <nav class="lang">
-          <a href="/lang/en" id="lang-en">English</a> • <a href="/lang/th" id="lang-th">ไทย</a>
-        </nav>
-        {% if t.publishable_key %}
-        <div class="stripe-badge">Secure payments · Stripe</div>
-        {% endif %}
-      </div>
+      <!-- optional right column (small info / CTA) -->
+      <div style="max-width:320px;display:none"></div>
     </div>
-  </header>
+  </div>
 
+  <!-- trust cards overlapping hero -->
+  <div class="trust-wrap" aria-label="Trust features">
+    <div class="trust-card">
+      <div class="title">🔒 Secure payments</div>
+      <div class="desc">Payments processed by Stripe. Card details are never stored here.</div>
+    </div>
+    <div class="trust-card">
+      <div class="title">✅ Instant confirmation</div>
+      <div class="desc">Bookings block dates immediately and you'll receive a confirmation email.</div>
+    </div>
+    <div class="trust-card">
+      <div class="title">📞 Support</div>
+      <div class="desc">Email: {{ t.support_email or 'support@ravuri.example' }} — reply within 24 hours.</div>
+    </div>
+  </div>
+
+  <!-- main listing grid -->
   <main class="wrap" role="main">
-    <!-- three trust boxes in a white overlap box (exact mock) -->
-    <section class="trust-row boxed" aria-label="Trust guarantees">
-      <div class="trust-card">
-        <div class="trust-title">🔒 Secure payments</div>
-        <div class="trust-desc">Cards processed by Stripe — we don't store card details.</div>
-      </div>
-      <div class="trust-card">
-        <div class="trust-title">✅ Instant confirmation</div>
-        <div class="trust-desc">Bookings block dates immediately; confirmation emailed to you.</div>
-      </div>
-      <div class="trust-card">
-        <div class="trust-title">📞 Support</div>
-        <div class="trust-desc">Email: {{ t.support_email or '' }} — replies within 24 hours.</div>
-      </div>
-    </section>
-
-    <!-- 2-column grid on desktop (auto-fit responsive on mobile) -->
     <section class="grid" aria-label="Properties list">
       {% for slug, info in groups.items() %}
       <article class="card" role="article" aria-labelledby="title-{{ loop.index }}">
         <a class="media-link" href="/prop/{{ slug }}" aria-label="Open {{ info.title }}">
-          <img src="{{ info.image_url }}" alt="{{ info.title }}" loading="lazy" class="card-image">
-          <div class="card-image-overlay"><div class="overlay-title">{{ info.title }}</div></div>
+          <img class="card-image" src="{{ info.image_url }}" alt="{{ info.title }}" loading="lazy">
         </a>
-
         <div class="pad">
-          <div class="card-main">
+          <div>
             <div id="title-{{ loop.index }}" class="title">{{ info.title }}</div>
             <div class="meta">Units: {{ info.unit_ids|length }}</div>
-
             {% if info.price %}
               <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="muted">/ night</span></div>
             {% else %}
               <div class="price muted">Price: not set</div>
             {% endif %}
-
-            <div class="teaser">“Comfortable villa with private pool and sea view.”</div>
+            <div class="teaser">“A beautiful stay — comfortable and clean.”</div>
           </div>
-
           <div class="card-actions">
             <a class="btn btn-outline" href="/prop/{{ slug }}">View</a>
             <a class="btn btn-primary" href="/prop/{{ slug }}#book">Book</a>
@@ -93,22 +78,14 @@
       {% endfor %}
     </section>
 
-        <footer class="page-footer" role="contentinfo">
-      <small class="muted" id="footer-year">
-        © {{ (t.brand|default('Ravuri Properties')) if t else 'Ravuri Properties' }} — Built with care
-      </small>
+    <footer class="page-footer" role="contentinfo">
+      <small class="muted">© {{ (t.brand if (t and getattr(t,'brand',None)) else 'Ravuri Properties') }} — Built with care</small>
     </footer>
+  </main>
 
-    <script>
-      // ensure footer has current year without using template helpers
-      (function(){
-        const el = document.getElementById('footer-year');
-        if(!el) return;
-        // el.textContent currently contains the brand text, e.g. "© Ravuri Properties — Built with care"
-        // We replace only the leading © part with the current year + brand text:
-        const brandText = el.textContent.replace(/^©\s*/, '').trim();
-        el.textContent = `© ${new Date().getFullYear()} ${brandText}`;
-      })();
-    </script>
+  <script>
+    // fallback to ensure footer has year if not set server-side
+    (function(){ try{ const s = document.querySelector('.page-footer small'); if(s && !s.textContent.trim().match(/\d{4}/)) s.textContent = `© ${new Date().getFullYear()} Ravuri Properties — Built with care`; }catch(e){} })();
+  </script>
 </body>
 </html>
