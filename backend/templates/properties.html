@@ -2,42 +2,26 @@
 <html lang="{{ session.get('lang','en') }}">
 <head>
   <meta charset="utf-8" />
-  <title>Properties — {{ (t.brand if (t and t.brand) else 'Ravuri Properties') }}</title>
+  <title>Properties — {% raw %}{{ brand }}{% endraw %}</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
 
-  <!-- base CSS -->
+  <!-- app CSS -->
   <link rel="stylesheet" href="/static/style.css" />
-  <!-- luxury theme CSS (if present) -->
   <link rel="stylesheet" href="/static/style-luxury.css?v=20251022" />
 
-  <!-- Inline critical hero + brand overrides -->
   <style>
-    .site-hero {
-      position: relative;
-      height: 420px;
-      background-image: url('/static/hero-pool.jpg?v=20251023');
-      background-size: cover;
-      background-position: center;
-      display: flex;
-      align-items: flex-end;
-      border-bottom: 1px solid rgba(0,0,0,0.06);
-    }
-    .site-hero::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(180deg, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.36) 100%);
-      pointer-events: none;
-    }
-    .hero-inner { position: relative; width:100%; max-width:1200px; margin:0 auto; padding:28px; box-sizing:border-box; }
+    /* critical hero/brand overrides — keeps layout stable across devices (mobile-first) */
+    .site-hero { position:relative; height:420px; background-image:url('/static/hero-pool.jpg?v=20251023'); background-size:cover; background-position:center; display:flex; align-items:flex-end; border-bottom:1px solid rgba(0,0,0,0.06); }
+    .site-hero::before { content:""; position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.36) 100%); pointer-events:none; }
+    .hero-inner { position:relative; width:100%; max-width:1200px; margin:0 auto; padding:28px; box-sizing:border-box; }
     .brand-block { position:absolute; left:28px; bottom:28px; z-index:5; color:#fff; text-shadow:0 8px 28px rgba(0,0,0,0.45); display:flex; flex-direction:column; gap:6px; }
     .brand-line { display:flex; align-items:baseline; gap:10px; line-height:1; }
-    .brand-red  { color:#e11d48; font-family:"Playfair Display", serif; font-weight:700; font-size:44px; }
-    .brand-dark { color:#0f1724; font-family:"Poppins",sans-serif; font-weight:800; font-size:44px; margin-left:6px; }
+    .brand-red { color:#e11d48; font-family:"Playfair Display", serif; font-weight:700; font-size:44px; }
+    .brand-dark { color:#fff; font-family:"Poppins",sans-serif; font-weight:800; font-size:44px; margin-left:6px; opacity:0.95; }
     .brand-tagline { color:rgba(255,255,255,0.95); font-size:14px; font-weight:600; opacity:0.95; }
 
     .trust-row-hero { position:absolute; right:28px; bottom:24px; z-index:6; display:flex; gap:10px; align-items:center; }
-    .trust-card { background:#fff; color:#111827; border-radius:10px; padding:10px 12px; min-width:160px; box-shadow:0 10px 28px rgba(0,0,0,0.12); font-size:13px; display:flex; flex-direction:column; gap:6px; }
+    .trust-card { background:#fff; color:#0f1724; border-radius:10px; padding:10px 12px; min-width:160px; box-shadow:0 10px 28px rgba(0,0,0,0.12); font-size:13px; display:flex; flex-direction:column; gap:6px; }
     .trust-title { font-weight:800; color:#0f1724; font-size:13px; }
 
     .wrap { max-width:1200px; margin:18px auto; padding:10px 20px 48px; box-sizing:border-box; background:transparent; }
@@ -59,6 +43,32 @@
   </style>
 </head>
 <body>
+  {# --- SAFELY compute brand + year using only Jinja constructs (no getattr/locals) --- #}
+  {% set brand = 'Ravuri Properties' %}
+  {% set year = namespace(val=2025) %}
+  {% if t %}
+    {# if t is an object with attribute brand #}
+    {% if t.brand is defined and t.brand %}
+      {% set brand = t.brand %}
+    {% else %}
+      {# if t is mapping-like with get() #}
+      {% if t.get is defined %}
+        {% if t.get('brand') %}
+          {% set brand = t.get('brand') %}
+        {% endif %}
+      {% endif %}
+    {% endif %}
+
+    {# year: prefer t.year if present #}
+    {% if t.year is defined and t.year %}
+      {% set year.val = t.year %}
+    {% else %}
+      {% if t.get is defined and t.get('year') %}
+        {% set year.val = t.get('year') %}
+      {% endif %}
+    {% endif %}
+  {% endif %}
+
   <!-- HERO -->
   <header class="site-hero" role="banner" aria-label="Hero">
     <div class="hero-inner">
@@ -80,7 +90,7 @@
         </div>
         <div class="trust-card">
           <div class="trust-title">📞 Support</div>
-          <div>Email: {{ (t.support_email if (t and t.support_email) else '') }} — reply within 24 hours.</div>
+          <div>Email: {{ (t.support_email if (t and (t.support_email is defined)) else '') }} — reply within 24 hours.</div>
         </div>
       </div>
     </div>
@@ -112,17 +122,17 @@
     </section>
 
     <footer class="page-footer" role="contentinfo" style="margin-top:26px;text-align:center;color:#6b7280;font-size:13px">
-      <small>© {{ (t.year if (t and getattr(t,'year',None) ) else ( 2025 )) }} {{ (t.brand if (t and t.brand) else 'Ravuri Properties') }} — Built with care</small>
+      <small>© {{ year.val }} {{ brand }} — Built with care</small>
     </footer>
   </main>
 
-  <!-- quick client-side fallback for footer year -->
   <script>
+    // Client-side fallback for year if template couldn't set it
     (function(){
       try{
         const el = document.querySelector('.page-footer small');
         if(el && !/\d{4}/.test(el.textContent)){
-          el.textContent = `© ${new Date().getFullYear()} ${'Ravuri Properties'} — Built with care`;
+          el.textContent = `© ${new Date().getFullYear()} Ravuri Properties — Built with care`;
         }
       }catch(e){}
     })();
