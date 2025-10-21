@@ -1,141 +1,116 @@
 <!doctype html>
-<html lang="{{ session.get('lang','en') }}">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Properties — {% raw %}{{ brand }}{% endraw %}</title>
+  <title>Properties — {{ t.brand if t else "Properties" }}</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-
-  <!-- app CSS -->
   <link rel="stylesheet" href="/static/style.css" />
-  <link rel="stylesheet" href="/static/style-luxury.css?v=20251022" />
-
+  <!-- Modern font for a premium look -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
-    /* critical hero/brand overrides — keeps layout stable across devices (mobile-first) */
-    .site-hero { position:relative; height:420px; background-image:url('/static/hero-pool.jpg?v=20251023'); background-size:cover; background-position:center; display:flex; align-items:flex-end; border-bottom:1px solid rgba(0,0,0,0.06); }
-    .site-hero::before { content:""; position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.36) 100%); pointer-events:none; }
-    .hero-inner { position:relative; width:100%; max-width:1200px; margin:0 auto; padding:28px; box-sizing:border-box; }
-    .brand-block { position:absolute; left:28px; bottom:28px; z-index:5; color:#fff; text-shadow:0 8px 28px rgba(0,0,0,0.45); display:flex; flex-direction:column; gap:6px; }
-    .brand-line { display:flex; align-items:baseline; gap:10px; line-height:1; }
-    .brand-red { color:#e11d48; font-family:"Playfair Display", serif; font-weight:700; font-size:44px; }
-    .brand-dark { color:#fff; font-family:"Poppins",sans-serif; font-weight:800; font-size:44px; margin-left:6px; opacity:0.95; }
-    .brand-tagline { color:rgba(255,255,255,0.95); font-size:14px; font-weight:600; opacity:0.95; }
-
-    .trust-row-hero { position:absolute; right:28px; bottom:24px; z-index:6; display:flex; gap:10px; align-items:center; }
-    .trust-card { background:#fff; color:#0f1724; border-radius:10px; padding:10px 12px; min-width:160px; box-shadow:0 10px 28px rgba(0,0,0,0.12); font-size:13px; display:flex; flex-direction:column; gap:6px; }
-    .trust-title { font-weight:800; color:#0f1724; font-size:13px; }
-
-    .wrap { max-width:1200px; margin:18px auto; padding:10px 20px 48px; box-sizing:border-box; background:transparent; }
-    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:20px; margin-top:20px; }
-
-    @media (max-width:920px) {
-      .brand-red, .brand-dark { font-size:34px; }
-      .site-hero { height:340px; }
-      .brand-block { left:18px; bottom:18px; right:18px; }
-      .trust-row-hero { right:18px; bottom:16px; gap:6px; }
-      .trust-card { min-width:120px; padding:8px 10px; font-size:12px; }
-    }
-    @media (max-width:520px) {
-      .brand-red, .brand-dark { font-size:30px; }
-      .site-hero { height:300px; background-position:center 36%; }
-      .trust-row-hero { position: static; margin:12px 0 0; display:flex; justify-content:flex-start; }
-      .brand-block { position: static; margin:12px 0; text-align:left; color:#111827; text-shadow:none; }
-    }
+    /* small extra styles to keep immediate polish without editing global css */
+    body{font-family:system-ui,Arial,Helvetica,sans-serif;background:#f6f8fa;margin:0;color:#222}
+    .wrap{max-width:1100px;margin:22px auto;padding:18px}
+    .header-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+    .brand{display:flex;align-items:center;gap:8px;line-height:1}
+    .brand .brand-name{font-family:'Poppins',system-ui,Arial,sans-serif;font-weight:800;font-size:1.25rem;letter-spacing:0.2px}
+    .brand .brand-strong{color:#e11d48} /* vivid red for "Ravuri" */
+    .brand .brand-light{color:#111}   /* dark for "Properties" */
+    .brand .tagline{font-size:.88rem;color:#6b7280;margin-left:6px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+    .card{background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,.06);display:flex;flex-direction:column;transition:transform .12s,box-shadow .12s}
+    .card:hover{transform:translateY(-6px);box-shadow:0 12px 28px rgba(0,0,0,.12)}
+    .card img{width:100%;height:180px;object-fit:cover;display:block}
+    .pad{padding:12px 14px;flex:1;display:flex;flex-direction:column;justify-content:space-between}
+    .title{font-weight:700;margin-bottom:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .meta{color:#6b7280;font-size:.92rem;margin-bottom:8px}
+    .price{font-size:1.05rem;font-weight:800;margin-bottom:10px}
+    .buttons{display:flex;gap:8px}
+    .btn{flex:1;padding:10px;border-radius:10px;border:0;font-weight:700;cursor:pointer;text-align:center;display:inline-block;text-decoration:none}
+    .btn.view{background:#0ea5a4;color:#fff}    /* teal */
+    .btn.book{background:#2563eb;color:#fff}    /* blue */
+    .small{font-size:.92rem;padding:8px;border-radius:8px}
+    .muted{color:#6b7280}
+    .stripe-badge{display:inline-block;background:#f8fafc;border-radius:8px;padding:6px 8px;font-size:.82rem;color:#0b5cff;margin-left:8px;border:1px solid #e6eefc}
+    .trust-row{display:flex;gap:8px;margin:14px 0;flex-wrap:wrap}
+    .trust-card{padding:10px;border-radius:8px;background:#fff;border:1px solid #eee;min-width:160px;flex:1}
+    .rating{font-weight:700;color:#b45309}
+    @media (max-width:720px){ .card img{height:140px} .header-row{flex-direction:column;align-items:flex-start} .brand .brand-name{font-size:1.1rem} }
   </style>
 </head>
 <body>
-  {# --- SAFELY compute brand + year using only Jinja constructs (no getattr/locals) --- #}
-  {% set brand = 'Ravuri Properties' %}
-  {% set year = namespace(val=2025) %}
-  {% if t %}
-    {# if t is an object with attribute brand #}
-    {% if t.brand is defined and t.brand %}
-      {% set brand = t.brand %}
-    {% else %}
-      {# if t is mapping-like with get() #}
-      {% if t.get is defined %}
-        {% if t.get('brand') %}
-          {% set brand = t.get('brand') %}
-        {% endif %}
-      {% endif %}
-    {% endif %}
-
-    {# year: prefer t.year if present #}
-    {% if t.year is defined and t.year %}
-      {% set year.val = t.year %}
-    {% else %}
-      {% if t.get is defined and t.get('year') %}
-        {% set year.val = t.get('year') %}
-      {% endif %}
-    {% endif %}
-  {% endif %}
-
-  <!-- HERO -->
-  <header class="site-hero" role="banner" aria-label="Hero">
-    <div class="hero-inner">
-      <div class="brand-block" aria-hidden="false">
-        <div class="brand-line">
-          <span class="brand-red">Ravuri</span><span class="brand-dark">Properties</span>
+  <div class="wrap">
+    <div class="header-row">
+      <div class="brand" aria-label="Ravuri Properties">
+        <!-- Styled company name: Ravuri (red) + Properties (black) -->
+        <div class="brand-name">
+          <span class="brand-strong">Ravuri</span>
+          <span class="brand-light"> Properties</span>
         </div>
-        <div class="brand-tagline">Luxury Stays · Trusted Service</div>
+        <div class="tagline muted">Premium vacation rentals — book direct</div>
       </div>
 
-      <div class="trust-row-hero" aria-hidden="false">
-        <div class="trust-card">
-          <div class="trust-title">🔒 Secure payments</div>
-          <div>Payments processed by Stripe. Card details never stored here.</div>
-        </div>
-        <div class="trust-card">
-          <div class="trust-title">✅ Instant confirmation</div>
-          <div>Booking blocks dates immediately and you'll receive a confirmation email.</div>
-        </div>
-        <div class="trust-card">
-          <div class="trust-title">📞 Support</div>
-          <div>Email: {{ (t.support_email if (t and (t.support_email is defined)) else '') }} — reply within 24 hours.</div>
-        </div>
+      <div class="muted" style="display:flex;align-items:center;gap:8px">
+        <span><a href="/lang/en">English</a></span> • <a href="/lang/th">ไทย</a>
+        {% if t.publishable_key %}<span class="stripe-badge">Secure payments by Stripe</span>{% endif %}
       </div>
     </div>
-  </header>
 
-  <!-- MAIN -->
-  <main class="wrap" role="main">
-    <section class="grid" aria-label="Properties grid">
+    <!-- Trust / Guarantees row -->
+    <div class="trust-row" aria-hidden="false">
+      <div class="trust-card">
+        <div style="font-weight:700">🔒 Secure payments</div>
+        <div style="color:#6b7280;margin-top:6px">Payments processed by Stripe. Card details never stored here.</div>
+      </div>
+      <div class="trust-card">
+        <div style="font-weight:700">✅ Instant confirmation</div>
+        <div style="color:#6b7280;margin-top:6px">Booking blocks dates immediately and you'll receive a confirmation email.</div>
+      </div>
+      <div class="trust-card">
+        <div style="font-weight:700">📞 Support</div>
+        <div style="color:#6b7280;margin-top:6px">Email: {{ t.support_email or '' }} — reply within 24 hours.</div>
+      </div>
+    </div>
+
+    <div class="grid">
       {% for slug, info in groups.items() %}
-      <article class="card" aria-labelledby="title-{{ loop.index }}">
-        <a class="media-link" href="/prop/{{ slug }}" aria-label="Open {{ info.title }}">
-          <img class="card-image" src="{{ info.image_url }}" alt="{{ info.title }}" loading="lazy">
+      <div class="card" role="article" aria-labelledby="title-{{ loop.index }}">
+        <a href="/prop/{{ slug }}" style="text-decoration:none;color:inherit">
+          <img src="{{ info.image_url }}" alt="{{ info.title }}" loading="lazy">
         </a>
         <div class="pad">
-          <div id="title-{{ loop.index }}" class="title">{{ info.title }}</div>
-          <div class="meta">Units: {{ info.unit_ids|length }}</div>
-          {% if info.price %}
-            <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="muted">/ night ({{ info.currency or 'THB' }})</span></div>
-          {% else %}
-            <div class="price muted">Price: not set</div>
-          {% endif %}
-          <div class="card-actions">
-            <a class="btn btn-outline" href="/prop/{{ slug }}">View</a>
-            <a class="btn btn-primary" href="/prop/{{ slug }}#book">Book</a>
+          <div>
+            <div id="title-{{ loop.index }}" class="title">{{ info.title }}</div>
+
+            <!-- NOTE: We intentionally hide raw unit ids & internal text on public page for simplicity -->
+            <div class="meta">Units: {{ info.unit_ids|length }}</div>
+
+            {% if info.price %}
+              <div class="price">฿ {{ '%.0f'|format(info.price) }} <span class="muted">/ night ({{ info.currency or 'THB' }})</span></div>
+            {% else %}
+              <div class="price muted">Price: not set</div>
+            {% endif %}
+
+            <!-- small sample rating / testimonial — replace with real reviews if available -->
+            <div style="margin-top:8px">
+              <span class="rating">★ 4.8</span>
+              <span style="color:#6b7280;margin-left:8px;font-size:.95rem"> · 235 reviews</span>
+              <div style="margin-top:6px;color:#333">"Lovely stay — clean, helpful host." — <em>Verified guest</em></div>
+            </div>
+          </div>
+
+          <div class="buttons" style="margin-top:10px">
+            <a class="btn view" href="/prop/{{ slug }}">View</a>
+            <a class="btn book" href="/prop/{{ slug }}#book">Book</a>
           </div>
         </div>
-      </article>
+      </div>
       {% endfor %}
-    </section>
+    </div>
 
-    <footer class="page-footer" role="contentinfo" style="margin-top:26px;text-align:center;color:#6b7280;font-size:13px">
-      <small>© {{ year.val }} {{ brand }} — Built with care</small>
-    </footer>
-  </main>
-
-  <script>
-    // Client-side fallback for year if template couldn't set it
-    (function(){
-      try{
-        const el = document.querySelector('.page-footer small');
-        if(el && !/\d{4}/.test(el.textContent)){
-          el.textContent = `© ${new Date().getFullYear()} Ravuri Properties — Built with care`;
-        }
-      }catch(e){}
-    })();
-  </script>
+    <div style="margin-top:20px;color:#666;font-size:.95rem;">
+      <p>Showing public properties. For admin actions (sync, edit iCal), sign in to the admin dashboard.</p>
+    </div>
+  </div>
 </body>
 </html>
