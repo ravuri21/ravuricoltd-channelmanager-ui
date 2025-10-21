@@ -79,7 +79,7 @@
     </section>
 
     <footer class="page-footer" role="contentinfo">
-      <small class="muted">© {{ (t.brand if (t and getattr(t,'brand',None)) else 'Ravuri Properties') }} — Built with care</small>
+      <small class="muted">© {{ t.brand if (t and (t.brand is defined)) else 'Ravuri Properties' }} — Built with care</small>
     </footer>
   </main>
 
