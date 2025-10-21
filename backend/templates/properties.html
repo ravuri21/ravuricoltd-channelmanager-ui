@@ -2,16 +2,16 @@
 <html lang="{{ session.get('lang','en') }}">
 <head>
   <meta charset="utf-8" />
-  <title>Properties — {{ t.brand if t and getattr(t,'brand',None) else 'Ravuri Properties' }}</title>
+  <title>Properties — {{ (t.brand if (t and t.brand) else 'Ravuri Properties') }}</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <!-- base css (keep) -->
+
+  <!-- base CSS -->
   <link rel="stylesheet" href="/static/style.css" />
-  <!-- luxury css (optional / keep if present) -->
+  <!-- luxury theme CSS (if present) -->
   <link rel="stylesheet" href="/static/style-luxury.css?v=20251022" />
 
-  <!-- Inline critical hero + brand overrides (useful so change appears immediately on mobile) -->
+  <!-- Inline critical hero + brand overrides -->
   <style>
-    /* Hero */
     .site-hero {
       position: relative;
       height: 420px;
@@ -19,10 +19,9 @@
       background-size: cover;
       background-position: center;
       display: flex;
-      align-items: flex-end; /* to place brand near bottom */
+      align-items: flex-end;
       border-bottom: 1px solid rgba(0,0,0,0.06);
     }
-    /* dark overlay for contrast */
     .site-hero::before {
       content: "";
       position: absolute;
@@ -30,92 +29,32 @@
       background: linear-gradient(180deg, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.36) 100%);
       pointer-events: none;
     }
-    .hero-inner {
-      position: relative; /* above overlay */
-      width: 100%;
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 28px;
-      display: flex;
-      align-items: flex-end;
-      box-sizing: border-box;
-    }
+    .hero-inner { position: relative; width:100%; max-width:1200px; margin:0 auto; padding:28px; box-sizing:border-box; }
+    .brand-block { position:absolute; left:28px; bottom:28px; z-index:5; color:#fff; text-shadow:0 8px 28px rgba(0,0,0,0.45); display:flex; flex-direction:column; gap:6px; }
+    .brand-line { display:flex; align-items:baseline; gap:10px; line-height:1; }
+    .brand-red  { color:#e11d48; font-family:"Playfair Display", serif; font-weight:700; font-size:44px; }
+    .brand-dark { color:#0f1724; font-family:"Poppins",sans-serif; font-weight:800; font-size:44px; margin-left:6px; }
+    .brand-tagline { color:rgba(255,255,255,0.95); font-size:14px; font-weight:600; opacity:0.95; }
 
-    /* Brand block (bottom-left over hero) */
-    .brand-block {
-      position: absolute;
-      left: 28px;
-      bottom: 28px;
-      z-index: 5;
-      color: #fff;
-      text-shadow: 0 8px 28px rgba(0,0,0,0.45);
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      max-width: calc(100% - 56px);
-    }
-    .brand-line {
-      display: flex;
-      align-items: baseline;
-      gap: 10px;
-      line-height: 1;
-    }
-    .brand-xxx { font-family: "Playfair Display", serif; font-weight:700; font-size:40px; letter-spacing:-1px; }
-    .brand-red  { color: #e11d48; font-weight:900; font-size:44px; }
-    .brand-dark { color: #0f1724; font-weight:800; font-size:44px; margin-left:6px; }
-
-    .brand-tagline {
-      color: rgba(255,255,255,0.95);
-      font-size:14px;
-      font-weight:600;
-      margin-top:2px;
-      opacity:0.95;
-      display:inline-block;
-    }
-
-    /* three trust boxes (overlapping hero, right side) */
-    .trust-row-hero {
-      position: absolute;
-      right: 28px;
-      bottom: 24px;
-      z-index: 6;
-      display:flex;
-      gap:10px;
-      align-items:center;
-      pointer-events: auto;
-    }
-    .trust-card {
-      background: #fff;
-      color: #111827;
-      border-radius: 10px;
-      padding:10px 12px;
-      min-width:160px;
-      box-shadow: 0 10px 28px rgba(0,0,0,0.12);
-      font-size:13px;
-      display:flex;
-      flex-direction:column;
-      gap:6px;
-    }
+    .trust-row-hero { position:absolute; right:28px; bottom:24px; z-index:6; display:flex; gap:10px; align-items:center; }
+    .trust-card { background:#fff; color:#111827; border-radius:10px; padding:10px 12px; min-width:160px; box-shadow:0 10px 28px rgba(0,0,0,0.12); font-size:13px; display:flex; flex-direction:column; gap:6px; }
     .trust-title { font-weight:800; color:#0f1724; font-size:13px; }
 
-    /* page content container below hero */
-    .wrap { max-width:1200px; margin: 18px auto; padding: 10px 20px 48px; box-sizing:border-box; background:transparent; }
+    .wrap { max-width:1200px; margin:18px auto; padding:10px 20px 48px; box-sizing:border-box; background:transparent; }
     .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:20px; margin-top:20px; }
 
-    /* small responsive adjustments */
     @media (max-width:920px) {
       .brand-red, .brand-dark { font-size:34px; }
-      .brand-line { gap:8px; }
-      .brand-block { left:18px; bottom:18px; right:18px; max-width:none; }
+      .site-hero { height:340px; }
+      .brand-block { left:18px; bottom:18px; right:18px; }
       .trust-row-hero { right:18px; bottom:16px; gap:6px; }
       .trust-card { min-width:120px; padding:8px 10px; font-size:12px; }
-      .site-hero { height:340px; }
     }
     @media (max-width:520px) {
       .brand-red, .brand-dark { font-size:30px; }
-      .site-hero { height:300px; background-position: center 36%; }
-      .trust-row-hero { position: static; margin: 12px 0 0; display:flex; justify-content:flex-start; }
-      .brand-block { position: static; margin: 12px 0; text-align:left; color:#111827; text-shadow:none; }
+      .site-hero { height:300px; background-position:center 36%; }
+      .trust-row-hero { position: static; margin:12px 0 0; display:flex; justify-content:flex-start; }
+      .brand-block { position: static; margin:12px 0; text-align:left; color:#111827; text-shadow:none; }
     }
   </style>
 </head>
@@ -123,7 +62,6 @@
   <!-- HERO -->
   <header class="site-hero" role="banner" aria-label="Hero">
     <div class="hero-inner">
-      <!-- Left-bottom brand block: Ravuri (red) Properties (black) + tagline below -->
       <div class="brand-block" aria-hidden="false">
         <div class="brand-line">
           <span class="brand-red">Ravuri</span><span class="brand-dark">Properties</span>
@@ -131,7 +69,6 @@
         <div class="brand-tagline">Luxury Stays · Trusted Service</div>
       </div>
 
-      <!-- Right-bottom trust cards -->
       <div class="trust-row-hero" aria-hidden="false">
         <div class="trust-card">
           <div class="trust-title">🔒 Secure payments</div>
@@ -143,13 +80,13 @@
         </div>
         <div class="trust-card">
           <div class="trust-title">📞 Support</div>
-          <div>Email: {{ t.support_email or '' }} — reply within 24 hours.</div>
+          <div>Email: {{ (t.support_email if (t and t.support_email) else '') }} — reply within 24 hours.</div>
         </div>
       </div>
     </div>
   </header>
 
-  <!-- MAIN CONTENT -->
+  <!-- MAIN -->
   <main class="wrap" role="main">
     <section class="grid" aria-label="Properties grid">
       {% for slug, info in groups.items() %}
@@ -175,16 +112,18 @@
     </section>
 
     <footer class="page-footer" role="contentinfo" style="margin-top:26px;text-align:center;color:#6b7280;font-size:13px">
-      <small>© {{ new_year if locals().get('new_year') else (t.year if (t and getattr(t,'year',None)) else '') or (2025) }} Ravuri Properties — Built with care</small>
+      <small>© {{ (t.year if (t and getattr(t,'year',None) ) else ( 2025 )) }} {{ (t.brand if (t and t.brand) else 'Ravuri Properties') }} — Built with care</small>
     </footer>
   </main>
 
-  <!-- quick client-side fallback for footer year (if template helpers fail) -->
+  <!-- quick client-side fallback for footer year -->
   <script>
     (function(){
       try{
         const el = document.querySelector('.page-footer small');
-        if(el){ const y = new Date().getFullYear(); if(!/\\d{4}/.test(el.textContent)) el.textContent = `© ${y} Ravuri Properties — Built with care`; }
+        if(el && !/\d{4}/.test(el.textContent)){
+          el.textContent = `© ${new Date().getFullYear()} ${'Ravuri Properties'} — Built with care`;
+        }
       }catch(e){}
     })();
   </script>
