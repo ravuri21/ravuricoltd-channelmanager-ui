@@ -34,12 +34,41 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--brand-dark);font-f
 .hero-overlay{
   position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 45%, rgba(0,0,0,0.28) 100%);pointer-events:none;
 }
-.brand-text{
-  position:absolute; left:36px; bottom:28px; color:#fff; z-index:4; display:flex; align-items:baseline; gap:8px;
-  text-shadow:0 8px 26px rgba(0,0,0,0.42);
+.brand {
+  font-family: "Playfair Display", serif;
+  font-weight: 700;
+  font-size: 3rem;                /* increased font size */
+  line-height: 1.2;
+  display: flex;
+  align-items: baseline;
+  flex-direction: column;
+  text-align: center;
 }
-.brand-text .ravuri{ font-family:"Playfair Display", serif; font-size:40px; font-weight:700; color:var(--brand-red); line-height:1; }
-.brand-text .properties{ font-family:"Poppins",sans-serif; font-size:22px; font-weight:700; color:#fff; opacity:.95; margin-left:6px }
+
+.brand-red {
+  color: var(--brand-red);
+  font-size: 3.2rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.brand-dark {
+  color: var(--brand-dark);
+  font-family: "Poppins", sans-serif;
+  font-size: 2.6rem;
+  font-weight: 700;
+}
+
+/* tagline text under Ravuri Properties */
+.brand-tagline {
+  font-family: "Poppins", sans-serif;
+  font-size: 1rem;
+  color: #fff;
+  font-weight: 400;
+  opacity: 0.9;
+  margin-top: 8px;
+  text-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
 
 /* Trust cards overlay (overlapping hero) */
 .trust-wrap{
