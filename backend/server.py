@@ -782,9 +782,13 @@ def public_book_group(slug):
 
         db = SessionLocal()
         try:
+                        # Reject if ANY unit overlaps — show which unit caused the rejection and log it
             for uid in unit_ids:
                 if _overlaps(db, uid, start, end):
-                    return jsonify({"error": "Dates not available"}), 409
+                    # helpful log for debugging (visible in Render logs)
+                    print(f"[BOOKING] overlap detected for unit {uid} while booking {slug} {start}–{end}")
+                    # return the overlapping unit id so UI/logs can show useful info
+                    return jsonify({"error": "Dates not available", "overlap_unit": uid}), 409
 
             for uid in unit_ids:
                 db.add(AvailabilityBlock(
