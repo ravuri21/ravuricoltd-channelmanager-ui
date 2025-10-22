@@ -59,6 +59,28 @@
   /* TAGLINE MUST BE WHITE */
   .brand-tagline { color: #ffffff; font-size:15px; font-weight:600; opacity:0.95; text-shadow:0 6px 18px rgba(0,0,0,0.6); }
 
+  /* language toggle (top-right inside hero) */
+  .hero-lang {
+    display:flex;
+    gap:8px;
+    align-items:center;
+    font-weight:600;
+    font-size:14px;
+  }
+  .hero-lang a{
+    color:#ffffff;
+    text-decoration:none;
+    opacity:0.95;
+    padding:6px 8px;
+    border-radius:8px;
+    border:1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.03);
+  }
+  .hero-lang a.active{
+    background: rgba(255,255,255,0.12);
+    text-decoration:underline;
+  }
+
   /* trust row below hero (not inside hero) */
   .trust-row-below{
     display:flex;
@@ -92,6 +114,7 @@
     .hero-inner{ padding:18px; gap:8px; align-items:flex-start; flex-direction:column; }
     .trust-row-below{ flex-direction:row; gap:10px; padding:0 12px; }
     .trust-card{ width:170px; padding:10px; font-size:12px; }
+    .hero-lang { margin-top:6px; }
   }
 
   @media (max-width:520px){
@@ -100,6 +123,7 @@
     .brand-block{ text-shadow:none; }
     .trust-row-below{ flex-direction:column; gap:10px; margin-top:10px; align-items:center; }
     .trust-card{ width:88%; min-width:unset; }
+    .hero-lang{ align-self:flex-end; }
   }
 </style>
 </head>
@@ -169,12 +193,15 @@
       <div class="brand-tagline">{{ T['hero_tagline'] }}</div>
     </div>
 
-    <!-- keep this empty placeholder so hero layout remains centered -->
-    <div style="width:1px; height:1px; visibility:hidden;" aria-hidden="true"></div>
+    <!-- Language selector (visible on hero, top-right) -->
+    <nav class="hero-lang" aria-label="Language switch">
+      <a href="/lang/en" class="{{ 'active' if lang == 'en' else '' }}">English</a>
+      <a href="/lang/th" class="{{ 'active' if lang == 'th' else '' }}">ไทย</a>
+    </nav>
   </div>
 </header>
 
-<!-- TRUST CARDS: BELOW the hero (NOT inside it) -->
+<!-- TRUST CARDS: BELOW the hero (NOT inside hero) -->
 <div class="trust-row-below" role="region" aria-label="Trust guarantees">
   <div class="trust-card">
     <div class="trust-title">{{ T['secure_title'] }}</div>
