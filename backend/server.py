@@ -131,7 +131,7 @@ def _overlaps(db, unit_id: int, start: str, end: str) -> bool:
     return db.query(q.exists()).scalar()
 
 # Expose _load_meta into Jinja templates so templates can call it:
-app.jinja_env.globals.update(_load_meta=__load_meta)
+app.jinja_env.globals.update(_load_meta=_load_meta)
 
 # ====== iCal fetch (lightweight) ======
 def fetch_ical(ical_url):
@@ -462,7 +462,6 @@ def lang(code):
     if code in ("en","th"):
         session["lang"] = code
     ref = request.referrer or url_for("index")
-    # If referrer is admin-only and user not logged in, go to public properties
     if ref.endswith("/login") or ref.startswith(request.host_url + "admin"):
         return redirect(url_for("properties_index"))
     return redirect(ref)
@@ -623,7 +622,6 @@ def properties_index():
             price = None
             currency = "THB"
             if unit_ids:
-                # pick the first visible unit's rate
                 first_uid = None
                 for uid in unit_ids:
                     if uid not in ignore_set:
@@ -686,7 +684,6 @@ def property_page(slug):
     if visible_unit_ids:
         db = SessionLocal()
         try:
-            # use the first visible unit
             first_uid = visible_unit_ids[0]
             rp = db.query(RatePlan).filter(RatePlan.unit_id == first_uid).first()
             if rp and rp.base_rate is not None:
@@ -731,7 +728,6 @@ def api_public_create_intent(slug):
 
     db = SessionLocal()
     try:
-        # pick first unit's rate
         rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
     finally:
         db.close()
