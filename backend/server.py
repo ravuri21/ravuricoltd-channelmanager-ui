@@ -85,9 +85,6 @@ def _tr(key):
     lang = _flask_session.get("lang", APP_LANG_DEFAULT)
     return LANG_MAP.get(lang, LANG_MAP.get(APP_LANG_DEFAULT, {})).get(key, key)
 
-# make available in templates
-app.jinja_env.globals["_tr"] = _tr
-
 # ====== Helpers ======
 def _load_meta():
     """Read backend/unit_meta.json to get grouped properties."""
@@ -130,7 +127,8 @@ def _overlaps(db, unit_id: int, start: str, end: str) -> bool:
     )
     return db.query(q.exists()).scalar()
 
-# Expose _load_meta into Jinja templates so templates can call it:
+# Expose helpers into Jinja templates after definition
+app.jinja_env.globals["_tr"] = _tr
 app.jinja_env.globals.update(_load_meta=_load_meta)
 
 # ====== iCal fetch (lightweight) ======
@@ -140,11 +138,12 @@ def fetch_ical(ical_url):
     Returns list of {"start": "YYYY-MM-DD","end":"YYYY-MM-DD"} or [].
     """
     try:
-        if not ical_url or not ical_url.lower().startswith("http"):
+        if not ical_url or not isinstance(ical_url, str) or not ical_url.lower().startswith("http"):
             raise ValueError("invalid or missing URL")
         resp = requests.get(ical_url, timeout=12)
         resp.raise_for_status()
-        cal = ICal.from_ical(resp.content)
+        body = resp.content
+        cal = ICal.from_ical(body)
         events = []
         for comp in cal.walk("VEVENT"):
             try:
@@ -155,8 +154,8 @@ def fetch_ical(ical_url):
                 continue
         return events
     except Exception as e:
-        # Let caller handle/log; return empty list
-        print(f"iCal fetch error: {e}")
+        # let caller decide; log for debugging
+        print(f"iCal fetch error for {ical_url}: {e}")
         return []
 
 # ====== Email helpers (SMTP primary, Resend fallback) ======
@@ -274,6 +273,7 @@ def _sync_units(db, units):
             r.raise_for_status()
             cal = ICal.from_ical(r.content)
 
+            # Remove previous OTA-sourced blocks for this unit then re-insert from iCal
             db.query(AvailabilityBlock).filter(
                 AvailabilityBlock.unit_id == u.id,
                 AvailabilityBlock.source == (u.ota or "").lower()
@@ -380,7 +380,6 @@ def api_admin_sync_property(slug):
 try:
     print("Bootstrap: init_db()")
     init_db()
-
     if SINGLE_WORKER:
         print("Starting periodic_sync thread (single worker)")
         threading.Thread(target=periodic_sync, daemon=True).start()
@@ -390,7 +389,7 @@ except Exception as e:
     print("Bootstrap error:", e)
     traceback.print_exc()
 
-# ====== Template helpers ======
+# ====== Template helpers & context ======
 def _template_context_extra():
     class T:
         brand = os.environ.get("BRAND_NAME", "RavuriCo")
@@ -399,10 +398,8 @@ def _template_context_extra():
         test_mode = (STRIPE_PUBLISHABLE_KEY or "").startswith("pk_test_")
     return {"t": T()}
 
-# Expose helper to templates
 app.jinja_env.globals.update(t=_template_context_extra()["t"])
 
-# ---- NEW: inject i18n dictionary + current_lang into ALL templates ----
 @app.context_processor
 def inject_i18n():
     lang = session.get("lang", APP_LANG_DEFAULT)
@@ -414,7 +411,6 @@ def inject_i18n():
 def index():
     if "user" not in session:
         return redirect(url_for("login"))
-
     db = None
     try:
         db = SessionLocal()
@@ -422,7 +418,6 @@ def index():
         rates = db.query(RatePlan).all()
         rates_map = {r.unit_id: r.base_rate for r in rates}
         currency_map = {r.unit_id: (r.currency or "THB") for r in rates}
-
         ctx = dict(
             units=units,
             rates_map=rates_map,
@@ -436,10 +431,8 @@ def index():
         return "Internal server error", 500
     finally:
         if db is not None:
-            try:
-                db.close()
-            except Exception:
-                pass
+            try: db.close()
+            except Exception: pass
 
 @app.route("/login", methods=["GET","POST"])
 def login():
@@ -548,13 +541,13 @@ def api_blocks():
         return jsonify({"error":"unauthorized"}),401
     db = SessionLocal()
     try:
-        if request.method == "GET":
+        if request.method=="GET":
             unit_id=request.args.get("unit_id",type=int)
             q=db.query(AvailabilityBlock)
             if unit_id: q=q.filter(AvailabilityBlock.unit_id==unit_id)
             rows=q.order_by(AvailabilityBlock.start_date.desc()).all()
             return jsonify([{"id":b.id,"unit_id":b.unit_id,"start_date":b.start_date,"end_date":b.end_date,"source":b.source,"note":b.note} for b in rows])
-        if request.method == "POST":
+        if request.method=="POST":
             data=request.json or {}
             b=AvailabilityBlock(
                 unit_id=data.get("unit_id"),
@@ -566,7 +559,7 @@ def api_blocks():
             db.add(b); db.commit()
             send_alert("New Manual Block", f"Unit {b.unit_id}: {b.start_date}–{b.end_date} ({b.source}) {b.note}")
             return jsonify({"ok":True,"id":b.id})
-        if request.method == "DELETE":
+        if request.method=="DELETE":
             bid=request.args.get("id",type=int)
             if not bid: return jsonify({"error":"id required"}),400
             b=db.query(AvailabilityBlock).filter(AvailabilityBlock.id==bid).first()
@@ -600,7 +593,7 @@ def ical_export(unit_id):
     return (ics,200,{"Content-Type":"text/calendar; charset=utf-8",
                      "Content-Disposition":f'attachment; filename=unit-{unit_id}.ics'})
 
-# ====== Public: Properties listing (grouped) ======
+# ====== PUBLIC: Properties page (public) ======
 @app.route("/properties")
 def properties_index():
     meta = _load_meta()
@@ -622,21 +615,13 @@ def properties_index():
             price = None
             currency = "THB"
             if unit_ids:
-                first_uid = None
-                for uid in unit_ids:
-                    if uid not in ignore_set:
-                        first_uid = uid
-                        break
-                if first_uid is None and unit_ids:
-                    first_uid = unit_ids[0]
-                if first_uid is not None:
-                    rp = db.query(RatePlan).filter(RatePlan.unit_id == first_uid).first()
-                    if rp and rp.base_rate is not None:
-                        try:
-                            price = float(rp.base_rate)
-                        except Exception:
-                            price = None
-                        currency = rp.currency or "THB"
+                rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
+                if rp and rp.base_rate is not None:
+                    try:
+                        price = float(rp.base_rate)
+                    except Exception:
+                        price = None
+                    currency = rp.currency or "THB"
 
             enriched.append({
                 "slug": slug,
@@ -653,58 +638,59 @@ def properties_index():
 
     enriched.sort(key=lambda x: (x.get("order", 999), x.get("title","")))
     out = { item["slug"]: item for item in enriched }
-
     ctx = {"groups": out, "lang": session.get("lang", APP_LANG_DEFAULT)}
     ctx.update(_template_context_extra())
     return render_template("properties.html", **ctx)
 
-# ====== Public property page ======
-@app.route("/prop/<slug>")
-def property_page(slug):
+# ====== Public availability (grouped): DB blocks + iCal events merged ======
+@app.route("/api/public/availability/<slug>", methods=["GET"])
+def api_public_availability(slug):
     info = _group_info(slug)
     if not info:
-        return "Not found", 404
+        return jsonify({"error":"property not found"}), 404
 
-    title = info.get("title", slug)
-    image_url = info.get("image_url") or "https://source.unsplash.com/featured/?pattaya,villa"
     unit_ids = info.get("unit_ids", [])
+    blocks_out = []
 
-    ignore_env = os.environ.get("IGNORE_PUBLIC_UNIT_IDS", "").strip()
-    ignore_set = set()
-    if ignore_env:
-        try:
-            ignore_set = set(int(x.strip()) for x in ignore_env.split(",") if x.strip())
-        except Exception:
-            ignore_set = set()
+    db = SessionLocal()
+    try:
+        # DB blocks
+        for uid in unit_ids:
+            rows = db.query(AvailabilityBlock).filter(AvailabilityBlock.unit_id == uid).all()
+            for b in rows:
+                blocks_out.append({
+                    "start_date": b.start_date,
+                    "end_date": b.end_date,
+                    "source": b.source or "manual",
+                    "unit_id": uid
+                })
+        # OTA iCal (best-effort merge)
+        for uid in unit_ids:
+            u = db.query(Unit).filter(Unit.id == uid).first()
+            if not u or not u.ical_url:
+                continue
+            try:
+                ev = fetch_ical(u.ical_url)
+                for e in ev:
+                    blocks_out.append({
+                        "start_date": e["start"], "end_date": e["end"],
+                        "source": "ical", "unit_id": uid
+                    })
+            except Exception:
+                continue
+    finally:
+        db.close()
 
-    visible_unit_ids = [uid for uid in unit_ids if uid not in ignore_set]
+    # de-dup
+    seen = set()
+    unique = []
+    for b in blocks_out:
+        key = (b["start_date"], b["end_date"], b["unit_id"], b["source"])
+        if key in seen:
+            continue
+        seen.add(key); unique.append(b)
 
-    price = None
-    currency = "THB"
-    if visible_unit_ids:
-        db = SessionLocal()
-        try:
-            first_uid = visible_unit_ids[0]
-            rp = db.query(RatePlan).filter(RatePlan.unit_id == first_uid).first()
-            if rp and rp.base_rate is not None:
-                try:
-                    price = float(rp.base_rate)
-                except Exception:
-                    price = None
-                currency = rp.currency or "THB"
-        finally:
-            db.close()
-
-    ctx = {
-        "title": title,
-        "image_url": image_url,
-        "price": price,
-        "currency": currency,
-        "publishable_key": STRIPE_PUBLISHABLE_KEY,
-        "slug": slug
-    }
-    ctx.update(_template_context_extra())
-    return render_template("room.html", **ctx)
+    return jsonify(unique)
 
 # ---- Stripe: create PaymentIntent for group (price × nights) ----
 @app.route("/api/public/create_intent/<slug>", methods=["POST"])
@@ -727,10 +713,8 @@ def api_public_create_intent(slug):
         return jsonify({"error":"no units linked to this property"}),400
 
     db = SessionLocal()
-    try:
-        rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
-    finally:
-        db.close()
+    rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
+    db.close()
 
     if not rp or rp.base_rate is None:
         return jsonify({"error": "price not set for this property"}), 400
@@ -782,13 +766,9 @@ def public_book_group(slug):
 
         db = SessionLocal()
         try:
-                        # Reject if ANY unit overlaps — show which unit caused the rejection and log it
             for uid in unit_ids:
                 if _overlaps(db, uid, start, end):
-                    # helpful log for debugging (visible in Render logs)
-                    print(f"[BOOKING] overlap detected for unit {uid} while booking {slug} {start}–{end}")
-                    # return the overlapping unit id so UI/logs can show useful info
-                    return jsonify({"error": "Dates not available", "overlap_unit": uid}), 409
+                    return jsonify({"error": "Dates not available"}), 409
 
             for uid in unit_ids:
                 db.add(AvailabilityBlock(
@@ -857,6 +837,45 @@ def room(unit_id):
     ctx = {"title": display_name, "image_url": image_url, "price": price, "currency": currency, "publishable_key": STRIPE_PUBLISHABLE_KEY}
     ctx.update(_template_context_extra())
     return render_template("room.html", **ctx)
+
+@app.route("/api/public/book/<int:unit_id>", methods=["POST"])
+def public_book(unit_id):
+    try:
+        data = request.json or {}
+        start = (data.get("start_date") or "").strip()
+        end = (data.get("end_date") or "").strip()
+        name = (data.get("name") or "").strip()
+        email = (data.get("email") or "").strip()
+        if not (start and end and name and email):
+            return jsonify({"error": "missing fields"}), 400
+        if end <= start:
+            return jsonify({"error": "check-out must be after check-in"}), 400
+
+        db = SessionLocal()
+        u = db.query(Unit).filter(Unit.id == unit_id).first()
+        if not u:
+            db.close()
+            return jsonify({"error": "unit not found"}), 404
+
+        if _overlaps(db, unit_id, start, end):
+            db.close()
+            return jsonify({"error": "Dates not available"}), 409
+
+        db.add(AvailabilityBlock(unit_id=unit_id, start_date=start, end_date=end, source="direct", note=f"Guest: {name} {email}"))
+        db.commit()
+        db.close()
+
+        try:
+            html = f"<p>Thank you {name},<br/>Your booking for unit {unit_id} from {start} to {end} is confirmed.</p>"
+            send_email_best_effort(email, f"Booking confirmed — unit {unit_id}", html, f"Booking confirmed: {start}–{end}")
+            send_alert("New Direct Booking", f"Unit {unit_id}: {start}–{end} Guest: {name} ({email})")
+        except Exception as e:
+            print("email error:", e)
+
+        return jsonify({"ok": True})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 # ====== Grouped Admin UI ======
 @app.route("/admin/groups")
@@ -979,5 +998,54 @@ def admin_reimport():
         return "CSV reimported successfully", 200
     except Exception as e:
         return f"Error: {e}", 500
+
+# ====== Public single property page (uses grouped data) ======
+@app.route("/prop/<slug>")
+def property_page(slug):
+    info = _group_info(slug)
+    if not info:
+        return "Not found", 404
+
+    title = info.get("title", slug)
+    image_url = info.get("image_url") or "https://source.unsplash.com/featured/?pattaya,villa"
+    unit_ids = info.get("unit_ids", [])
+
+    ignore_env = os.environ.get("IGNORE_PUBLIC_UNIT_IDS", "").strip()
+    ignore_set = set()
+    if ignore_env:
+        try:
+            ignore_set = set(int(x.strip()) for x in ignore_env.split(",") if x.strip())
+        except Exception:
+            ignore_set = set()
+
+    visible_unit_ids = [uid for uid in unit_ids if uid not in ignore_set]
+
+    price = None
+    currency = "THB"
+    if visible_unit_ids:
+        db = SessionLocal()
+        try:
+            # take first available unit's rate plan (defensive)
+            first_id = visible_unit_ids[0]
+            rp = db.query(RatePlan).filter(RatePlan.unit_id == first_id).first()
+            if rp and rp.base_rate is not None:
+                try:
+                    price = float(rp.base_rate)
+                except Exception:
+                    price = None
+                currency = rp.currency or "THB"
+        finally:
+            db.close()
+
+    ctx = {
+        "title": title,
+        "image_url": image_url,
+        "price": price,
+        "currency": currency,
+        "publishable_key": STRIPE_PUBLISHABLE_KEY,
+        "slug": slug
+    }
+    ctx.update(_template_context_extra())
+    return render_template("room.html", **ctx)
 
 # ====== End of file ======
