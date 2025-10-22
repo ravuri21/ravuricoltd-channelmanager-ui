@@ -11,29 +11,32 @@
   <link rel="stylesheet" href="/static/style-additions.css?v=20251023" />
   <link rel="stylesheet" href="/static/style-luxury.css?v=20251023" />
 
-    <!-- HERO: minimal critical CSS (replace existing hero CSS only) -->
+      <!-- HERO: updated CSS (only this block) -->
   <style>
     :root { --brand-red:#e11d48; --brand-dark:#0f1724; --muted:#6b7280; }
 
+    /* hero image area */
     .site-hero{
       position:relative;
       height:420px;
-      /* make sure hero-pool.jpg exists at /static/hero-pool.jpg */
       background-image: url('/static/hero-pool.jpg?v=20251023');
       background-size: cover;
       background-position: center;
       display:flex;
-      align-items:flex-end;
+      align-items:center;
+      justify-content:center;
       border-bottom:1px solid rgba(0,0,0,0.06);
       overflow:hidden;
     }
+    /* subtle dark overlay so text reads on image */
     .site-hero::before{
       content:"";
       position:absolute;
       inset:0;
-      background: linear-gradient(180deg, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.38) 100%);
+      background: linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.22) 100%);
       z-index:1;
     }
+
     .hero-inner{
       position:relative;
       width:100%;
@@ -45,33 +48,60 @@
       display:flex;
       justify-content:space-between;
       gap:12px;
-      align-items:flex-end;
+      align-items:center;
     }
 
-    /* Brand */
-    .brand-block { color:#fff; text-shadow:0 8px 28px rgba(0,0,0,0.45); display:flex; flex-direction:column; gap:6px; }
+    /* Brand: Ravuri (red) / Properties (black) — big and bold in front of the hero */
+    .brand-block { display:flex; flex-direction:column; gap:6px; align-items:flex-start; }
     .brand-line { display:flex; align-items:baseline; gap:10px; line-height:1; }
-    .brand-red { color: var(--brand-red); font-family:"Playfair Display",serif; font-weight:700; font-size:44px; }
-    .brand-dark { color: #fff; font-family:"Poppins",sans-serif; font-weight:800; font-size:44px; margin-left:6px; opacity:0.95; }
-    .brand-tagline { color: rgba(255,255,255,0.95); font-size:14px; font-weight:600; }
+    .brand-red { color: var(--brand-red); font-family:"Playfair Display", serif; font-weight:700; font-size:48px; }
+    .brand-dark { color: var(--brand-dark); font-family:"Poppins",sans-serif; font-weight:800; font-size:48px; margin-left:6px; }
+    .brand-tagline { color: rgba(15,23,36,0.95); font-size:15px; font-weight:600; opacity:0.95; }
 
-    /* Trust cards to the right of brand on hero */
-    .trust-row-hero{ display:flex; gap:12px; align-items:flex-end; }
-    .trust-card{ background:#fff; color:#0f1724; border-radius:10px; padding:12px 14px; min-width:170px; box-shadow:0 10px 28px rgba(0,0,0,0.12); font-size:13px; display:flex; flex-direction:column; gap:6px; }
+    /* TRUST cards will be visually pulled down below the hero - absolute inside hero then translated out */
+    .trust-row-hero{
+      position:absolute;
+      left:50%;
+      transform: translateX(-50%) translateY(54%); /* push down out of image */
+      bottom:-1px; /* align just below hero */
+      z-index:3;
+      display:flex;
+      gap:14px;
+      align-items:flex-start;
+      width:auto;
+      padding:4px;
+      pointer-events:auto;
+    }
+    .trust-card{
+      background:#fff;
+      color:#0f1724;
+      border-radius:12px;
+      padding:12px 14px;
+      min-width:170px;
+      box-shadow:0 14px 36px rgba(2,6,23,0.18);
+      font-size:13px;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      text-align:left;
+    }
     .trust-title{ font-weight:800; font-size:13px; }
 
-    /* responsive behavior */
+    /* when screen small, stack trust cards centered below hero */
     @media (max-width:920px){
-      .brand-red, .brand-dark{ font-size:34px; }
-      .site-hero{ height:340px; }
-      .hero-inner{ padding:18px; gap:8px; align-items:flex-end; flex-direction:column; align-items:flex-start; }
-      .trust-row-hero{ width:100%; justify-content:flex-start; }
+      .brand-red, .brand-dark{ font-size:36px; }
+      .site-hero{ height:360px; }
+      .hero-inner{ padding:18px; gap:8px; align-items:flex-start; }
+      .trust-row-hero{ transform: translateX(-50%) translateY(66%); gap:10px; left:50%; bottom:-6px; }
       .trust-card{ min-width:140px; padding:10px; font-size:12px; }
     }
+
     @media (max-width:520px){
       .site-hero{ height:300px; background-position:center 36%; }
-      .brand-red, .brand-dark{ font-size:30px; }
-      .brand-block{ text-shadow:none; color:#111; }
+      .brand-red, .brand-dark{ font-size:28px; }
+      .brand-block{ text-shadow:none; }
+      .trust-row-hero{ flex-direction:column; transform: translateX(-50%) translateY(80%); bottom:-8px; }
+      .trust-card{ width:88%; margin:0 auto; min-width:unset; }
     }
   </style>
 </head>
