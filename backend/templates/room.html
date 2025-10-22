@@ -193,8 +193,12 @@
   let selEnd   = null;
   let baseMonthOffset = 0;  // 0 = current month
 
+  // cached PaymentIntent client secret (cleared on selection changes)
+  let cachedClientSecret = null;
+
   function clearSelection(){
     selStart = selEnd = null;
+    cachedClientSecret = null;
     const sEls = document.getElementById("start");
     const eEls = document.getElementById("end");
     if(sEls) sEls.value = "";
@@ -211,12 +215,14 @@
     for(const r of ranges){
       let d = new Date(r.start_date);
       const end = new Date(r.end_date);
+      // end is checkout date; do NOT include end (exclusive)
       while(d < end){ set.add(ymd(d)); d = addDays(d,1); }
     }
     return set;
   }
 
   function isAllAvailable(startStr, endStr){
+    // check nights in [start, end) — do not check end itself
     let d = new Date(startStr);
     const end = new Date(endStr);
     while(d < end){
@@ -304,6 +310,8 @@
       renderCalendars();
       const bookBtn = document.getElementById("bookBtn"); if(bookBtn) bookBtn.disabled = true;
       updatePriceCalc();
+      // clear previous intent because date changed
+      cachedClientSecret = null;
       return;
     }
 
@@ -325,11 +333,14 @@
       setMsg("");
       renderCalendars();
       const bookBtn2 = document.getElementById("bookBtn"); if(bookBtn2) bookBtn2.disabled = true;
+      cachedClientSecret = null;
       updatePriceCalc();
       return;
     }
 
     // 4) dateStr > selStart -> attempting to set checkout
+    // IMPORTANT: allow checkout == a date that is the start of another booking (end is exclusive).
+    // Check nights [selStart, dateStr) for blocked nights.
     if(!isAllAvailable(selStart, dateStr)){
       setMsg(local("❌ Some dates in between are already booked (red). Please pick different dates.", "❌ มีบางวันที่ถูกจองแล้ว (สีแดง) โปรดเลือกวันที่อื่น"), false, 6000);
       return;
@@ -342,6 +353,9 @@
     renderCalendars();
     const bookBtn3 = document.getElementById("bookBtn"); if(bookBtn3) bookBtn3.disabled = false;
     updatePriceCalc();
+
+    // prefetch PaymentIntent immediately (if Stripe configured)
+    prefetchIntentIfNeeded().catch(()=>{});
   }
 
   // --------- Price calc: nights = (end - start) in days, must be >= 1 ----------
@@ -413,7 +427,6 @@
   }
 
   // --------- Payment optimization: prefetch PaymentIntent client_secret on date selection ----------
-  let cachedClientSecret = null;
   async function prefetchIntentIfNeeded(){
     const s = document.getElementById('start').value;
     const e = document.getElementById('end').value;
@@ -442,7 +455,7 @@
   // trigger prefetch when end date changes (user finished selecting)
   document.addEventListener('change', (ev)=>{
     if(ev.target && ev.target.id === 'end'){
-      prefetchIntentIfNeeded();
+      prefetchIntentIfNeeded().catch(()=>{});
     }
   });
 
@@ -587,9 +600,6 @@
     // set html lang attribute so date-format/prompt decisions follow
     document.documentElement.lang = code;
   }
-
-  // wire the language anchors quickly and apply session language on load
-  // (these are executed in DOMContentLoaded above)
   </script>
 </body>
 </html>
