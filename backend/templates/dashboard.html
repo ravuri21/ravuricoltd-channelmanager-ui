@@ -86,12 +86,24 @@
               </div>
             </td>
 
+            <!-- REPLACED PRICE INPUT: only this block was updated to be mobile-friendly and always show current value -->
             <td>
               <div style="display:flex;gap:8px;align-items:center;">
-                <input id="rate-{{ u.id }}" type="number" placeholder="Price" value="{{ rates_map.get(u.id) or '' }}" />
+                <!-- numeric input that always prints the current value and is mobile-friendly -->
+                <input
+                  id="rate-{{ u.id }}"
+                  type="number"
+                  inputmode="numeric"
+                  step="1"
+                  min="0"
+                  placeholder="Price"
+                  value="{{ rates_map.get(u.id, '') }}"
+                  style="width:110px;padding:8px;border:1px solid #e6e6e6;border-radius:8px"
+                />
                 <button class="btn small" onclick="savePrice({{ u.id }})">Save</button>
               </div>
             </td>
+            <!-- END REPLACED PRICE INPUT -->
 
             <td>
               <div class="muted-small">Blocks: <span id="blocks-{{ u.id }}">—</span></div>
