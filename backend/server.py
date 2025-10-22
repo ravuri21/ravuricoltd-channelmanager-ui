@@ -49,7 +49,6 @@ EMAIL_PROVIDER = os.environ.get("EMAIL_PROVIDER", "").strip().lower()  # "resend
 SINGLE_WORKER = os.getenv("WEB_CONCURRENCY", "1") == "1"
 
 # ----------------- Simple translations -----------------
-# small static map — add keys you need below
 LANG_MAP = {
     "en": {
         "tap_calendar": "Tap the calendar to choose check-in and check-out. <b>Red</b> = booked, <b>Green</b> = available.",
@@ -88,12 +87,6 @@ def _tr(key):
 
 # make available in templates
 app.jinja_env.globals["_tr"] = _tr
-
-# also expose the load_meta helper to templates
-app.jinja_env.globals.update(_load_meta=_load_meta) if ' _load_meta' in globals() else None
-# Note: the above conditional ensures we don't error if _load_meta not yet defined in this execution order.
-# (The function _load_meta is defined below in this file; the templates will still be able to call it
-#  because it's exported again later after definition.)
 
 # ====== Helpers ======
 def _load_meta():
@@ -138,7 +131,7 @@ def _overlaps(db, unit_id: int, start: str, end: str) -> bool:
     return db.query(q.exists()).scalar()
 
 # Expose _load_meta into Jinja templates so templates can call it:
-app.jinja_env.globals.update(_load_meta=_load_meta)
+app.jinja_env.globals.update(_load_meta=__load_meta)
 
 # ====== iCal fetch (lightweight) ======
 def fetch_ical(ical_url):
@@ -168,10 +161,6 @@ def fetch_ical(ical_url):
 
 # ====== Email helpers (SMTP primary, Resend fallback) ======
 def send_via_smtp(to_email: str, subject: str, html_body: str, text_body: str = "") -> None:
-    """
-    Send email using SMTP (Gmail App Password recommended).
-    Raises exception on failure so caller can catch/log.
-    """
     smtp_server = os.environ.get("SMTP_SERVER", "").strip()
     smtp_port = int(os.environ.get("SMTP_PORT", 587))
     smtp_user = os.environ.get("SMTP_USER", "").strip()
@@ -189,7 +178,6 @@ def send_via_smtp(to_email: str, subject: str, html_body: str, text_body: str = 
         msg.attach(MIMEText(text_body, "plain"))
     msg.attach(MIMEText(html_body, "html"))
 
-    # Connect and send via STARTTLS (port 587)
     with smtplib.SMTP(smtp_server, smtp_port, timeout=15) as server:
         server.ehlo()
         server.starttls()
@@ -214,10 +202,6 @@ def send_via_resend(to_email: str, subject: str, html_body: str, text_body: str 
     return
 
 def send_email_best_effort(to_email: str, subject: str, html_body: str, text_body: str = "") -> bool:
-    """
-    Try to send email. Prefer SMTP if configured, otherwise Resend if configured.
-    Returns True when send attempt succeeded, False otherwise (and logs).
-    """
     try:
         if EMAIL_PROVIDER == "smtp" or (SMTP_SERVER and SMTP_USER and SMTP_PASSWORD):
             send_via_smtp(to_email, subject, html_body, text_body)
@@ -242,10 +226,6 @@ def send_alert(subject, body):
 
 @app.get("/admin/test_email")
 def admin_test_email():
-    """
-    Admin-only test endpoint. Open this in a browser while logged in as admin.
-    Attempts to send a test email to ALERT_TO (or SMTP_USER).
-    """
     if "user" not in session:
         return redirect(url_for("login"))
 
@@ -271,10 +251,6 @@ def admin_test_email():
 
 # ====== Background iCal sync → write to DB ======
 def _sync_units(db, units):
-    """
-    Shared sync core used by background, global button, and per-property button.
-    Returns list of result dicts.
-    """
     results = []
     for u in units:
         if not u.ical_url:
@@ -298,7 +274,6 @@ def _sync_units(db, units):
             r.raise_for_status()
             cal = ICal.from_ical(r.content)
 
-            # Remove previous OTA-sourced blocks for this unit then re-insert from iCal
             db.query(AvailabilityBlock).filter(
                 AvailabilityBlock.unit_id == u.id,
                 AvailabilityBlock.source == (u.ota or "").lower()
@@ -345,7 +320,6 @@ def _sync_units(db, units):
     return results
 
 def periodic_sync():
-    """Every 10 minutes: mirror each unit's OTA iCal into availability_blocks."""
     while True:
         try:
             db = SessionLocal()
@@ -357,7 +331,7 @@ def periodic_sync():
         except Exception as e:
             print("sync loop error:", e)
             traceback.print_exc()
-        time.sleep(600)  # 10 minutes
+        time.sleep(600)
 
 # ====== One-shot sync helpers & APIs ======
 def sync_calendars_once():
@@ -407,8 +381,6 @@ try:
     print("Bootstrap: init_db()")
     init_db()
 
-    # ⚠️ Important: do not auto-import CSV every boot (that can reset DB / overwrite)
-    # You can run /admin/reimport manually when needed.
     if SINGLE_WORKER:
         print("Starting periodic_sync thread (single worker)")
         threading.Thread(target=periodic_sync, daemon=True).start()
@@ -420,7 +392,6 @@ except Exception as e:
 
 # ====== Template helpers ======
 def _template_context_extra():
-    """Small object 't' available to templates to avoid UndefinedError."""
     class T:
         brand = os.environ.get("BRAND_NAME", "RavuriCo")
         support_email = ALERT_TO or ""
@@ -436,21 +407,17 @@ app.jinja_env.globals.update(t=_template_context_extra()["t"])
 def inject_i18n():
     lang = session.get("lang", APP_LANG_DEFAULT)
     strings = LANG_MAP.get(lang, LANG_MAP.get(APP_LANG_DEFAULT, {}))
-    # expose as 'i18n' (a dict of keys/strings) and 'current_lang' for templates
     return {"i18n": strings, "current_lang": lang}
-# ---- end i18n injection ----
 
 # ====== Auth & Basic ======
 @app.route("/")
 def index():
-    # require login
     if "user" not in session:
         return redirect(url_for("login"))
 
     db = None
     try:
         db = SessionLocal()
-        # Fetch units in stable order
         units = db.query(Unit).order_by(Unit.id.asc()).all()
         rates = db.query(RatePlan).all()
         rates_map = {r.unit_id: r.base_rate for r in rates}
@@ -465,9 +432,7 @@ def index():
         ctx.update(_template_context_extra())
         return render_template("dashboard.html", **ctx)
     except Exception:
-        # Log so you see the real exception in Render logs
         traceback.print_exc()
-        # Optionally show a friendly page instead of crashing
         return "Internal server error", 500
     finally:
         if db is not None:
@@ -494,12 +459,10 @@ def logout():
 
 @app.route("/lang/<code>")
 def lang(code):
-    # Allow public users to switch language without logging in.
     if code in ("en","th"):
         session["lang"] = code
-    # Redirect back to referrer (preferred) or homepage
     ref = request.referrer or url_for("index")
-    # If referrer is an admin-only page and user is not logged in, go to public properties
+    # If referrer is admin-only and user not logged in, go to public properties
     if ref.endswith("/login") or ref.startswith(request.host_url + "admin"):
         return redirect(url_for("properties_index"))
     return redirect(ref)
@@ -586,13 +549,13 @@ def api_blocks():
         return jsonify({"error":"unauthorized"}),401
     db = SessionLocal()
     try:
-        if request.method=="GET":
+        if request.method == "GET":
             unit_id=request.args.get("unit_id",type=int)
             q=db.query(AvailabilityBlock)
             if unit_id: q=q.filter(AvailabilityBlock.unit_id==unit_id)
             rows=q.order_by(AvailabilityBlock.start_date.desc()).all()
             return jsonify([{"id":b.id,"unit_id":b.unit_id,"start_date":b.start_date,"end_date":b.end_date,"source":b.source,"note":b.note} for b in rows])
-        if request.method=="POST":
+        if request.method == "POST":
             data=request.json or {}
             b=AvailabilityBlock(
                 unit_id=data.get("unit_id"),
@@ -604,7 +567,7 @@ def api_blocks():
             db.add(b); db.commit()
             send_alert("New Manual Block", f"Unit {b.unit_id}: {b.start_date}–{b.end_date} ({b.source}) {b.note}")
             return jsonify({"ok":True,"id":b.id})
-        if request.method()=="DELETE":
+        if request.method == "DELETE":
             bid=request.args.get("id",type=int)
             if not bid: return jsonify({"error":"id required"}),400
             b=db.query(AvailabilityBlock).filter(AvailabilityBlock.id==bid).first()
@@ -638,13 +601,68 @@ def ical_export(unit_id):
     return (ics,200,{"Content-Type":"text/calendar; charset=utf-8",
                      "Content-Disposition":f'attachment; filename=unit-{unit_id}.ics'})
 
+# ====== Public: Properties listing (grouped) ======
+@app.route("/properties")
+def properties_index():
+    meta = _load_meta()
+    groups = meta.get("groups", {})
+
+    ignore_env = os.environ.get("IGNORE_PUBLIC_UNIT_IDS", "").strip()
+    ignore_set = set()
+    if ignore_env:
+        try:
+            ignore_set = set(int(x.strip()) for x in ignore_env.split(",") if x.strip())
+        except Exception:
+            ignore_set = set()
+
+    enriched = []
+    db = SessionLocal()
+    try:
+        for slug, info in groups.items():
+            unit_ids = info.get("unit_ids", []) or []
+            price = None
+            currency = "THB"
+            if unit_ids:
+                # pick the first visible unit's rate
+                first_uid = None
+                for uid in unit_ids:
+                    if uid not in ignore_set:
+                        first_uid = uid
+                        break
+                if first_uid is None and unit_ids:
+                    first_uid = unit_ids[0]
+                if first_uid is not None:
+                    rp = db.query(RatePlan).filter(RatePlan.unit_id == first_uid).first()
+                    if rp and rp.base_rate is not None:
+                        try:
+                            price = float(rp.base_rate)
+                        except Exception:
+                            price = None
+                        currency = rp.currency or "THB"
+
+            enriched.append({
+                "slug": slug,
+                "title": info.get("title", slug),
+                "image_url": info.get("image_url") or "https://source.unsplash.com/featured/?pattaya,villa",
+                "unit_ids": unit_ids,
+                "price": price,
+                "currency": currency,
+                "short_description": info.get("short_description", ""),
+                "order": int(info.get("order", 999))
+            })
+    finally:
+        db.close()
+
+    enriched.sort(key=lambda x: (x.get("order", 999), x.get("title","")))
+    out = { item["slug"]: item for item in enriched }
+
+    ctx = {"groups": out, "lang": session.get("lang", APP_LANG_DEFAULT)}
+    ctx.update(_template_context_extra())
+    return render_template("properties.html", **ctx)
+
 # ====== Public property page ======
 @app.route("/prop/<slug>")
 def property_page(slug):
-    """
-    Public single property page. Does not reveal internal unit IDs or per-unit OTA names.
-    Uses price from first visible unit (respecting IGNORE_PUBLIC_UNIT_IDS).
-    """
     info = _group_info(slug)
     if not info:
         return "Not found", 404
@@ -653,7 +671,6 @@ def property_page(slug):
     image_url = info.get("image_url") or "https://source.unsplash.com/featured/?pattaya,villa"
     unit_ids = info.get("unit_ids", [])
 
-    # respect ignore list
     ignore_env = os.environ.get("IGNORE_PUBLIC_UNIT_IDS", "").strip()
     ignore_set = set()
     if ignore_env:
@@ -669,9 +686,14 @@ def property_page(slug):
     if visible_unit_ids:
         db = SessionLocal()
         try:
-            rp = db.query(RatePlan).filter(RatePlan.unit_id == visible_unit_ids[1] if len(visible_unit_ids) > 0 else visible_unit_ids[0]).first()
-            if rp:
-                price = rp.base_rate
+            # use the first visible unit
+            first_uid = visible_unit_ids[0]
+            rp = db.query(RatePlan).filter(RatePlan.unit_id == first_uid).first()
+            if rp and rp.base_rate is not None:
+                try:
+                    price = float(rp.base_rate)
+                except Exception:
+                    price = None
                 currency = rp.currency or "THB"
         finally:
             db.close()
@@ -683,7 +705,6 @@ def property_page(slug):
         "currency": currency,
         "publishable_key": STRIPE_PUBLISHABLE_KEY,
         "slug": slug
-        # NOTE: we intentionally do NOT pass visible_unit_ids into the template
     }
     ctx.update(_template_context_extra())
     return render_template("room.html", **ctx)
@@ -709,8 +730,11 @@ def api_public_create_intent(slug):
         return jsonify({"error":"no units linked to this property"}),400
 
     db = SessionLocal()
-    rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
-    db.close()
+    try:
+        # pick first unit's rate
+        rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
+    finally:
+        db.close()
 
     if not rp or rp.base_rate is None:
         return jsonify({"error": "price not set for this property"}), 400
@@ -718,7 +742,7 @@ def api_public_create_intent(slug):
     try:
         base_rate = float(rp.base_rate)
     except Exception:
-        return jsonify({"error": "invalid price configured"}, 400)
+        return jsonify({"error": "invalid price configured"}), 400
 
     nights = (_parse_yyyy_mm_dd(end) - _parse_yyyy_mm_dd(start)).days
     if nights <= 0:
@@ -740,7 +764,6 @@ def api_public_create_intent(slug):
 # ---- Public booking: grouped + per-unit ----
 @app.route("/api/public/book_group/<slug>", methods=["POST"])
 def public_book_group(slug):
-    """Block dates across ALL unit_ids in the group (Airbnb+Booking+Agoda)."""
     try:
         info = _group_info(slug)
         if not info:
@@ -763,12 +786,10 @@ def public_book_group(slug):
 
         db = SessionLocal()
         try:
-            # Reject if ANY unit overlaps
             for uid in unit_ids:
                 if _overlaps(db, uid, start, end):
                     return jsonify({"error": "Dates not available"}), 409
 
-            # Safe: create blocks for ALL units
             for uid in unit_ids:
                 db.add(AvailabilityBlock(
                     unit_id=uid,
@@ -781,7 +802,6 @@ def public_book_group(slug):
         finally:
             db.close()
 
-        # Try emailing guest + alert email
         try:
             html = f"""
             <p>Thank you {name},</p>
@@ -837,45 +857,6 @@ def room(unit_id):
     ctx = {"title": display_name, "image_url": image_url, "price": price, "currency": currency, "publishable_key": STRIPE_PUBLISHABLE_KEY}
     ctx.update(_template_context_extra())
     return render_template("room.html", **ctx)
-
-@app.route("/api/public/book/<int:unit_id>", methods=["POST"])
-def public_book(unit_id):
-    try:
-        data = request.json or {}
-        start = (data.get("start_date") or "").strip()
-        end = (data.get("end_date") or "").strip()
-        name = (data.get("name") or "").strip()
-        email = (data.get("email") or "").strip()
-        if not (start and end and name and email):
-            return jsonify({"error": "missing fields"}), 400
-        if end <= start:
-            return jsonify({"error": "check-out must be after check-in"}), 400
-
-        db = SessionLocal()
-        u = db.query(Unit).filter(Unit.id == unit_id).first()
-        if not u:
-            db.close()
-            return jsonify({"error": "unit not found"}), 404
-
-        if _overlaps(db, unit_id, start, end):
-            db.close()
-            return jsonify({"error": "Dates not available"}), 409
-
-        db.add(AvailabilityBlock(unit_id=unit_id, start_date=start, end_date=end, source="direct", note=f"Guest: {name} {email}"))
-        db.commit()
-        db.close()
-
-        try:
-            html = f"<p>Thank you {name},<br/>Your booking for unit {unit_id} from {start} to {end} is confirmed.</p>"
-            send_email_best_effort(email, f"Booking confirmed — unit {unit_id}", html, f"Booking confirmed: {start}–{end}")
-            send_alert("New Direct Booking", f"Unit {unit_id}: {start}–{end} Guest: {name} ({email})")
-        except Exception as e:
-            print("email error:", e)
-
-        return jsonify({"ok": True})
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
 
 # ====== Grouped Admin UI ======
 @app.route("/admin/groups")
