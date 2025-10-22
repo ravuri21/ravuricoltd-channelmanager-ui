@@ -638,66 +638,6 @@ def ical_export(unit_id):
     return (ics,200,{"Content-Type":"text/calendar; charset=utf-8",
                      "Content-Disposition":f'attachment; filename=unit-{unit_id}.ics'})
 
-# ---- Public property page -----
-@app.route("/prop/<slug>")
-def property_page(slug):
-    """
-    Public single property page. Does not reveal internal unit IDs or per-unit OTA names.
-    Uses price from first visible unit (respecting IGNORE_PUBLIC_UNIT_IDS).
-    """
-    info = _group_info(slug)
-    if not info:
-        return "Not found", 404
-
-    title = info.get("title", slug)
-    image_url = info.get("image_url") or "https://source.unsplash.com/featured/?pattaya,villa"
-    unit_ids = info.get("unit_ids", [])
-
-    # respect ignore list
-    ignore_env = os.environ.get("IGNORE_PUBLIC_UNIT_IDS", "").strip()
-    ignore_set = set()
-    if ignore_env:
-        try:
-            ignore_set = set(int(x.strip()) for x in ignore_env.split(",") if x.strip())
-        except Exception:
-            ignore_set = set()
-
-    visible_unit_ids = [uid for uid in unit_ids if uid not in ignore_set]
-
-    price = None
-    currency = "THB"
-    if visible_unit_ids:
-        db = SessionLocal()
-        try:
-            # always pick the first visible unit for public price
-            first_unit = visible_unit_ids[0]
-            rp = db.query(RatePlan).filter(RatePlan.unit_id == first_unit).first()
-            if rp and rp.base_rate is not None:
-                try:
-                    price = float(rp.base_rate)
-                except Exception:
-                    # fallback: try converting via str then float
-                    try:
-                        price = float(str(rp.base_rate))
-                    except Exception:
-                        price = None
-                currency = rp.currency or "THB"
-        finally:
-            db.close()
-
-    ctx = {
-        "title": title,
-        "image_url": image_url,
-        # price must be numeric (float) or None
-        "price": price,
-        "currency": currency,
-        "publishable_key": STRIPE_PUBLISHABLE_KEY,
-        "slug": slug
-        # NOTE: we intentionally do NOT pass visible_unit_ids into the template
-    }
-    ctx.update(_template_context_extra())
-    return render_template("room.html", **ctx)
-
 # ====== Public property page ======
 @app.route("/prop/<slug>")
 def property_page(slug):
@@ -747,56 +687,6 @@ def property_page(slug):
     }
     ctx.update(_template_context_extra())
     return render_template("room.html", **ctx)
-
-# ---- Availability (grouped): DB blocks + iCal events merged ----
-@app.route("/api/public/availability/<slug>", methods=["GET"])
-def api_public_availability(slug):
-    info = _group_info(slug)
-    if not info:
-        return jsonify({"error":"property not found"}), 404
-
-    unit_ids = info.get("unit_ids", [])
-    blocks_out = []
-
-    db = SessionLocal()
-    try:
-        # DB blocks
-        for uid in unit_ids:
-            rows = db.query(AvailabilityBlock).filter(AvailabilityBlock.unit_id == uid).all()
-            for b in rows:
-                blocks_out.append({
-                    "start_date": b.start_date,
-                    "end_date": b.end_date,
-                    "source": b.source or "manual",
-                    "unit_id": uid
-                })
-        # OTA iCal (best-effort merge)
-        for uid in unit_ids:
-            u = db.query(Unit).filter(Unit.id == uid).first()
-            if not u or not u.ical_url:
-                continue
-            try:
-                ev = fetch_ical(u.ical_url)
-                for e in ev:
-                    blocks_out.append({
-                        "start_date": e["start"], "end_date": e["end"],
-                        "source": "ical", "unit_id": uid
-                    })
-            except Exception:
-                continue
-    finally:
-        db.close()
-
-    # de-dup
-    seen = set()
-    unique = []
-    for b in blocks_out:
-        key = (b["start_date"], b["end_date"], b["unit_id"], b["source"])
-        if key in seen:
-            continue
-        seen.add(key); unique.append(b)
-
-    return jsonify(unique)
 
 # ---- Stripe: create PaymentIntent for group (price × nights) ----
 @app.route("/api/public/create_intent/<slug>", methods=["POST"])
