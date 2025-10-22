@@ -410,21 +410,40 @@
   }
 
   // --------- Load availability (grouped: DB blocks + OTA iCal) ----------
-  async function loadAvailabilityViaSlug(theSlug){
-    try{
-      const r = await fetch(`/api/public/availability/${theSlug}`);
-      const data = await r.json();
-      if(Array.isArray(data)){
-        blocked = expandRanges(data);
-      }else{
-        blocked = new Set();
-      }
-    }catch(_){
-      blocked = new Set();
-    }
+async function loadAvailabilityViaSlug(theSlug){
+  // guard -- if no slug provided, show an empty calendar (safer)
+  if(!theSlug){
+    blocked = new Set();
     renderCalendars();
+    return;
   }
 
+  try{
+    const r = await fetch(`/api/public/availability/${encodeURIComponent(theSlug)}`);
+    if(!r.ok){
+      // if API responded non-200, show empty calendar and console.warn
+      console.warn("availability fetch failed:", r.status);
+      blocked = new Set();
+      renderCalendars();
+      return;
+    }
+    const data = await r.json();
+    if(Array.isArray(data)){
+      // expecting objects with start_date / end_date keys
+      blocked = expandRanges(data.map(d => ({
+        start_date: d.start_date || d.start || '',
+        end_date: d.end_date || d.end || ''
+      })));
+    }else{
+      blocked = new Set();
+    }
+  }catch(err){
+    console.warn("availability fetch error:", err);
+    blocked = new Set();
+  }
+  renderCalendars();
+}
+    
   // --------- Init page (mount Stripe card when key present) ----------
   async function initPage(){
     if(STRIPE_PK){
@@ -576,11 +595,45 @@
       });
       const j = await res.json();
       if(res.ok && j.ok){
+        // Show success message and preserve it
         setMsg(BOOKING_SUCCESS || (document.documentElement.lang === 'th' ? "✅ จองเรียบร้อย — วันที่ถูกบล็อก ขอบคุณ!" : "✅ Booking confirmed — dates blocked. Thank you!"), true, 8000);
-        clearSelection(true);  // preserve the success message for user
+
+        // Clear selection UI but keep the success message visible
+        clearSelection(true);
         cachedClientSecret = null;
-        if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
-        else if(isUnit) await loadAvailabilityViaSlug(groupSlug || '');
+
+        // Refresh availability intelligently:
+        // - If this page has a groupSlug (public group page) refresh that
+        // - If this is a unit page, resolve the group via api/admin/find_group and then refresh
+        // - Otherwise, just re-render calendars
+        try{
+          if(groupSlug){
+            await loadAvailabilityViaSlug(groupSlug);
+          }else if(isUnit){
+            // try to find the group's slug for this unit and reload
+            try{
+              const r2 = await fetch(`/api/admin/find_group?unit_id=${unitId}`);
+              const j2 = await r2.json();
+              if(r2.ok && j2.ok && j2.slug){
+                groupSlug = j2.slug;
+                await loadAvailabilityViaSlug(groupSlug);
+              }else{
+                // fallback: render calendars (blocks for this unit only available via blocks endpoint)
+                await loadAvailabilityViaSlug(groupSlug); // will be no-op if groupSlug falsy
+              }
+            }catch(fe){
+              console.warn("find_group failed:", fe);
+              // fallback re-render
+              renderCalendars();
+            }
+          }else{
+            // fallback re-render
+            renderCalendars();
+          }
+        }catch(fe){
+          console.warn("Reload availability error:", fe);
+          renderCalendars();
+        }
       }else{
         throw new Error(j.error || "Unknown error");
       }
