@@ -7,623 +7,136 @@
   <link rel="stylesheet" href="/static/style.css" />
   <link rel="stylesheet" href="/static/style-additions.css" />
   <style>
-    /* small page-specific polish */
     .container { max-width:980px; margin:24px auto; background:#fff; border-radius:12px; box-shadow:0 6px 18px rgba(2,6,23,0.06); overflow:hidden; }
     .hero img { width:100%; height:320px; object-fit:cover; display:block; }
     .content { padding:20px; display:grid; grid-template-columns:1.15fr .85fr; gap:24px; }
     @media (max-width:960px){ .content { grid-template-columns:1fr; } }
     .price { font-weight:800; font-size:1.1rem; }
     .stripe-inline { display:inline-block; margin-left:8px; color:#0b5cff; font-size:.9rem; background:#fff7; padding:6px 8px; border-radius:8px; border:1px solid #e6eefc;}
-    /* message box larger */
     .msg { margin-top:10px; padding:14px; border-radius:10px; font-size:1.05rem; display:none; }
     .msg.ok { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-weight:700; }
     .msg.err { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; font-weight:700; }
-    /* small tweaks for calendar controls if needed */
     .panel { background:#fafafa; border:1px solid #eee; border-radius:10px; padding:14px; }
     .calwrap { display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:16px; align-items:start; }
     .cal { border:1px solid #eee; border-radius:10px; overflow:hidden; background:#fff; }
     .cal h3 { margin:0; padding:12px 10px; background:#f8fafc; border-bottom:1px solid #eee; font-size:1rem; text-align:center; font-weight:700; color:#1f2937; }
-
-    /* ---------- Calendar colour & legend updates (reworked for Airbnb-like look) ---------- */
-    .grid, .dow, .cell { box-sizing:border-box; }
     .grid { display:grid; grid-template-columns: repeat(7, 1fr); gap:6px; padding:10px; }
     .dow, .cell { padding:10px 6px; text-align:center; user-select:none; font-size:0.95rem; border-radius:8px; }
-    .grid > *:nth-child(7n){ /* no extra styling required here */ }
-
-    .dow { background:transparent; font-weight:700; font-size:.85rem; color:#6b7280; padding-bottom:6px; }
-    .cell.dis { color:#9ca3af; background:transparent; cursor:not-allowed; opacity:0.6; }
-    /* Available = gentle green */
-    .cell.ok {
-      background: #ecfdf5;
-      color: #065f46;
-      border: 1px solid rgba(16,185,129,0.08);
-      cursor:pointer;
-      font-weight:700;
-      box-shadow: inset 0 -2px 0 rgba(16,185,129,0.04);
-    }
-    /* Booked = soft red */
-    .cell.bad {
-      background:#fff1f2;
-      color:#991b1b;
-      border:1px solid rgba(239,68,68,0.06);
-      cursor:not-allowed;
-      font-weight:700;
-      opacity:0.95;
-    }
-    /* Selected range highlight = warm gold */
-    .cell.sel {
-      background: linear-gradient(90deg,#fff7ed,#fff3d7);
-      color:#92400e;
-      border: 2px solid rgba(245,158,11,0.22);
-      cursor:pointer;
-      font-weight:800;
-      box-shadow: 0 6px 18px rgba(249,115,22,0.06);
-    }
-
-    /* Hover/tap feedback */
-    .cell.ok:hover { transform: translateY(-2px); transition: transform .12s ease; }
-    .cell.sel:hover { transform: translateY(-1px); transition: transform .12s ease; }
-
-    .legend{display:flex; gap:12px; align-items:center; font-size:.92rem; margin-top:12px; color:#374151; flex-wrap:wrap}
+    .dow { font-weight:700; font-size:.85rem; color:#6b7280; }
+    .cell.ok { background:#ecfdf5; color:#065f46; border:1px solid rgba(16,185,129,0.08); cursor:pointer; font-weight:700; }
+    .cell.bad { background:#fff1f2; color:#991b1b; border:1px solid rgba(239,68,68,0.06); cursor:not-allowed; font-weight:700; }
+    .cell.sel { background:linear-gradient(90deg,#fff7ed,#fff3d7); color:#92400e; border:2px solid rgba(245,158,11,0.22); font-weight:800; }
+    .legend{display:flex; gap:12px; align-items:center; font-size:.92rem; margin-top:12px; color:#374151;}
     .dot{width:12px;height:12px;border-radius:3px;display:inline-block; margin-right:6px}
-    .d-ok{background:#10b981;border:1px solid rgba(16,185,129,0.12)}
-    .d-bad{background:#ef4444;border:1px solid rgba(239,68,68,0.12)}
-    .d-sel{background:#f59e0b;border:1px solid rgba(245,158,11,0.12)}
-    @media (max-width:720px){
-      .calwrap { grid-template-columns: 1fr; }
-      .grid { gap:6px; padding:8px; }
-      .cal h3 { padding:10px; font-size:0.98rem; }
-      .cell { padding:10px; font-size:0.95rem; }
-    }
+    .d-ok{background:#10b981}
+    .d-bad{background:#ef4444}
+    .d-sel{background:#f59e0b}
   </style>
-
-  <!-- Stripe JS (loaded only - mounting happens conditionally in JS) -->
   <script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
   <div class="container">
-    <div class="hero">
-      <img src="{{ image_url or 'https://source.unsplash.com/featured/?pattaya,villa' }}" alt="Property photo">
-    </div>
-
+    <div class="hero"><img src="{{ image_url or 'https://source.unsplash.com/featured/?pattaya,villa' }}" alt="Property photo"></div>
     <div class="content">
       <div>
         <h1>{{ title }}</h1>
         {% if price %}
           <div class="price">฿ {{ '%.0f'|format(price) }} <span class="muted">/ night {{ currency or 'THB' }}</span></div>
         {% endif %}
-        <div style="margin-top:8px;">
-          {% if t.publishable_key %}
-            <span class="stripe-inline">{{ _tr('book_button') if session.get('lang','en') else '' }} Secure payments · Powered by Stripe</span>
-          {% endif %}
-        </div>
+        {% if t.publishable_key %}
+          <span class="stripe-inline">Secure payments · Powered by Stripe</span>
+        {% endif %}
         <p class="muted" id="availabilityHint">{{ _tr('tap_calendar') }}</p>
 
-        <!-- calendar panel (keeps your existing markup & JS hooks) -->
         <div class="panel">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
             <div style="font-weight:600">{{ _tr('availability_title') }}</div>
             <div style="display:flex;gap:8px;align-items:center">
-              <button id="prevMonth" class="btn secondary small" type="button">← {{ _tr('clear_button') if session.get('lang','en') else '' }}</button>
-              <button id="nextMonth" class="btn small" type="button">{{ _tr('view_button') if session.get('lang','en') else '' }} →</button>
+              <button id="prevMonth" class="btn secondary small" type="button">←</button>
+              <button id="nextMonth" class="btn small" type="button">→</button>
             </div>
           </div>
-          <div id="calwrap" class="calwrap" aria-live="polite" aria-atomic="true"></div>
-          <div class="legend" aria-hidden="false">
-            <div><span class="dot d-ok" aria-hidden="true"></span> {{ session.get('lang','en') == 'th' and 'ว่าง' or 'Available' }}</div>
-            <div><span class="dot d-bad" aria-hidden="true"></span> {{ session.get('lang','en') == 'th' and 'ถูกจอง' or 'Booked' }}</div>
-            <div><span class="dot d-sel" aria-hidden="true"></span> {{ session.get('lang','en') == 'th' and 'เลือกแล้ว' or 'Selected' }}</div>
+          <div id="calwrap" class="calwrap"></div>
+          <div class="legend">
+            <div><span class="dot d-ok"></span> Available</div>
+            <div><span class="dot d-bad"></span> Booked</div>
+            <div><span class="dot d-sel"></span> Selected</div>
           </div>
         </div>
-
         <div class="footer" style="margin-top:12px">Powered by {{ t.brand if t else "Ravuri" }}</div>
       </div>
 
-      <!-- booking form (unchanged functionality) -->
       <div>
         <form id="bookForm" class="panel" novalidate>
-          <label for="start">{{ session.get('lang','en') == 'th' and 'เช็คอิน' or 'Check-in' }}</label>
-          <input id="start" type="date" required>
-          <label for="end">{{ session.get('lang','en') == 'th' and 'เช็คเอาท์' or 'Check-out' }}</label>
-          <input id="end" type="date" required>
-          <label for="name">{{ session.get('lang','en') == 'th' and 'ชื่อ' or 'Your Name' }}</label>
-          <input id="name" type="text" placeholder="Full name" required>
-          <label for="email">{{ session.get('lang','en') == 'th' and 'อีเมล' or 'Your Email' }}</label>
-          <input id="email" type="email" placeholder="Email address" required>
+          <label for="start">Check-in</label><input id="start" type="date" required>
+          <label for="end">Check-out</label><input id="end" type="date" required>
+          <label for="name">Your Name</label><input id="name" type="text" required>
+          <label for="email">Your Email</label><input id="email" type="email" required>
 
-          <div id="cardWrap" style="display:none;">
-            <label>Card</label>
-            <div id="card-element" style="padding:10px;border:1px solid #ddd;border-radius:8px;"></div>
-          </div>
-
+          <div id="cardWrap" style="display:none;"><label>Card</label><div id="card-element" style="padding:10px;border:1px solid #ddd;border-radius:8px;"></div></div>
           <div id="priceCalc" style="margin-top:10px;font-weight:700;"></div>
-
-          <div class="actions" style="display:flex;gap:10px;align-items:center;margin-top:10px">
-            <button id="bookBtn" type="submit" disabled>{{ _tr('book_button') }}</button>
-            <button type="button" class="secondary" onclick="clearSelection()">{{ _tr('clear_button') }}</button>
+          <div style="display:flex;gap:10px;margin-top:10px">
+            <button id="bookBtn" type="submit" disabled>Book & Pay</button>
+            <button type="button" class="secondary" onclick="clearSelection()">Clear</button>
           </div>
-
-          <!-- message area: large and persistent when success -->
-          <div id="msg" class="msg" role="status" aria-live="polite"></div>
+          <div id="msg" class="msg"></div>
         </form>
       </div>
     </div>
   </div>
 
-  <script>
-  // --------- Context ----------
-  const path = location.pathname;
-  const isGroup = path.startsWith("/prop/");
-  const isUnit  = path.startsWith("/r/");
-  const slug    = isGroup ? path.split("/").pop() : null;
-  const unitId  = isUnit  ? parseInt(path.split("/").pop(), 10) : null;
+<script>
+const path=location.pathname,isGroup=path.startsWith("/prop/"),isUnit=path.startsWith("/r/"),slug=isGroup?path.split("/").pop():null,unitId=isUnit?parseInt(path.split("/").pop(),10):null;
+let groupSlug=slug,groupUnitIds=[],blocked=new Set(),selStart=null,selEnd=null,baseMonthOffset=0,cachedClientSecret=null;
+const STRIPE_PK="{{ publishable_key or '' }}".trim();let stripe,card;
 
-  let groupSlug = slug;
-  let groupUnitIds = [];
-
-  const STRIPE_PK = "{{ publishable_key or '' }}".trim();
-  let stripe, card;
-
-  // Inject server-side translated messages into JS (so messages from JS match session)
-  const BOOKING_SUCCESS = "{{ _tr('booking_confirmed')|replace('\"', '\\\"') }}";
-  const BOOKING_ERROR   = "{{ _tr('booking_failed')|replace('\"', '\\\"') }}";
-
-  // --------- Small helpers ----------
-  function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}` }
-  function addDays(dt, n){ const d=new Date(dt); d.setDate(d.getDate()+n); return d; }
-
-  // nicer message helper: big, bold, stays for X ms (or until cleared)
-  function setMsg(text, ok=false, persistMs=6000){
-    const m = document.getElementById("msg");
-    if(!m){ console.warn("msg element not found"); return; }
-    if(!text){ m.style.display = "none"; return; }
-    m.textContent = text;
-    m.className = "msg " + (ok ? "ok" : "err");
-    m.style.display = "block";
-    if(persistMs && persistMs > 0){
-      clearTimeout(window.__msgTimeout);
-      window.__msgTimeout = setTimeout(()=>{ m.style.display="none"; }, persistMs);
-    }
-  }
-
-  // --------- Calendar / selection state ----------
-  let blocked = new Set();
-  let monthsToShow = 2;        // shows 2 months side-by-side on desktop
-  let selStart = null;
-  let selEnd   = null;
-  let baseMonthOffset = 0;  // 0 = current month
-
-  // cached PaymentIntent client secret (cleared on selection changes)
-  let cachedClientSecret = null;
-
-  function clearSelection(preserveMsg){
-  selStart = selEnd = null;
-  cachedClientSecret = null;
-  const sEls = document.getElementById("start");
-  const eEls = document.getElementById("end");
-  if(sEls) sEls.value = "";
-  if(eEls) eEls.value = "";
-  // only clear messages when preserveMsg is NOT true
-  if(!preserveMsg){
-    setMsg("");
-  }
-  renderCalendars();
-  const bookBtn = document.getElementById("bookBtn");
-  if(bookBtn) bookBtn.disabled = true;
-  updatePriceCalc();
+function ymd(d){const z=n=>String(n).padStart(2,'0');return`${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;}
+function addDays(dt,n){const d=new Date(dt);d.setDate(d.getDate()+n);return d;}
+function setMsg(t,ok=false,ms=8000){const m=document.getElementById("msg");if(!m)return;m.textContent=t;m.className="msg "+(ok?"ok":"err");m.style.display="block";clearTimeout(window._t);window._t=setTimeout(()=>{m.style.display="none";},ms);}
+function clearSelection(preserve){selStart=selEnd=null;cachedClientSecret=null;if(!preserve)setMsg("");renderCalendars();document.getElementById("bookBtn").disabled=true;updatePriceCalc();}
+function expandRanges(r){const s=new Set();for(const x of r){let d=new Date(x.start_date);const e=new Date(x.end_date);while(d<e){s.add(ymd(d));d=addDays(d,1);}}return s;}
+function isAllAvailable(a,b){let d=new Date(a),e=new Date(b);while(d<e){if(blocked.has(ymd(d)))return false;d=addDays(d,1);}return true;}
+function buildMonth(y,m){const w=document.createElement("div");w.className="cal";w.innerHTML=`<h3>${new Date(y,m,1).toLocaleString('default',{month:'long',year:'numeric'})}</h3><div class='grid'></div>`;const g=w.querySelector(".grid");
+["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].forEach(d=>{const e=document.createElement("div");e.className="dow";e.textContent=d;g.appendChild(e);});
+const start=new Date(y,m,1).getDay(),days=new Date(y,m+1,0).getDate();for(let i=0;i<start;i++){const e=document.createElement("div");e.className="cell dis";g.appendChild(e);}
+for(let day=1;day<=days;day++){const e=document.createElement("div"),ds=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`,isB=blocked.has(ds);
+let cls=isB?"bad":"ok";if(selStart&&!selEnd&&ds===selStart)cls="sel";if(selStart&&selEnd&&ds>=selStart&&ds<selEnd)cls="sel";
+e.className="cell "+cls;e.textContent=day;e.setAttribute("data-date",ds);
+let click=false;if(!isB)click=true;else if(selStart&&ds>selStart&&isAllAvailable(selStart,ds))click=true;
+if(click)e.onclick=()=>onPick(ds);
+g.appendChild(e);}return w;}
+function renderCalendars(){const h=document.getElementById("calwrap");h.innerHTML="";for(let i=0;i<2;i++)h.appendChild(buildMonth(new Date().getFullYear(),new Date().getMonth()+baseMonthOffset+i));}
+function onPick(ds){
+ if(!selStart){if(blocked.has(ds)){setMsg("❌ Booked",false);return;}selStart=ds;renderCalendars();return;}
+ if(ds===selStart){setMsg("❌ Minimum 1 night",false);return;}
+ if(ds<selStart){if(blocked.has(ds)){setMsg("❌ Booked",false);return;}selStart=ds;selEnd=null;renderCalendars();return;}
+ if(!isAllAvailable(selStart,ds)){setMsg("❌ Some dates booked",false);return;}
+ selEnd=ds;renderCalendars();document.getElementById("bookBtn").disabled=false;updatePriceCalc();
 }
-
-  function expandRanges(ranges){
-  const set = new Set();
-  for(const r of ranges){
-    let d = new Date(r.start_date);
-    const end = new Date(r.end_date);
-    // end is checkout date; do NOT include end (exclusive)
-    while(d < end){
-      set.add(ymd(d));
-      d = addDays(d,1);
-    }
-  }
-  return set;
+function updatePriceCalc(){
+ const s=document.getElementById('start'),e=document.getElementById('end');if(!selStart||!selEnd){document.getElementById('priceCalc').textContent="";return;}
+ s.value=selStart;e.value=selEnd;const ds=new Date(selStart),de=new Date(selEnd),days=Math.round((de-ds)/(1000*60*60*24));
+ const ppn=Number({{ price or 0 }})||0,total=ppn*days;if(days>0)document.getElementById('priceCalc').textContent=`฿${ppn} × ${days} night${days>1?'s':''} = ฿${total}`;
 }
-    
-  function isAllAvailable(startStr, endStr){
-    // check nights in [start, end) — do not check end itself
-    let d = new Date(startStr);
-    const end = new Date(endStr);
-    while(d < end){
-      if(blocked.has(ymd(d))) return false;
-      d = addDays(d,1);
-    }
-    return true;
-  }
-
- function buildMonth(year, month){
-  const wrap = document.createElement("div");
-  wrap.className = "cal";
-  const title = new Date(year, month, 1).toLocaleString('default', { month:'long', year:'numeric' });
-  wrap.innerHTML = `<h3>${title}</h3><div class="grid" role="grid"></div>`;
-  const grid = wrap.querySelector(".grid");
-
-  const dows = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  dows.forEach(d => {
-    const el=document.createElement("div"); el.className="dow"; el.setAttribute('role','columnheader'); el.textContent=d; grid.appendChild(el);
-  });
-
-  const startDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month+1, 0).getDate();
-
-  for(let i=0;i<startDay;i++){
-    const el=document.createElement("div"); el.className="cell dis"; el.textContent=""; grid.appendChild(el);
-  }
-
-  for(let day=1; day<=daysInMonth; day++){
-    const el = document.createElement("div");
-    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-
-    let cls = "ok";
-    const isBlocked = blocked.has(dateStr);
-    if(isBlocked) cls = "bad";
-    if(selStart && !selEnd && dateStr===selStart) cls = "sel";
-    if(selStart && selEnd && dateStr>=selStart && dateStr<selEnd) cls = "sel";
-
-    el.className = "cell " + cls;
-    el.textContent = day;
-    el.setAttribute("data-date", dateStr);
-    el.setAttribute("role","gridcell");
-
-    // clickable rules:
-    // - normally a cell is clickable if not blocked
-    // - BUT if it's blocked, allow it to be clickable only if:
-    //   * user already selected selStart
-    //   * clicked date > selStart
-    //   * and all nights in [selStart, clicked date) are available (isAllAvailable)
-    let clickable = false;
-    if(!isBlocked){
-      clickable = true;
-    } else {
-      if(selStart && dateStr > selStart && isAllAvailable(selStart, dateStr)){
-        // allow blocked day to be used as exclusive checkout (clickable)
-        clickable = true;
-      }
-    }
-
-    if(clickable){
-      el.style.pointerEvents = "";
-      el.addEventListener("click", () => onPick(dateStr));
-    } else {
-      el.style.pointerEvents = "none";
-    }
-
-    grid.appendChild(el);
-  }
-  return wrap;
-}
-
-  function buildMonthForOffset(offset){
-    const now = new Date();
-    const dt = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-    return buildMonth(dt.getFullYear(), dt.getMonth());
-  }
-
-  function renderCalendars(){
-    const holder = document.getElementById("calwrap");
-    if(!holder) return;
-    holder.innerHTML = "";
-    for(let m=0; m<monthsToShow; m++){
-      const offset = baseMonthOffset + m;
-      holder.appendChild(buildMonthForOffset(offset));
-    }
-  }
-
-  // ---------- Selection logic (airbnb-like behaviour) ----------
- function onPick(dateStr){
-  const lang = document.documentElement.lang || '{{ session.get("lang","en") }}' || 'en';
-  function local(en, th){ return lang === 'th' ? th : en; }
-
-  // 1) if no start -> set start (if available)
-  if(!selStart){
-    if(blocked.has(dateStr)){
-      setMsg(local("❌ This day is already booked.", "❌ วันที่นี้ถูกจองแล้ว"), false, 5000);
-      return;
-    }
-    selStart = dateStr; selEnd = null;
-    const s = document.getElementById("start"); if(s) s.value = selStart;
-    const e = document.getElementById("end"); if(e) e.value = "";
-    setMsg("");
-    renderCalendars();
-    const bookBtn = document.getElementById("bookBtn"); if(bookBtn) bookBtn.disabled = true;
-    updatePriceCalc();
-    // clear previous intent because date changed
-    cachedClientSecret = null;
-    return;
-  }
-
-  // 2) if clicked same day as start -> not allowed (must be at least 1 night)
-  if(dateStr === selStart){
-    setMsg(local("❌ Check-out must be after check-in (minimum 1 night).", "❌ เช็คเอาต์จะต้องอยู่หลังเช็คอินอย่างน้อย 1 คืน"), false, 6000);
-    return;
-  }
-
-  // 3) if clicked earlier than start -> treat as new start (if available)
-  if(dateStr < selStart){
-    if(blocked.has(dateStr)){
-      setMsg(local("❌ This day is already booked.", "❌ วันที่นี้ถูกจองแล้ว"), false, 5000);
-      return;
-    }
-    selStart = dateStr; selEnd = null;
-    const s2 = document.getElementById("start"); if(s2) s2.value = selStart;
-    const e2 = document.getElementById("end"); if(e2) e2.value = "";
-    setMsg("");
-    renderCalendars();
-    const bookBtn2 = document.getElementById("bookBtn"); if(bookBtn2) bookBtn2.disabled = true;
-    cachedClientSecret = null;
-    updatePriceCalc();
-    return;
-  }
-
-  // 4) dateStr > selStart -> attempting to set checkout
-  // IMPORTANT: allow checkout == a date that is the start of another booking (end is exclusive).
-  // Check nights [selStart, dateStr) for blocked nights.
-  if(!isAllAvailable(selStart, dateStr)){
-    setMsg(local("❌ Some dates in between are already booked (red). Please pick different dates.", "❌ มีบางวันที่ถูกจองแล้ว (สีแดง) โปรดเลือกวันที่อื่น"), false, 6000);
-    return;
-  }
-
-  // success: set end
-  selEnd = dateStr;
-  const e3 = document.getElementById("end"); if(e3) e3.value = selEnd;
-  setMsg("");
-  renderCalendars();
-  const bookBtn3 = document.getElementById("bookBtn"); if(bookBtn3) bookBtn3.disabled = false;
-  updatePriceCalc();
-
-  // prefetch PaymentIntent immediately (if Stripe configured)
-  prefetchIntentIfNeeded().catch(()=>{});
-}
-
-  // --------- Price calc: nights = (end - start) in days, must be >= 1 ----------
-  function updatePriceCalc(){
-    const s = document.getElementById('start') ? document.getElementById('start').value : "";
-    const e = document.getElementById('end') ? document.getElementById('end').value : "";
-    if(!s || !e || e <= s){ document.getElementById('priceCalc').textContent = ''; return; }
-    const ds = new Date(s), de = new Date(e);
-    const days = Math.round((de - ds) / (1000*60*60*24));
-    if(days <= 0){ document.getElementById('priceCalc').textContent = ''; return; }
-    const pricePerNight = Number({{ price or 0 }}) || 0;
-    const total = Math.round(pricePerNight * days);
-    const nightsLabel = (days === 1) ? (document.documentElement.lang === 'th' ? '1 คืน' : '1 night') : (document.documentElement.lang === 'th' ? `${days} คืน` : `${days} nights`);
-    document.getElementById('priceCalc').textContent = `฿${pricePerNight} × ${nightsLabel} = ฿${total}`;
-  }
-
-  // --------- Load availability (grouped: DB blocks + OTA iCal) ----------
-  async function loadAvailabilityViaSlug(theSlug){
-    try{
-      const r = await fetch(`/api/public/availability/${theSlug}`);
-      const data = await r.json();
-      if(Array.isArray(data)){
-        blocked = expandRanges(data);
-      }else{
-        blocked = new Set();
-      }
-    }catch(_){
-      blocked = new Set();
-    }
-    renderCalendars();
-  }
-
-  // --------- Init page (mount Stripe card when key present) ----------
-  async function initPage(){
-    if(STRIPE_PK){
-      try{
-        stripe = Stripe(STRIPE_PK);
-        const elements = stripe.elements();
-        card = elements.create('card');
-        card.mount('#card-element');
-        document.getElementById("cardWrap").style.display = "block";
-      }catch(e){
-        console.warn("Stripe init failed:", e);
-      }
-    }
-
-    // default months visible (2 looks like Airbnb side-by-side)
-    monthsToShow = 2;
-
-    if(isGroup){
-      await loadAvailabilityViaSlug(groupSlug);
-      return;
-    }
-
-    if(isUnit){
-      try{
-        const r = await fetch(`/api/admin/find_group?unit_id=${unitId}`);
-        const j = await r.json();
-        if(j.ok && j.slug){
-          groupSlug = j.slug;
-          groupUnitIds = j.unit_ids || [];
-          await loadAvailabilityViaSlug(groupSlug);
-          return;
-        }
-      }catch(_){}
-      blocked = new Set();
-      renderCalendars();
-    }
-  }
-
-  // --------- Payment optimization: prefetch PaymentIntent client_secret on date selection ----------
-  async function prefetchIntentIfNeeded(){
-    const s = document.getElementById('start').value;
-    const e = document.getElementById('end').value;
-    if(!s || !e || e <= s) return;
-    if(!groupSlug && !isUnit) return;
-    try{
-      const res = await fetch("/api/public/create_intent/" + groupSlug, {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ start_date: s, end_date: e })
-      });
-      const j = await res.json();
-      if(res.ok && j.ok && j.client_secret){
-        cachedClientSecret = j.client_secret;
-        console.log("PaymentIntent prefetched");
-      }else{
-        cachedClientSecret = null;
-        console.warn("prefetch intent failed:", j);
-      }
-    }catch(err){
-      cachedClientSecret = null;
-      console.warn("prefetch intent error:", err);
-    }
-  }
-
-  // trigger prefetch when end date changes (user finished selecting)
-  document.addEventListener('change', (ev)=>{
-    if(ev.target && ev.target.id === 'end'){
-      prefetchIntentIfNeeded().catch(()=>{});
-    }
-  });
-
-  // Calendar navigation handlers (Prev / Next)
-  document.addEventListener('DOMContentLoaded', ()=>{
-    const prev = document.getElementById("prevMonth");
-    const next = document.getElementById("nextMonth");
-    if(prev) prev.addEventListener("click", ()=>{
-      baseMonthOffset = Math.max(baseMonthOffset - 1, 0);
-      renderCalendars();
-    });
-    if(next) next.addEventListener("click", ()=>{
-      baseMonthOffset = baseMonthOffset + 1;
-      renderCalendars();
-    });
-
-    // wire language link anchors (apply session language client-side)
-    const en = document.querySelector('a[href="/lang/en"]');
-    const th = document.querySelector('a[href="/lang/th"]');
-    if(en) en.addEventListener('click', (e)=>{ e.preventDefault(); applyLanguage('en'); });
-    if(th) th.addEventListener('click', (e)=>{ e.preventDefault(); applyLanguage('th'); });
-
-    // apply session language
-    const lang = document.documentElement.lang || '{{ session.get("lang","en") }}' || 'en';
-    applyLanguage(lang);
-
-    // run init
-    initPage();
-  });
-
-  // --------- Booking submit ----------
-  document.getElementById("bookForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const startDate = document.getElementById("start").value;
-    const endDate   = document.getElementById("end").value;
-    const name      = document.getElementById("name").value.trim();
-    const email     = document.getElementById("email").value.trim();
-
-    if(!startDate || !endDate){ setMsg("❌ " + (document.documentElement.lang === 'th' ? "กรุณาเลือกวันที่" : "Please select dates from the calendar."), false, 6000); return; }
-    if(endDate <= startDate){ setMsg("❌ " + (document.documentElement.lang === 'th' ? "วันเช็คเอาท์ต้องหลังวันเช็คอิน" : "Check-out must be after check-in."), false, 6000); return; }
-    if(!name || !email){ setMsg("❌ " + (document.documentElement.lang === 'th' ? "กรุณากรอกชื่อและอีเมล" : "Please enter your name and email."), false, 6000); return; }
-
-    const btn = document.getElementById("bookBtn");
-    const original = btn.textContent;
-    btn.disabled = true; btn.textContent = "{{ _tr('booking_processing') }}"; setMsg("");
-
-    try{
-      // If using Stripe, confirm card now using cached client secret (prefetched) or create-on-demand
-      if(STRIPE_PK){
-        let client_secret = cachedClientSecret;
-        if(!client_secret){
-          // create intent now (fallback)
-          const piRes = await fetch("/api/public/create_intent/" + groupSlug, {
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({ start_date: startDate, end_date: endDate })
-          });
-          const pi = await piRes.json();
-          if(!piRes.ok || !pi.ok){ throw new Error(pi.error || "Failed to create payment"); }
-          client_secret = pi.client_secret;
-        }
-
-        const {error, paymentIntent} = await stripe.confirmCardPayment(client_secret, {
-          payment_method: { card, billing_details: { name, email } }
-        });
-        if(error) throw error;
-        if(paymentIntent.status !== "succeeded") throw new Error("Payment not completed");
-      }
-
-      // Proceed to create booking in backend (grouped or unit)
-      const postUrl = groupSlug ? `/api/public/book_group/${groupSlug}` : (isUnit ? `/api/public/book/${unitId}` : "/api/public/book");
-
-      const res = await fetch(postUrl, {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ start_date:startDate, end_date:endDate, name, email })
-      });
-      const j = await res.json();
-      if(res.ok && j.ok){
-  setMsg(BOOKING_SUCCESS || (document.documentElement.lang === 'th' ? "✅ จองเรียบร้อย — วันที่ถูกบล็อก ขอบคุณ!" : "✅ Booking confirmed — dates blocked. Thank you!"), true, 8000);
-  clearSelection(true);  // preserve the success message for user
-  cachedClientSecret = null;
-  if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
-  else if(isUnit) await loadAvailabilityViaSlug(groupSlug || '');
-}
-      }else{
-        throw new Error(j.error || "Unknown error");
-      }
-    }catch(err){
-      console.error(err);
-      setMsg(BOOKING_ERROR || (document.documentElement.lang === 'th' ? "❌ การจองล้มเหลว" : "❌ Booking failed"), false, 8000);
-    }finally{
-      btn.disabled = false; btn.textContent = original;
-    }
-  });
-
-  // --------- Simple client-side translations & language toggle ----------
-  const translations = {
-    en: {
-      checkin: "Check-in",
-      checkout: "Check-out",
-      name: "Your Name",
-      email: "Your Email",
-      bookBtn: "Book & Pay",
-      availabilityHint: "Tap the calendar to choose check-in and check-out. Red = booked, Green = available.",
-      bookingSuccess: "✅ Booking confirmed — dates blocked. Thank you!",
-      bookingError: "❌ Booking failed. Please try again."
-    },
-    th: {
-      checkin: "เช็คอิน",
-      checkout: "เช็คเอาท์",
-      name: "ชื่อของคุณ",
-      email: "อีเมลของคุณ",
-      bookBtn: "จองและชำระเงิน",
-      availabilityHint: "แตะปฏิทินเพื่อเลือกเช็คอินและเช็คเอาท์ สีแดง = ถูกจอง สีเขียว = ว่าง",
-      bookingSuccess: "✅ จองเรียบร้อย — วันที่ถูกบล็อก ขอบคุณ!",
-      bookingError: "❌ การจองล้มเหลว โปรดลองอีกครั้ง"
-    }
-  };
-
-  function applyLanguage(code) {
-    if(!translations[code]) code = 'en';
-    const map = translations[code];
-
-    // update labels inside the booking form (four labels)
-    const labels = document.querySelectorAll('#bookForm label');
-    if(labels && labels.length >= 4){
-      labels[0].textContent = map.checkin;
-      labels[1].textContent = map.checkout;
-      labels[2].textContent = map.name;
-      labels[3].textContent = map.email;
-    }
-
-    const bookBtn = document.getElementById('bookBtn');
-    if(bookBtn) bookBtn.textContent = map.bookBtn;
-
-    const hint = document.getElementById('availabilityHint');
-    if(hint) hint.textContent = map.availabilityHint;
-
-    // store server-side session preference (best-effort)
-    fetch('/lang/' + code, { method:'GET' }).catch(()=>{});
-    // set html lang attribute so date-format/prompt decisions follow
-    document.documentElement.lang = code;
-  }
-  </script>
+async function loadAvailabilityViaSlug(sl){try{const r=await fetch(`/api/public/availability/${sl}`);const d=await r.json();blocked=Array.isArray(d)?expandRanges(d):new Set();}catch{blocked=new Set();}renderCalendars();}
+async function initPage(){
+ if(STRIPE_PK){stripe=Stripe(STRIPE_PK);const e=stripe.elements();card=e.create('card');card.mount('#card-element');document.getElementById("cardWrap").style.display="block";}
+ if(isGroup){await loadAvailabilityViaSlug(groupSlug);}else if(isUnit){try{const r=await fetch(`/api/admin/find_group?unit_id=${unitId}`);const j=await r.json();if(j.ok&&j.slug){groupSlug=j.slug;await loadAvailabilityViaSlug(groupSlug);return;}}catch{}await loadAvailabilityViaSlug(groupSlug||"");}}
+document.addEventListener("DOMContentLoaded",()=>{document.getElementById("prevMonth").onclick=()=>{baseMonthOffset=Math.max(baseMonthOffset-1,0);renderCalendars();};
+document.getElementById("nextMonth").onclick=()=>{baseMonthOffset++;renderCalendars();};initPage();});
+document.getElementById("bookForm").addEventListener("submit",async e=>{
+ e.preventDefault();
+ const s=document.getElementById("start").value,e2=document.getElementById("end").value,n=document.getElementById("name").value,t=document.getElementById("email").value;
+ if(!s||!e2){setMsg("❌ Select dates");return;}
+ const btn=document.getElementById("bookBtn");const old=btn.textContent;btn.disabled=true;btn.textContent="Processing...";
+ try{
+   const postUrl=groupSlug?`/api/public/book_group/${groupSlug}`:(isUnit?`/api/public/book/${unitId}`:"/api/public/book");
+   const res=await fetch(postUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({start_date:s,end_date:e2,name:n,email:t})});
+   const j=await res.json();
+   if(res.ok&&j.ok){setMsg("✅ Booking confirmed — thank you!",true,10000);clearSelection(true);await loadAvailabilityViaSlug(groupSlug);}
+   else throw new Error();
+ }catch{setMsg("❌ Booking failed",false,8000);}finally{btn.disabled=false;btn.textContent=old;}
+});
+</script>
 </body>
 </html>
