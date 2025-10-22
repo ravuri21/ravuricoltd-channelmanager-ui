@@ -638,19 +638,22 @@ def ical_export(unit_id):
     return (ics,200,{"Content-Type":"text/calendar; charset=utf-8",
                      "Content-Disposition":f'attachment; filename=unit-{unit_id}.ics'})
 
-# ====== PUBLIC: Properties page (public) ======
-@app.route("/properties")
-def properties_index():
+# ---- Public property page -----
+@app.route("/prop/<slug>")
+def property_page(slug):
     """
-    Public listing: show grouped properties.
-    NOTE: we intentionally DO NOT expose unit IDs or per-unit names on the public page.
-    We only show title, image, and a public price (from the first unit's rate plan).
+    Public single property page. Does not reveal internal unit IDs or per-unit OTA names.
+    Uses price from first visible unit (respecting IGNORE_PUBLIC_UNIT_IDS).
     """
+    info = _group_info(slug)
+    if not info:
+        return "Not found", 404
 
-    meta = _load_meta()
-    groups = meta.get("groups", {})
+    title = info.get("title", slug)
+    image_url = info.get("image_url") or "https://source.unsplash.com/featured/?pattaya,villa"
+    unit_ids = info.get("unit_ids", [])
 
-    # Optionally hide specific unit IDs from public view via env var (comma separated ints)
+    # respect ignore list
     ignore_env = os.environ.get("IGNORE_PUBLIC_UNIT_IDS", "").strip()
     ignore_set = set()
     if ignore_env:
@@ -659,43 +662,41 @@ def properties_index():
         except Exception:
             ignore_set = set()
 
-    # enrich groups with price + allow ordering via `order` key in unit_meta.json
-    enriched = []
-    db = SessionLocal()
-    try:
-        for slug, info in groups.items():
-            unit_ids = info.get("unit_ids", []) or []
-            price = None
-            currency = "THB"
-            if unit_ids:
-                rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
-                if rp and rp.base_rate:
+    visible_unit_ids = [uid for uid in unit_ids if uid not in ignore_set]
+
+    price = None
+    currency = "THB"
+    if visible_unit_ids:
+        db = SessionLocal()
+        try:
+            # always pick the first visible unit for public price
+            first_unit = visible_unit_ids[0]
+            rp = db.query(RatePlan).filter(RatePlan.unit_id == first_unit).first()
+            if rp and rp.base_rate is not None:
+                try:
                     price = float(rp.base_rate)
-                    currency = rp.currency or "THB"
+                except Exception:
+                    # fallback: try converting via str then float
+                    try:
+                        price = float(str(rp.base_rate))
+                    except Exception:
+                        price = None
+                currency = rp.currency or "THB"
+        finally:
+            db.close()
 
-            enriched.append({
-                "slug": slug,
-                "title": info.get("title", slug),
-                "image_url": info.get("image_url") or "https://source.unsplash.com/featured/?pattaya,villa",
-                "unit_ids": unit_ids,
-                "price": price,
-                "currency": currency,
-                # optional fields from unit_meta.json
-                "short_description": info.get("short_description", ""),
-                "order": int(info.get("order", 999))
-            })
-    finally:
-        db.close()
-
-    # sort by order (ascending) and then title
-    enriched.sort(key=lambda x: (x.get("order", 999), x.get("title","")))
-
-    # convert to dict keyed by slug (templates expect groups.items() iteration)
-    out = { item["slug"]: item for item in enriched }
-
-    ctx = {"groups": out, "lang": session.get("lang", APP_LANG_DEFAULT)}
+    ctx = {
+        "title": title,
+        "image_url": image_url,
+        # price must be numeric (float) or None
+        "price": price,
+        "currency": currency,
+        "publishable_key": STRIPE_PUBLISHABLE_KEY,
+        "slug": slug
+        # NOTE: we intentionally do NOT pass visible_unit_ids into the template
+    }
     ctx.update(_template_context_extra())
-    return render_template("properties.html", **ctx)
+    return render_template("room.html", **ctx)
 
 # ====== Public property page ======
 @app.route("/prop/<slug>")
@@ -821,14 +822,19 @@ def api_public_create_intent(slug):
     rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
     db.close()
 
-    if not rp or not rp.base_rate:
+    if not rp or rp.base_rate is None:
         return jsonify({"error": "price not set for this property"}), 400
+
+    try:
+        base_rate = float(rp.base_rate)
+    except Exception:
+        return jsonify({"error": "invalid price configured"}, 400)
 
     nights = (_parse_yyyy_mm_dd(end) - _parse_yyyy_mm_dd(start)).days
     if nights <= 0:
         return jsonify({"error": "nights must be > 0"}), 400
 
-    amount = int(round(rp.base_rate * nights * 100))  # THB → satang
+    amount = int(round(base_rate * nights * 100))  # THB → satang
     currency = (rp.currency or "THB").lower()
 
     try:
@@ -926,8 +932,17 @@ def room(unit_id):
 
     display_name = f"{u.ota} — {u.property_id}"
     image_url = "https://source.unsplash.com/featured/?pattaya,villa"
-    price = rp.base_rate if rp else None
-    currency = rp.currency if rp else "THB"
+    price = None
+    currency = "THB"
+    if rp and rp.base_rate is not None:
+        try:
+            price = float(rp.base_rate)
+        except Exception:
+            try:
+                price = float(str(rp.base_rate))
+            except Exception:
+                price = None
+        currency = rp.currency or "THB"
 
     ctx = {"title": display_name, "image_url": image_url, "price": price, "currency": currency, "publishable_key": STRIPE_PUBLISHABLE_KEY}
     ctx.update(_template_context_extra())
