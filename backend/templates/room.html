@@ -196,31 +196,37 @@
   // cached PaymentIntent client secret (cleared on selection changes)
   let cachedClientSecret = null;
 
-  function clearSelection(){
-    selStart = selEnd = null;
-    cachedClientSecret = null;
-    const sEls = document.getElementById("start");
-    const eEls = document.getElementById("end");
-    if(sEls) sEls.value = "";
-    if(eEls) eEls.value = "";
+  function clearSelection(preserveMsg){
+  selStart = selEnd = null;
+  cachedClientSecret = null;
+  const sEls = document.getElementById("start");
+  const eEls = document.getElementById("end");
+  if(sEls) sEls.value = "";
+  if(eEls) eEls.value = "";
+  // only clear messages when preserveMsg is NOT true
+  if(!preserveMsg){
     setMsg("");
-    renderCalendars();
-    const bookBtn = document.getElementById("bookBtn");
-    if(bookBtn) bookBtn.disabled = true;
-    updatePriceCalc();
   }
+  renderCalendars();
+  const bookBtn = document.getElementById("bookBtn");
+  if(bookBtn) bookBtn.disabled = true;
+  updatePriceCalc();
+}
 
   function expandRanges(ranges){
-    const set = new Set();
-    for(const r of ranges){
-      let d = new Date(r.start_date);
-      const end = new Date(r.end_date);
-      // end is checkout date; do NOT include end (exclusive)
-      while(d < end){ set.add(ymd(d)); d = addDays(d,1); }
+  const set = new Set();
+  for(const r of ranges){
+    let d = new Date(r.start_date);
+    const end = new Date(r.end_date);
+    // end is checkout date; do NOT include end (exclusive)
+    while(d < end){
+      set.add(ymd(d));
+      d = addDays(d,1);
     }
-    return set;
   }
-
+  return set;
+}
+    
   function isAllAvailable(startStr, endStr){
     // check nights in [start, end) — do not check end itself
     let d = new Date(startStr);
@@ -232,49 +238,67 @@
     return true;
   }
 
-  function buildMonth(year, month){
-    const wrap = document.createElement("div");
-    wrap.className = "cal";
-    const title = new Date(year, month, 1).toLocaleString('default', { month:'long', year:'numeric' });
-    wrap.innerHTML = `<h3>${title}</h3><div class="grid" role="grid"></div>`;
-    const grid = wrap.querySelector(".grid");
+ function buildMonth(year, month){
+  const wrap = document.createElement("div");
+  wrap.className = "cal";
+  const title = new Date(year, month, 1).toLocaleString('default', { month:'long', year:'numeric' });
+  wrap.innerHTML = `<h3>${title}</h3><div class="grid" role="grid"></div>`;
+  const grid = wrap.querySelector(".grid");
 
-    const dows = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-    dows.forEach(d => {
-      const el=document.createElement("div"); el.className="dow"; el.setAttribute('role','columnheader'); el.textContent=d; grid.appendChild(el);
-    });
+  const dows = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  dows.forEach(d => {
+    const el=document.createElement("div"); el.className="dow"; el.setAttribute('role','columnheader'); el.textContent=d; grid.appendChild(el);
+  });
 
-    const startDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month+1, 0).getDate();
+  const startDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
 
-    for(let i=0;i<startDay;i++){
-      const el=document.createElement("div"); el.className="cell dis"; el.textContent=""; grid.appendChild(el);
-    }
-
-    for(let day=1; day<=daysInMonth; day++){
-      const el = document.createElement("div");
-      const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-
-      let cls = "ok";
-      if(blocked.has(dateStr)) cls = "bad";
-      if(selStart && !selEnd && dateStr===selStart) cls = "sel";
-      if(selStart && selEnd && dateStr>=selStart && dateStr<selEnd) cls = "sel";
-
-      el.className = "cell " + cls;
-      el.textContent = day;
-      el.setAttribute("data-date", dateStr);
-      el.setAttribute("role","gridcell");
-      if(cls !== "bad"){
-        el.addEventListener("click", () => onPick(dateStr));
-      } else {
-        // ensure booked cells don't have pointer events
-        el.style.pointerEvents = "none";
-      }
-
-      grid.appendChild(el);
-    }
-    return wrap;
+  for(let i=0;i<startDay;i++){
+    const el=document.createElement("div"); el.className="cell dis"; el.textContent=""; grid.appendChild(el);
   }
+
+  for(let day=1; day<=daysInMonth; day++){
+    const el = document.createElement("div");
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+
+    let cls = "ok";
+    const isBlocked = blocked.has(dateStr);
+    if(isBlocked) cls = "bad";
+    if(selStart && !selEnd && dateStr===selStart) cls = "sel";
+    if(selStart && selEnd && dateStr>=selStart && dateStr<selEnd) cls = "sel";
+
+    el.className = "cell " + cls;
+    el.textContent = day;
+    el.setAttribute("data-date", dateStr);
+    el.setAttribute("role","gridcell");
+
+    // clickable rules:
+    // - normally a cell is clickable if not blocked
+    // - BUT if it's blocked, allow it to be clickable only if:
+    //   * user already selected selStart
+    //   * clicked date > selStart
+    //   * and all nights in [selStart, clicked date) are available (isAllAvailable)
+    let clickable = false;
+    if(!isBlocked){
+      clickable = true;
+    } else {
+      if(selStart && dateStr > selStart && isAllAvailable(selStart, dateStr)){
+        // allow blocked day to be used as exclusive checkout (clickable)
+        clickable = true;
+      }
+    }
+
+    if(clickable){
+      el.style.pointerEvents = "";
+      el.addEventListener("click", () => onPick(dateStr));
+    } else {
+      el.style.pointerEvents = "none";
+    }
+
+    grid.appendChild(el);
+  }
+  return wrap;
+}
 
   function buildMonthForOffset(offset){
     const now = new Date();
@@ -293,70 +317,70 @@
   }
 
   // ---------- Selection logic (airbnb-like behaviour) ----------
-  function onPick(dateStr){
-    const lang = document.documentElement.lang || '{{ session.get("lang","en") }}' || 'en';
-    function local(en, th){ return lang === 'th' ? th : en; }
+ function onPick(dateStr){
+  const lang = document.documentElement.lang || '{{ session.get("lang","en") }}' || 'en';
+  function local(en, th){ return lang === 'th' ? th : en; }
 
-    // 1) if no start -> set start (if available)
-    if(!selStart){
-      if(blocked.has(dateStr)){
-        setMsg(local("❌ This day is already booked.", "❌ วันที่นี้ถูกจองแล้ว"), false, 5000);
-        return;
-      }
-      selStart = dateStr; selEnd = null;
-      const s = document.getElementById("start"); if(s) s.value = selStart;
-      const e = document.getElementById("end"); if(e) e.value = "";
-      setMsg("");
-      renderCalendars();
-      const bookBtn = document.getElementById("bookBtn"); if(bookBtn) bookBtn.disabled = true;
-      updatePriceCalc();
-      // clear previous intent because date changed
-      cachedClientSecret = null;
+  // 1) if no start -> set start (if available)
+  if(!selStart){
+    if(blocked.has(dateStr)){
+      setMsg(local("❌ This day is already booked.", "❌ วันที่นี้ถูกจองแล้ว"), false, 5000);
       return;
     }
-
-    // 2) if clicked same day as start -> not allowed (must be at least 1 night)
-    if(dateStr === selStart){
-      setMsg(local("❌ Check-out must be after check-in (minimum 1 night).", "❌ เช็คเอาต์จะต้องอยู่หลังเช็คอินอย่างน้อย 1 คืน"), false, 6000);
-      return;
-    }
-
-    // 3) if clicked earlier than start -> treat as new start (if available)
-    if(dateStr < selStart){
-      if(blocked.has(dateStr)){
-        setMsg(local("❌ This day is already booked.", "❌ วันที่นี้ถูกจองแล้ว"), false, 5000);
-        return;
-      }
-      selStart = dateStr; selEnd = null;
-      const s2 = document.getElementById("start"); if(s2) s2.value = selStart;
-      const e2 = document.getElementById("end"); if(e2) e2.value = "";
-      setMsg("");
-      renderCalendars();
-      const bookBtn2 = document.getElementById("bookBtn"); if(bookBtn2) bookBtn2.disabled = true;
-      cachedClientSecret = null;
-      updatePriceCalc();
-      return;
-    }
-
-    // 4) dateStr > selStart -> attempting to set checkout
-    // IMPORTANT: allow checkout == a date that is the start of another booking (end is exclusive).
-    // Check nights [selStart, dateStr) for blocked nights.
-    if(!isAllAvailable(selStart, dateStr)){
-      setMsg(local("❌ Some dates in between are already booked (red). Please pick different dates.", "❌ มีบางวันที่ถูกจองแล้ว (สีแดง) โปรดเลือกวันที่อื่น"), false, 6000);
-      return;
-    }
-
-    // success: set end
-    selEnd = dateStr;
-    const e3 = document.getElementById("end"); if(e3) e3.value = selEnd;
+    selStart = dateStr; selEnd = null;
+    const s = document.getElementById("start"); if(s) s.value = selStart;
+    const e = document.getElementById("end"); if(e) e.value = "";
     setMsg("");
     renderCalendars();
-    const bookBtn3 = document.getElementById("bookBtn"); if(bookBtn3) bookBtn3.disabled = false;
+    const bookBtn = document.getElementById("bookBtn"); if(bookBtn) bookBtn.disabled = true;
     updatePriceCalc();
-
-    // prefetch PaymentIntent immediately (if Stripe configured)
-    prefetchIntentIfNeeded().catch(()=>{});
+    // clear previous intent because date changed
+    cachedClientSecret = null;
+    return;
   }
+
+  // 2) if clicked same day as start -> not allowed (must be at least 1 night)
+  if(dateStr === selStart){
+    setMsg(local("❌ Check-out must be after check-in (minimum 1 night).", "❌ เช็คเอาต์จะต้องอยู่หลังเช็คอินอย่างน้อย 1 คืน"), false, 6000);
+    return;
+  }
+
+  // 3) if clicked earlier than start -> treat as new start (if available)
+  if(dateStr < selStart){
+    if(blocked.has(dateStr)){
+      setMsg(local("❌ This day is already booked.", "❌ วันที่นี้ถูกจองแล้ว"), false, 5000);
+      return;
+    }
+    selStart = dateStr; selEnd = null;
+    const s2 = document.getElementById("start"); if(s2) s2.value = selStart;
+    const e2 = document.getElementById("end"); if(e2) e2.value = "";
+    setMsg("");
+    renderCalendars();
+    const bookBtn2 = document.getElementById("bookBtn"); if(bookBtn2) bookBtn2.disabled = true;
+    cachedClientSecret = null;
+    updatePriceCalc();
+    return;
+  }
+
+  // 4) dateStr > selStart -> attempting to set checkout
+  // IMPORTANT: allow checkout == a date that is the start of another booking (end is exclusive).
+  // Check nights [selStart, dateStr) for blocked nights.
+  if(!isAllAvailable(selStart, dateStr)){
+    setMsg(local("❌ Some dates in between are already booked (red). Please pick different dates.", "❌ มีบางวันที่ถูกจองแล้ว (สีแดง) โปรดเลือกวันที่อื่น"), false, 6000);
+    return;
+  }
+
+  // success: set end
+  selEnd = dateStr;
+  const e3 = document.getElementById("end"); if(e3) e3.value = selEnd;
+  setMsg("");
+  renderCalendars();
+  const bookBtn3 = document.getElementById("bookBtn"); if(bookBtn3) bookBtn3.disabled = false;
+  updatePriceCalc();
+
+  // prefetch PaymentIntent immediately (if Stripe configured)
+  prefetchIntentIfNeeded().catch(()=>{});
+}
 
   // --------- Price calc: nights = (end - start) in days, must be >= 1 ----------
   function updatePriceCalc(){
@@ -535,12 +559,12 @@
       });
       const j = await res.json();
       if(res.ok && j.ok){
-        // show larger confirmation and persist for 6s
-        setMsg(BOOKING_SUCCESS || (document.documentElement.lang === 'th' ? "✅ จองเรียบร้อย — วันที่ถูกบล็อก ขอบคุณ!" : "✅ Booking confirmed — dates blocked. Thank you!"), true, 8000);
-        clearSelection();
-        cachedClientSecret = null;
-        if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
-        else if(isUnit) await loadAvailabilityViaSlug(groupSlug || '');
+  setMsg(BOOKING_SUCCESS || (document.documentElement.lang === 'th' ? "✅ จองเรียบร้อย — วันที่ถูกบล็อก ขอบคุณ!" : "✅ Booking confirmed — dates blocked. Thank you!"), true, 8000);
+  clearSelection(true);  // preserve the success message for user
+  cachedClientSecret = null;
+  if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
+  else if(isUnit) await loadAvailabilityViaSlug(groupSlug || '');
+}
       }else{
         throw new Error(j.error || "Unknown error");
       }
