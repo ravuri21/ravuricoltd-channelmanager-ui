@@ -23,19 +23,23 @@
     .calwrap { display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:16px; }
     .cal { border:1px solid #eee; border-radius:10px; overflow:hidden; }
     .cal h3 { margin:0; padding:8px 10px; background:#f3f4f6; border-bottom:1px solid #eee; font-size:.95rem; }
-    .grid { display:grid; grid-template-columns: repeat(7, 1fr); }
-    .dow, .cell { padding:10px; text-align:center; border-bottom:1px solid #f1f1f1; border-right:1px solid #f1f1f1; user-select:none; }
-    .grid > *:nth-child(7n){ border-right:none; }
-    .dow { background:#fafafa; font-weight:600; font-size:.85rem; }
-    .cell.dis { color:#bbb; background:#fafafa; cursor:not-allowed; }
-    .cell.ok { background:var(--ok); border-bottom-color:var(--okb); cursor:pointer; }
-    .cell.bad { background:var(--bad); border-bottom-color:var(--badb); color:#991b1b; cursor:not-allowed; }
-    .cell.sel { background:var(--sel); border-bottom-color:var(--selb); outline:2px solid var(--selb); }
-    .legend{display:flex; gap:10px; align-items:center; font-size:.9rem; margin-top:10px;}
-    .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
-    .d-ok{background:var(--ok);border:1px solid var(--okb)}
-    .d-bad{background:var(--bad);border:1px solid var(--badb)}
-    .d-sel{background:var(--sel);border:1px solid var(--selb)}
+    /* ---------- Calendar colour & legend updates (replace only) ---------- */
+.grid, .dow, .cell { box-sizing:border-box; }
+.dow, .cell { padding:10px; text-align:center; border-bottom:1px solid #f1f1f1; border-right:1px solid #f1f1f1; user-select:none; font-size:0.95rem; }
+.grid > *:nth-child(7n){ border-right:none; }
+.dow { background:#fafafa; font-weight:700; font-size:.88rem; color:#374151; }
+
+.cell.dis { color:#bbb; background:#fafafa; cursor:not-allowed; }
+.cell.ok { background:#ecfdf3; color:#065f46; border-bottom-color:#b7f0d9; cursor:pointer; } /* available = green */
+.cell.bad { background:#fff1f2; color:#991b1b; border-bottom-color:#f6c6cb; cursor:not-allowed; } /* booked = red */
+.cell.sel { background: linear-gradient(90deg,#fff7ed,#fff1d6); color:#92400e; border-bottom-color:#f2d9b1; outline:2px solid rgba(250,204,21,0.14); cursor:pointer; } /* selected = gold */
+
+.legend{display:flex; gap:12px; align-items:center; font-size:.92rem; margin-top:10px; color:#374151}
+.dot{width:12px;height:12px;border-radius:3px;display:inline-block}
+.d-ok{background:#065f46;border:1px solid #c9f0d9}
+.d-bad{background:#991b1b;border:1px solid #f6c6cb}
+.d-sel{background:#f59e0b;border:1px solid #fcd38d}
+@media (max-width:520px){ .cell { padding:8px; font-size:.88rem } .dow{font-size:.78rem} }    
   </style>
 
   <!-- Stripe JS (loaded only - mounting happens conditionally in JS) -->
@@ -240,9 +244,44 @@
     return true;
   }
 
-  function onPick(dateStr){
-    if(!selStart){
-      if(blocked.has(dateStr)) return;
+  /* ---------- Calendar selection logic (replace existing onPick / isAllAvailable / updatePriceCalc bits) ---------- */
+
+function expandRanges(ranges){
+  const set = new Set();
+  for(const r of ranges){
+    let d = new Date(r.start_date);
+    const end = new Date(r.end_date);
+    while(d < end){ set.add(ymd(d)); d = addDays(d,1); }
+  }
+  return set;
+}
+
+function isAllAvailable(startStr, endStr){
+  let d = new Date(startStr);
+  const end = new Date(endStr);
+  while(d < end){
+    if(blocked.has(ymd(d))) return false;
+    d = addDays(d,1);
+  }
+  return true;
+}
+
+function onPick(dateStr){
+  if(!selStart){
+    if(blocked.has(dateStr)) { setMsg("❌ That date is booked", false, 4000); return; }
+    selStart = dateStr; selEnd = null;
+    document.getElementById("start").value = selStart;
+    document.getElementById("end").value = "";
+    setMsg("");
+    renderCalendars();
+    document.getElementById("bookBtn").disabled = true;
+    updatePriceCalc();
+    return;
+  }
+
+  if(selStart && !selEnd){
+    if(dateStr < selStart){
+      if(blocked.has(dateStr)) { setMsg("❌ That date is booked", false, 4000); return; }
       selStart = dateStr; selEnd = null;
       document.getElementById("start").value = selStart;
       document.getElementById("end").value = "";
@@ -252,28 +291,55 @@
       updatePriceCalc();
       return;
     }
-    if(dateStr <= selStart){
-      if(blocked.has(dateStr)) return;
-      selStart = dateStr; selEnd = null;
-      document.getElementById("start").value = selStart;
-      document.getElementById("end").value = "";
-      setMsg("");
+
+    // allow same day check-in/out
+    if(dateStr === selStart){
+      selEnd = dateStr;
+      document.getElementById("end").value = selEnd;
       renderCalendars();
-      document.getElementById("bookBtn").disabled = true;
+      document.getElementById("bookBtn").disabled = false;
       updatePriceCalc();
       return;
     }
+
     if(!isAllAvailable(selStart, dateStr)){
-      setMsg("❌ Some dates in between are already booked (red). Please pick different dates.", false, 5000);
+      setMsg("❌ Some dates in between are booked. Please pick different dates.", false, 5000);
       return;
     }
+
     selEnd = dateStr;
     document.getElementById("end").value = selEnd;
-    setMsg("");
     renderCalendars();
     document.getElementById("bookBtn").disabled = false;
     updatePriceCalc();
+    return;
   }
+
+  if(selStart && selEnd){
+    if(blocked.has(dateStr)) { setMsg("❌ That date is booked", false, 4000); return; }
+    selStart = dateStr; selEnd = null;
+    document.getElementById("start").value = selStart;
+    document.getElementById("end").value = "";
+    renderCalendars();
+    document.getElementById("bookBtn").disabled = true;
+    updatePriceCalc();
+    return;
+  }
+}
+
+function updatePriceCalc(){
+  const s = document.getElementById('start').value;
+  const e = document.getElementById('end').value;
+  if(!s || !e){ document.getElementById('priceCalc').textContent = ''; return; }
+
+  const ds = new Date(s), de = new Date(e);
+  let nights = Math.round((de - ds) / (1000*60*60*24));
+  if(nights <= 0) nights = 1; // same-day = 1 night
+  const pricePerNight = Number({{ price or 0 }}) || 0;
+  const total = Math.round(pricePerNight * nights);
+  const nightsLabel = (nights === 1) ? `${nights} night` : `${nights} nights`;
+  document.getElementById('priceCalc').textContent = `฿${pricePerNight} × ${nightsLabel} = ฿${total}`;
+}
 
   // --------- Load availability (grouped: DB blocks + OTA iCal) ----------
   async function loadAvailabilityViaSlug(theSlug){
