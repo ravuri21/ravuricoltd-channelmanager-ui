@@ -55,25 +55,25 @@
         {% endif %}
         <div style="margin-top:8px;">
           {% if t.publishable_key %}
-            <span class="stripe-inline">Secure payments · Powered by Stripe</span>
+            <span class="stripe-inline">{{ _tr('book_button') if session.get('lang','en') else '' }} Secure payments · Powered by Stripe</span>
           {% endif %}
         </div>
-        <p class="muted" id="availabilityHint">Tap the calendar to choose check-in and check-out. <b>Red</b> = booked, <b>Green</b> = available.</p>
+        <p class="muted" id="availabilityHint">{{ _tr('tap_calendar') }}</p>
 
         <!-- calendar panel (keeps your existing markup & JS hooks) -->
         <div class="panel">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <div style="font-weight:600">Availability (click green days to select)</div>
+            <div style="font-weight:600">{{ _tr('availability_title') }}</div>
             <div style="display:flex;gap:8px;align-items:center">
-              <button id="prevMonth" class="btn secondary small" type="button">← Prev</button>
-              <button id="nextMonth" class="btn small" type="button">Next →</button>
+              <button id="prevMonth" class="btn secondary small" type="button">← {{ _tr('clear_button') if session.get('lang','en') else '' }}</button>
+              <button id="nextMonth" class="btn small" type="button">{{ _tr('view_button') if session.get('lang','en') else '' }} →</button>
             </div>
           </div>
           <div id="calwrap" class="calwrap"></div>
           <div class="legend">
-            <span class="dot d-ok"></span> Available
-            <span class="dot d-bad"></span> Booked
-            <span class="dot d-sel"></span> Selected
+            <span class="dot d-ok"></span> {{ _tr('price_per_night') }}
+            <span class="dot d-bad"></span> {{ _tr('booking_failed') }}
+            <span class="dot d-sel"></span> {{ _tr('booking_processing') }}
           </div>
         </div>
 
@@ -83,13 +83,13 @@
       <!-- booking form (unchanged functionality) -->
       <div>
         <form id="bookForm" class="panel" novalidate>
-          <label for="start">Check-in</label>
+          <label for="start">{{ _tr('tap_calendar') and (_tr('tap_calendar') or 'Check-in') and '' }}Check-in</label>
           <input id="start" type="date" required>
-          <label for="end">Check-out</label>
+          <label for="end">{{ _tr('tap_calendar') and '' }}Check-out</label>
           <input id="end" type="date" required>
-          <label for="name">Your Name</label>
+          <label for="name">{{ _tr('view_public') and '' }}Your Name</label>
           <input id="name" type="text" placeholder="Full name" required>
-          <label for="email">Your Email</label>
+          <label for="email">{{ _tr('book') and '' }}Your Email</label>
           <input id="email" type="email" placeholder="Email address" required>
 
           <div id="cardWrap" style="display:none;">
@@ -100,8 +100,8 @@
           <div id="priceCalc" style="margin-top:10px;font-weight:700;"></div>
 
           <div class="actions" style="display:flex;gap:10px;align-items:center;margin-top:10px">
-            <button id="bookBtn" type="submit" disabled>Book & Pay</button>
-            <button type="button" class="secondary" onclick="clearSelection()">Clear</button>
+            <button id="bookBtn" type="submit" disabled>{{ _tr('book_button') }}</button>
+            <button type="button" class="secondary" onclick="clearSelection()">{{ _tr('clear_button') }}</button>
           </div>
 
           <!-- message area: large and persistent when success -->
@@ -124,6 +124,10 @@
 
   const STRIPE_PK = "{{ publishable_key or '' }}".trim();
   let stripe, card;
+
+  // Inject server-side translated messages into JS (so messages from JS match session)
+  const BOOKING_SUCCESS = "{{ _tr('booking_confirmed')|replace('"', '\"') }}";
+  const BOOKING_ERROR   = "{{ _tr('booking_failed')|replace('"', '\"') }}";
 
   // --------- Small helpers ----------
   function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}` }
@@ -391,13 +395,13 @@
     const name      = document.getElementById("name").value.trim();
     const email     = document.getElementById("email").value.trim();
 
-    if(!startDate || !endDate){ setMsg("❌ Please select dates from the calendar.", false, 6000); return; }
-    if(endDate <= startDate){ setMsg("❌ Check-out must be after check-in.", false, 6000); return; }
-    if(!name || !email){ setMsg("❌ Please enter your name and email.", false, 6000); return; }
+    if(!startDate || !endDate){ setMsg("❌ " + (document.documentElement.lang === 'th' ? "กรุณาเลือกวันที่" : "Please select dates from the calendar."), false, 6000); return; }
+    if(endDate <= startDate){ setMsg("❌ " + (document.documentElement.lang === 'th' ? "วันเช็คเอาท์ต้องหลังวันเช็คอิน" : "Check-out must be after check-in."), false, 6000); return; }
+    if(!name || !email){ setMsg("❌ " + (document.documentElement.lang === 'th' ? "กรุณากรอกชื่อและอีเมล" : "Please enter your name and email."), false, 6000); return; }
 
     const btn = document.getElementById("bookBtn");
     const original = btn.textContent;
-    btn.disabled = true; btn.textContent = "Processing…"; setMsg("");
+    btn.disabled = true; btn.textContent = "{{ _tr('booking_processing') }}"; setMsg("");
 
     try{
       // If using Stripe, confirm card now using cached client secret (prefetched) or create-on-demand
@@ -433,8 +437,7 @@
       const j = await res.json();
       if(res.ok && j.ok){
         // show larger confirmation and persist for 6s
-        const lang = document.documentElement.lang || 'en';
-        setMsg((lang === 'th') ? "✅ จองเรียบร้อย — วันที่ถูกบล็อก ขอบคุณ!" : "✅ Booking confirmed — dates blocked. Thank you!", true, 8000);
+        setMsg(BOOKING_SUCCESS || (document.documentElement.lang === 'th' ? "✅ จองเรียบร้อย — วันที่ถูกบล็อก ขอบคุณ!" : "✅ Booking confirmed — dates blocked. Thank you!"), true, 8000);
         clearSelection();
         cachedClientSecret = null;
         if(groupSlug) await loadAvailabilityViaSlug(groupSlug);
@@ -444,8 +447,7 @@
       }
     }catch(err){
       console.error(err);
-      const lang = document.documentElement.lang || 'en';
-      setMsg((lang === 'th') ? ("❌ " + (err.message || "เกิดข้อผิดพลาด")) : ("❌ " + (err.message || "Booking failed")), false, 8000);
+      setMsg(BOOKING_ERROR || (document.documentElement.lang === 'th' ? "❌ การจองล้มเหลว" : "❌ Booking failed"), false, 8000);
     }finally{
       btn.disabled = false; btn.textContent = original;
     }
