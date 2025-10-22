@@ -2,7 +2,7 @@
 <html lang="{{ session.get('lang','en') }}">
 <head>
   <meta charset="utf-8" />
-  <title>Properties — {{ (t.brand if (t is not none and (t.brand is defined and t.brand)) else (t.get('brand') if (t is not none and (t.get is defined and t.get('brand'))) else 'Ravuri Properties')) }}</title>
+  <title>Properties — {{ (t.brand if (t is not none and (t.brand is defined and t.brand)) else (t.get('brand') if (t is not none and t.get is defined and t.get('brand')) else 'Ravuri Properties')) }}</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
 
   <!-- base app styles -->
@@ -160,6 +160,24 @@
   <main class="wrap" role="main">
     <section class="grid" aria-label="Properties list">
       {% for slug, info in groups.items() %}
+      {# Build safe small variables for each item so data-attrs don't error #}
+      {% if info.get is defined %}
+        {% set bedrooms = info.get('bedrooms', '') %}
+        {% set bathrooms = info.get('bathrooms', '') %}
+        {% set amenities_raw = info.get('amenities', '') %}
+      {% else %}
+        {% set bedrooms = info.bedrooms|default('') %}
+        {% set bathrooms = info.bathrooms|default('') %}
+        {% set amenities_raw = info.amenities|default('') %}
+      {% endif %}
+
+      {# If amenities is a list (iterable) join it; otherwise keep as-is #}
+      {% if amenities_raw is iterable and amenities_raw is not string %}
+        {% set amenities = amenities_raw|join(', ') %}
+      {% else %}
+        {% set amenities = amenities_raw %}
+      {% endif %}
+
       <article class="card" aria-labelledby="title-{{ loop.index }}">
         <a class="media-link" href="/prop/{{ slug }}" aria-label="Open {{ info.title }}">
           <img class="card-image" src="{{ info.image_url }}" alt="{{ info.title }}" loading="lazy">
@@ -176,7 +194,18 @@
           {% endif %}
 
           <div class="card-actions">
-            <a href="/prop/{{ slug }}" class="btn btn-outline">View</a>
+            <!-- VIEW: replaced with a button that opens a modal with details -->
+            <button type="button"
+                    class="btn btn-outline view-btn"
+                    data-slug="{{ slug }}"
+                    data-title="{{ info.title|e }}"
+                    data-bedrooms="{{ bedrooms|e }}"
+                    data-bathrooms="{{ bathrooms|e }}"
+                    data-amenities="{{ amenities|e }}">
+              View
+            </button>
+
+            <!-- BOOK remains unchanged -->
             <a href="/prop/{{ slug }}#book" class="btn btn-primary">Book</a>
           </div>
         </div>
@@ -201,5 +230,109 @@
       }catch(e){}
     })();
   </script>
+
+  <!-- DETAILS MODAL: exact implementation for "View" button (paste just once) -->
+  <style>
+    /* Modal minimal styles - small and theme-friendly */
+    .pv-modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,0.45); display:none; align-items:center; justify-content:center; z-index:9999; }
+    .pv-modal{ width:min(720px,94%); background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(2,6,23,0.45); overflow:hidden; transform:translateY(8px); }
+    .pv-modal .pv-head{ padding:18px 20px; border-bottom:1px solid #f1f1f1; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .pv-modal h3{ margin:0; font-size:1.1rem; }
+    .pv-modal .pv-body{ padding:16px 20px; color:#24303a; line-height:1.5; }
+    .pv-modal .pv-row{ margin-bottom:10px; }
+    .pv-modal .pv-row .label{ font-weight:700; color:#374151; display:block; margin-bottom:6px; }
+    .pv-modal .pv-footer{ padding:12px 16px; border-top:1px solid #f1f1f1; display:flex; justify-content:flex-end; gap:10px; background:#fafafa; }
+    .pv-modal .btn-close{ background:transparent;border:0;color:#6b7280;font-weight:700;padding:8px 12px;border-radius:8px;cursor:pointer }
+    .pv-modal .btn-book-now{ background:#e11d48;color:#fff;border:0;padding:9px 14px;border-radius:8px;font-weight:800;cursor:pointer }
+    @media(max-width:520px){ .pv-modal{ width:94%; } .pv-modal .pv-head{ padding:12px } .pv-modal .pv-body{ padding:12px } }
+  </style>
+
+  <div id="pvModalBackdrop" class="pv-modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="pv-modal" role="document" aria-labelledby="pvModalTitle">
+      <div class="pv-head">
+        <h3 id="pvModalTitle">Property details</h3>
+        <button class="btn-close" id="pvCloseBtn" aria-label="Close details">✕</button>
+      </div>
+      <div class="pv-body">
+        <div class="pv-row">
+          <span class="label">Name</span>
+          <div id="pvName" style="font-weight:700;font-size:1.05rem;"></div>
+        </div>
+
+        <div class="pv-row">
+          <span class="label">Bedrooms</span>
+          <div id="pvBedrooms">—</div>
+        </div>
+
+        <div class="pv-row">
+          <span class="label">Bathrooms</span>
+          <div id="pvBathrooms">—</div>
+        </div>
+
+        <div class="pv-row">
+          <span class="label">Amenities</span>
+          <div id="pvAmenities" style="white-space:normal;color:#374151"></div>
+        </div>
+      </div>
+
+      <div class="pv-footer">
+        <a id="pvViewFull" class="btn-close" href="#" style="text-decoration:none">Open full page</a>
+        <button id="pvBookNow" class="btn-book-now">Book now</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    const backdrop = document.getElementById('pvModalBackdrop');
+    const pvName = document.getElementById('pvName');
+    const pvBedrooms = document.getElementById('pvBedrooms');
+    const pvBathrooms = document.getElementById('pvBathrooms');
+    const pvAmenities = document.getElementById('pvAmenities');
+    const pvCloseBtn = document.getElementById('pvCloseBtn');
+    const pvViewFull = document.getElementById('pvViewFull');
+    const pvBookNow = document.getElementById('pvBookNow');
+
+    // Open modal with data from button
+    document.querySelectorAll('.view-btn').forEach(btn=>{
+      btn.addEventListener('click', function(){
+        const title = btn.dataset.title || 'Property details';
+        const bedrooms = btn.dataset.bedrooms || '—';
+        const bathrooms = btn.dataset.bathrooms || '—';
+        const amenities = btn.dataset.amenities || '';
+
+        pvName.textContent = title;
+        pvBedrooms.textContent = bedrooms;
+        pvBathrooms.textContent = bathrooms;
+        pvAmenities.textContent = amenities || 'No amenities listed';
+
+        // set links
+        const slug = btn.dataset.slug || '';
+        pvViewFull.setAttribute('href', '/prop/' + slug);
+        pvBookNow.onclick = function(){ location.href = '/prop/' + slug + '#book'; };
+
+        // show modal
+        backdrop.style.display = 'flex';
+        backdrop.setAttribute('aria-hidden','false');
+        // trap focus on close button for accessibility
+        pvCloseBtn.focus();
+      });
+    });
+
+    // close handlers
+    function hideModal(){
+      backdrop.style.display = 'none';
+      backdrop.setAttribute('aria-hidden','true');
+    }
+    pvCloseBtn.addEventListener('click', hideModal);
+    backdrop.addEventListener('click', function(e){
+      if(e.target === backdrop) hideModal();
+    });
+    document.addEventListener('keydown', function(e){
+      if(e.key === 'Escape' && backdrop.style.display === 'flex') hideModal();
+    });
+  })();
+  </script>
+
 </body>
 </html>
