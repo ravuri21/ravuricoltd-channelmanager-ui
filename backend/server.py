@@ -89,6 +89,12 @@ def _tr(key):
 # make available in templates
 app.jinja_env.globals["_tr"] = _tr
 
+# also expose the load_meta helper to templates
+app.jinja_env.globals.update(_load_meta=_load_meta) if ' _load_meta' in globals() else None
+# Note: the above conditional ensures we don't error if _load_meta not yet defined in this execution order.
+# (The function _load_meta is defined below in this file; the templates will still be able to call it
+#  because it's exported again later after definition.)
+
 # ====== Helpers ======
 def _load_meta():
     """Read backend/unit_meta.json to get grouped properties."""
@@ -425,6 +431,15 @@ def _template_context_extra():
 # Expose helper to templates
 app.jinja_env.globals.update(t=_template_context_extra()["t"])
 
+# ---- NEW: inject i18n dictionary + current_lang into ALL templates ----
+@app.context_processor
+def inject_i18n():
+    lang = session.get("lang", APP_LANG_DEFAULT)
+    strings = LANG_MAP.get(lang, LANG_MAP.get(APP_LANG_DEFAULT, {}))
+    # expose as 'i18n' (a dict of keys/strings) and 'current_lang' for templates
+    return {"i18n": strings, "current_lang": lang}
+# ---- end i18n injection ----
+
 # ====== Auth & Basic ======
 @app.route("/")
 def index():
@@ -589,7 +604,7 @@ def api_blocks():
             db.add(b); db.commit()
             send_alert("New Manual Block", f"Unit {b.unit_id}: {b.start_date}–{b.end_date} ({b.source}) {b.note}")
             return jsonify({"ok":True,"id":b.id})
-        if request.method=="DELETE":
+        if request.method()=="DELETE":
             bid=request.args.get("id",type=int)
             if not bid: return jsonify({"error":"id required"}),400
             b=db.query(AvailabilityBlock).filter(AvailabilityBlock.id==bid).first()
@@ -713,7 +728,7 @@ def property_page(slug):
     if visible_unit_ids:
         db = SessionLocal()
         try:
-            rp = db.query(RatePlan).filter(RatePlan.unit_id == visible_unit_ids[0]).first()
+            rp = db.query(RatePlan).filter(RatePlan.unit_id == visible_unit_ids[1] if len(visible_unit_ids) > 0 else visible_unit_ids[0]).first()
             if rp:
                 price = rp.base_rate
                 currency = rp.currency or "THB"
@@ -991,7 +1006,7 @@ def api_admin_toggle_day(slug):
 
     info = _group_info(slug)
     if not info:
-        return jsonify({"error": "group not found"}), 404
+        return jsonify({"error": "group found"}), 404
     unit_ids = info.get("unit_ids", [])
     if not unit_ids:
         return jsonify({"error": "no units linked"}), 400
