@@ -83,7 +83,6 @@ class RatePlan(Base):
     unit_id = Column(Integer, ForeignKey("units.id", ondelete="CASCADE"), index=True)
 
     base_rate = Column(Float, default=1500.0)  # nightly price fallback
-    weekend_rate = Column(Float, nullable=True)  # optional Fri/Sat special price (can be NULL)
     currency  = Column(String(8), default="THB")
 
     unit = relationship("Unit", back_populates="rates")
@@ -95,8 +94,5 @@ def init_db() -> None:
     """
     Create tables if they don't exist.
     Call this once at app startup.
-    NOTE: for adding new columns to existing tables in production (Postgres)
-    you should run an ALTER TABLE migration. init_db() will create missing tables
-    but won't add columns to an existing Postgres table.
     """
     Base.metadata.create_all(bind=engine)
