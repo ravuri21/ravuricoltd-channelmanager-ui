@@ -714,7 +714,7 @@ def api_blocks():
             db.add(b); db.commit()
             send_alert("New Manual Block", f"Unit {b.unit_id}: {b.start_date}–{b.end_date} ({b.source}) {b.note}")
             return jsonify({"ok":True,"id":b.id})
-        if request.method=="DELETE":
+        if request.method()=="DELETE":
             bid=request.args.get("id",type=int)
             if not bid: return jsonify({"error":"id required"}),400
             b=db.query(AvailabilityBlock).filter(AvailabilityBlock.id==bid).first()
@@ -888,17 +888,27 @@ def api_public_prices(slug):
         return jsonify({"error":"no visible unit for this property"}), 400
     unit_id = visible_unit_ids[0]
 
+    # attempt to get currency from RatePlan if available, and prefer RatePlan's nightly breakdown
     prices = []
     currency = "THB"
-    # attempt to get currency from RatePlan if available
     db = SessionLocal()
     try:
         rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_id).first()
         if rp:
             currency = rp.currency or currency
+            # Use RatePlan.get_nightly_rates to compute breakdown (DB-backed DateRate overrides will be respected)
+            try:
+                breakdown = rp.get_nightly_rates(start, end, session=db)
+                for item in breakdown:
+                    prices.append({"date": item["date"], "price": item["price"], "currency": currency})
+                return jsonify({"ok": True, "prices": prices})
+            except Exception:
+                # fallback to per-day lookup
+                pass
     finally:
         db.close()
 
+    # fallback: use existing JSON store / get_rate_for_unit_date
     d = start_dt
     while d < end_dt:
         dstr = d.isoformat()
@@ -926,11 +936,7 @@ def api_public_create_intent(slug):
     if end <= start:
         return jsonify({"error": "check-out must be after check-in"}), 400
 
-    # Use nightly prices (sum of per-night) rather than multiply base * nights
-    # We'll attempt to fetch the nightly prices using the prices endpoint logic.
-    prices_resp = None
     try:
-        # call internal function, not HTTP
         info = _group_info(slug)
         unit_ids = info.get("unit_ids", [])
         if not unit_ids:
@@ -951,29 +957,36 @@ def api_public_create_intent(slug):
         if nights <= 0:
             return jsonify({"error": "nights must be > 0"}), 400
 
-        # sum per-night prices
-        total = 0
-        currency = "THB"
-        d = _parse_yyyy_mm_dd(start)
-        rp = None
-        # currency from RatePlan
+        # Prefer DB-backed RatePlan calculation (will respect DateRate overrides and weekend_rate)
         db = SessionLocal()
         try:
             rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_id).first()
             if rp:
-                currency = (rp.currency or currency).lower()
+                # use RatePlan.calculate_total which returns breakdown + total
+                calc = rp.calculate_total(start, end, session=db)
+                total = calc.get("total")
+                currency = (rp.currency or "THB").lower()
+            else:
+                # fallback to old per-day lookup (date_rates.json)
+                total = 0.0
+                currency = "THB"
+                d = _parse_yyyy_mm_dd(start)
+                for i in range(nights):
+                    dstr = d.isoformat()
+                    p, rp_currency = get_rate_for_unit_date(unit_id, dstr)
+                    if p is None:
+                        return jsonify({"error": f"price not set for date {dstr}"}), 400
+                    total += float(p)
+                    if rp_currency:
+                        currency = rp_currency.lower()
+                    d = d + timedelta(days=1)
         finally:
             db.close()
 
-        for i in range(nights):
-            dstr = d.isoformat()
-            p, _ = get_rate_for_unit_date(unit_id, dstr)
-            if p is None:
-                return jsonify({"error": f"price not set for date {dstr}"}), 400
-            total += float(p)
-            d = d + timedelta(days=1)
+        if total is None:
+            return jsonify({"error": "could not determine total"}), 400
 
-        amount = int(round(total * 100))
+        amount = int(round(float(total) * 100))
         try:
             intent = stripe.PaymentIntent.create(
                 amount=amount,
