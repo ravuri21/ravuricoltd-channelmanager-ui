@@ -131,6 +131,78 @@ def _overlaps(db, unit_id: int, start: str, end: str) -> bool:
 app.jinja_env.globals["_tr"] = _tr
 app.jinja_env.globals.update(_load_meta=_load_meta)
 
+# ====== date_rates.json store (per-date overrides + weekend special price) ======
+DATE_RATES_PATH = Path(__file__).with_name("date_rates.json")
+
+def load_date_rates():
+    """Load JSON store that keeps per-unit overrides and weekend_price."""
+    try:
+        if DATE_RATES_PATH.exists():
+            with open(DATE_RATES_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        print("load_date_rates error:", e)
+    # default structure
+    return {"overrides": {}, "weekend_price": {}}
+
+def save_date_rates(data):
+    try:
+        with open(DATE_RATES_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            return True
+    except Exception as e:
+        print("save_date_rates error:", e)
+        return False
+
+def get_rate_for_unit_date(unit_id: int, date_str: str):
+    """
+    Return a price (float) for unit_id on date_str, using priority:
+      1) per-date override in date_rates.json
+      2) weekend_price for Fri/Sat if set
+      3) base rate from RatePlan
+    Returns tuple (price_float_or_None, currency)
+    """
+    db = SessionLocal()
+    try:
+        dr = load_date_rates()
+        overrides = dr.get("overrides", {})
+        weekend_map = dr.get("weekend_price", {})
+
+        # override
+        unit_key = str(unit_id)
+        if overrides.get(unit_key) and overrides[unit_key].get(date_str) is not None:
+            try:
+                return float(overrides[unit_key][date_str]), None  # currency will be from RatePlan below
+            except Exception:
+                pass
+
+        # weekend Price (Fri=4, Sat=5)
+        try:
+            dt = _parse_yyyy_mm_dd(date_str)
+            if dt.weekday() in (4, 5):  # Friday (4), Saturday (5)
+                wp = weekend_map.get(unit_key)
+                if wp is not None:
+                    try:
+                        return float(wp), None
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        # fallback to RatePlan base rate
+        rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_id).first()
+        if rp and rp.base_rate is not None:
+            try:
+                return float(rp.base_rate), (rp.currency or "THB")
+            except Exception:
+                try:
+                    return float(str(rp.base_rate)), (rp.currency or "THB")
+                except Exception:
+                    return None, (rp.currency or "THB")
+        return None, None
+    finally:
+        db.close()
+
 # ====== iCal fetch (lightweight) ======
 def fetch_ical(ical_url):
     """
@@ -535,6 +607,89 @@ def api_rates():
     db.commit(); db.close()
     return jsonify({"ok":True})
 
+# ====== New Admin Price Override APIs ======
+@app.route("/api/admin/price_override", methods=["POST"])
+def api_admin_price_override():
+    """
+    Admin-only. Payload:
+    {
+      "unit_id": 5,
+      "overrides": {"2025-11-01": 1500, "2025-11-02": 1600},
+      "weekend_price": 2000   # optional, absolute price for Fri/Sat
+    }
+    """
+    if "user" not in session:
+        return jsonify({"error":"unauthorized"}),401
+    data = request.json or {}
+    unit_id = data.get("unit_id")
+    if not unit_id:
+        return jsonify({"error":"unit_id required"}), 400
+    overrides = data.get("overrides", {})
+    weekend_price = data.get("weekend_price", None)
+
+    dr = load_date_rates()
+    unit_key = str(unit_id)
+    if "overrides" not in dr:
+        dr["overrides"] = {}
+    if unit_key not in dr["overrides"]:
+        dr["overrides"][unit_key] = {}
+
+    # merge overrides (set / delete if null)
+    for d, p in (overrides or {}).items():
+        if p is None:
+            dr["overrides"][unit_key].pop(d, None)
+        else:
+            try:
+                dr["overrides"][unit_key][d] = float(p)
+            except Exception:
+                # skip invalid
+                continue
+
+    # set weekend price
+    if weekend_price is not None:
+        if "weekend_price" not in dr:
+            dr["weekend_price"] = {}
+        try:
+            dr["weekend_price"][unit_key] = float(weekend_price)
+        except Exception:
+            return jsonify({"error":"invalid weekend_price"}), 400
+
+    ok = save_date_rates(dr)
+    if not ok:
+        return jsonify({"error":"failed to save"}), 500
+    return jsonify({"ok":True})
+
+@app.route("/api/admin/price_overrides", methods=["GET"])
+def api_admin_price_overrides_list():
+    """Admin-only: list overrides for a unit. Query param: unit_id"""
+    if "user" not in session:
+        return jsonify({"error":"unauthorized"}),401
+    unit_id = request.args.get("unit_id", type=int)
+    if not unit_id:
+        return jsonify({"error":"unit_id required"}), 400
+    dr = load_date_rates()
+    unit_key = str(unit_id)
+    overrides = dr.get("overrides", {}).get(unit_key, {})
+    weekend = dr.get("weekend_price", {}).get(unit_key)
+    return jsonify({"unit_id": unit_id, "overrides": overrides, "weekend_price": weekend})
+
+@app.route("/api/admin/clear_price_overrides", methods=["POST"])
+def api_admin_clear_price_overrides():
+    """Admin-only: clear all overrides for a given unit_id"""
+    if "user" not in session:
+        return jsonify({"error":"unauthorized"}),401
+    data = request.json or {}
+    unit_id = data.get("unit_id")
+    if not unit_id:
+        return jsonify({"error":"unit_id required"}), 400
+    dr = load_date_rates()
+    key = str(unit_id)
+    dr.get("overrides", {}).pop(key, None)
+    dr.get("weekend_price", {}).pop(key, None)
+    if not save_date_rates(dr):
+        return jsonify({"error":"failed to save"}), 500
+    return jsonify({"ok":True})
+
 @app.route("/api/blocks", methods=["GET","POST","DELETE"])
 def api_blocks():
     if "user" not in session:
@@ -692,6 +847,69 @@ def api_public_availability(slug):
 
     return jsonify(unique)
 
+# ---- Public prices endpoint (grouped) ----
+@app.route("/api/public/prices/<slug>", methods=["GET"])
+def api_public_prices(slug):
+    """
+    Returns nightly prices for a property group (using first visible unit).
+    Query params: start=YYYY-MM-DD, end=YYYY-MM-DD (end = check-out, exclusive)
+    Response: {"ok": True, "prices": [ {"date":"YYYY-MM-DD","price":1234.0, "currency":"THB"} ... ] }
+    """
+    info = _group_info(slug)
+    if not info:
+        return jsonify({"error":"property not found"}), 404
+
+    start = request.args.get("start", "").strip()
+    end = request.args.get("end", "").strip()
+    if not (start and end):
+        return jsonify({"error":"start and end query params required"}), 400
+    try:
+        start_dt = _parse_yyyy_mm_dd(start)
+        end_dt = _parse_yyyy_mm_dd(end)
+    except Exception:
+        return jsonify({"error":"invalid date format"}), 400
+    if end_dt <= start_dt:
+        return jsonify({"error":"end must be after start"}), 400
+
+    unit_ids = info.get("unit_ids", [])
+    if not unit_ids:
+        return jsonify({"error":"no units linked to this property"}), 400
+
+    # pick first visible unit for price
+    ignore_env = os.environ.get("IGNORE_PUBLIC_UNIT_IDS", "").strip()
+    ignore_set = set()
+    if ignore_env:
+        try:
+            ignore_set = set(int(x.strip()) for x in ignore_env.split(",") if x.strip())
+        except Exception:
+            ignore_set = set()
+    visible_unit_ids = [uid for uid in unit_ids if uid not in ignore_set]
+    if not visible_unit_ids:
+        return jsonify({"error":"no visible unit for this property"}), 400
+    unit_id = visible_unit_ids[0]
+
+    prices = []
+    currency = "THB"
+    # attempt to get currency from RatePlan if available
+    db = SessionLocal()
+    try:
+        rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_id).first()
+        if rp:
+            currency = rp.currency or currency
+    finally:
+        db.close()
+
+    d = start_dt
+    while d < end_dt:
+        dstr = d.isoformat()
+        p, rp_currency = get_rate_for_unit_date(unit_id, dstr)
+        if rp_currency:
+            currency = rp_currency
+        prices.append({"date": dstr, "price": (p if p is not None else None), "currency": currency})
+        d = d + timedelta(days=1)
+
+    return jsonify({"ok": True, "prices": prices})
+
 # ---- Stripe: create PaymentIntent for group (price × nights) ----
 @app.route("/api/public/create_intent/<slug>", methods=["POST"])
 def api_public_create_intent(slug):
@@ -708,38 +926,67 @@ def api_public_create_intent(slug):
     if end <= start:
         return jsonify({"error": "check-out must be after check-in"}), 400
 
-    unit_ids = info.get("unit_ids", [])
-    if not unit_ids:
-        return jsonify({"error":"no units linked to this property"}),400
-
-    db = SessionLocal()
-    rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
-    db.close()
-
-    if not rp or rp.base_rate is None:
-        return jsonify({"error": "price not set for this property"}), 400
-
+    # Use nightly prices (sum of per-night) rather than multiply base * nights
+    # We'll attempt to fetch the nightly prices using the prices endpoint logic.
+    prices_resp = None
     try:
-        base_rate = float(rp.base_rate)
-    except Exception:
-        return jsonify({"error": "invalid price configured"}), 400
+        # call internal function, not HTTP
+        info = _group_info(slug)
+        unit_ids = info.get("unit_ids", [])
+        if not unit_ids:
+            return jsonify({"error":"no units linked to this property"}),400
+        ignore_env = os.environ.get("IGNORE_PUBLIC_UNIT_IDS", "").strip()
+        ignore_set = set()
+        if ignore_env:
+            try:
+                ignore_set = set(int(x.strip()) for x in ignore_env.split(",") if x.strip())
+            except Exception:
+                ignore_set = set()
+        visible_unit_ids = [uid for uid in unit_ids if uid not in ignore_set]
+        if not visible_unit_ids:
+            return jsonify({"error":"no visible unit for this property"}),400
+        unit_id = visible_unit_ids[0]
 
-    nights = (_parse_yyyy_mm_dd(end) - _parse_yyyy_mm_dd(start)).days
-    if nights <= 0:
-        return jsonify({"error": "nights must be > 0"}), 400
+        nights = (_parse_yyyy_mm_dd(end) - _parse_yyyy_mm_dd(start)).days
+        if nights <= 0:
+            return jsonify({"error": "nights must be > 0"}), 400
 
-    amount = int(round(base_rate * nights * 100))  # THB → satang
-    currency = (rp.currency or "THB").lower()
+        # sum per-night prices
+        total = 0
+        currency = "THB"
+        d = _parse_yyyy_mm_dd(start)
+        rp = None
+        # currency from RatePlan
+        db = SessionLocal()
+        try:
+            rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_id).first()
+            if rp:
+                currency = (rp.currency or currency).lower()
+        finally:
+            db.close()
 
-    try:
-        intent = stripe.PaymentIntent.create(
-            amount=amount,
-            currency=currency,
-            automatic_payment_methods={"enabled": True}
-        )
-        return jsonify({"ok": True, "client_secret": intent.client_secret})
+        for i in range(nights):
+            dstr = d.isoformat()
+            p, _ = get_rate_for_unit_date(unit_id, dstr)
+            if p is None:
+                return jsonify({"error": f"price not set for date {dstr}"}), 400
+            total += float(p)
+            d = d + timedelta(days=1)
+
+        amount = int(round(total * 100))
+        try:
+            intent = stripe.PaymentIntent.create(
+                amount=amount,
+                currency=currency,
+                automatic_payment_methods={"enabled": True}
+            )
+            return jsonify({"ok": True, "client_secret": intent.client_secret})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 # ---- Public booking: grouped + per-unit ----
 @app.route("/api/public/book_group/<slug>", methods=["POST"])
