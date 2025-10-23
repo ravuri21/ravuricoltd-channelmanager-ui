@@ -75,6 +75,10 @@
       .cal h3 { padding:10px; font-size:0.98rem; }
       .cell { padding:10px; font-size:0.95rem; }
     }
+    /* price breakdown styles */
+    #priceCalc { white-space:pre-line; font-size:0.98rem; color:#111827 }
+    #priceCalc .line { display:flex; justify-content:space-between; gap:12px; padding:4px 0; border-bottom:1px dashed #eee; }
+    #priceCalc .total { font-weight:900; margin-top:8px; font-size:1.05rem; text-align:right; }
   </style>
 
   <!-- Stripe JS (loaded only - mounting happens conditionally in JS) -->
@@ -167,11 +171,6 @@
   // Inject server-side translated messages into JS (so messages from JS match session)
   const BOOKING_SUCCESS = "{{ _tr('booking_confirmed')|replace('\"', '\\\"') }}";
   const BOOKING_ERROR   = "{{ _tr('booking_failed')|replace('\"', '\\\"') }}";
-
-  // ------------ NEW: single authoritative price constant ----------------
-  // This avoids ambiguity and duplicated JS functions.
-  const PRICE_PER_NIGHT = Number({{ price or 0 }}) || 0;
-  // ---------------------------------------------------------------------
 
   // --------- Small helpers ----------
   function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}` }
@@ -387,26 +386,100 @@
     prefetchIntentIfNeeded().catch(()=>{});
   }
 
-  // --------- Price calc: nights = (end - start) in days, must be >= 1 ----------
-  function updatePriceCalc(){
+  // --------- Price calc: uses server nightly prices ----------
+  // Caches by key = `${slug}|${start}|${end}`
+  const priceCache = new Map();
+
+  async function fetchPricesForRange(theSlug, start, end){
+    const key = `${theSlug}|${start}|${end}`;
+    if(priceCache.has(key)) return priceCache.get(key);
+
+    // Attempt to call public prices endpoint
+    try{
+      const res = await fetch(`/api/public/prices/${encodeURIComponent(theSlug)}?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
+      if(!res.ok){
+        // store a failure marker to avoid re-requesting too quickly
+        priceCache.set(key, { ok:false, error:`prices API ${res.status}` });
+        return { ok:false, error:`prices API ${res.status}` };
+      }
+      const j = await res.json();
+      if(!j || !j.ok || !Array.isArray(j.prices)){
+        priceCache.set(key, { ok:false, error: 'invalid response' });
+        return { ok:false, error: 'invalid response' };
+      }
+      priceCache.set(key, { ok:true, prices:j.prices });
+      return { ok:true, prices:j.prices };
+    }catch(err){
+      priceCache.set(key, { ok:false, error: String(err) });
+      return { ok:false, error: String(err) };
+    }
+  }
+
+  async function updatePriceCalc(){
     const s = document.getElementById('start') ? document.getElementById('start').value : "";
     const e = document.getElementById('end') ? document.getElementById('end').value : "";
 
+    const container = document.getElementById('priceCalc');
+    if(!container) return;
+
     // Clear if invalid or not set
     if(!s || !e || e <= s){
-      document.getElementById('priceCalc').textContent = '';
+      container.innerHTML = '';
       return;
     }
 
-    const ds = new Date(s + 'T00:00:00');
-    const de = new Date(e + 'T00:00:00');
-    let nights = Math.round((de - ds) / (1000*60*60*24));
-    if(nights <= 0) nights = 1; // safety fallback
+    // determine which slug to query: prefer groupSlug; if missing and this is a unit page, try to derive (best-effort)
+    let theSlug = groupSlug;
+    if(!theSlug && isUnit){
+      // attempt synchronous retrieval via existing endpoint (if available)
+      try{
+        const r = await fetch(`/api/admin/find_group?unit_id=${unitId}`);
+        if(r.ok){
+          const j = await r.json();
+          if(j.ok && j.slug) theSlug = j.slug;
+        }
+      }catch(_){}
+    }
+    if(!theSlug){
+      // fallback: show a note that prices are unavailable
+      container.textContent = document.documentElement.lang === 'th' ? 'ราคาไม่พร้อมใช้งาน' : 'Prices unavailable';
+      return;
+    }
 
-    const pricePerNight = Number(PRICE_PER_NIGHT) || 0;
-    const total = Math.round(pricePerNight * nights);
+    // Show loading text quickly
+    container.textContent = (document.documentElement.lang === 'th') ? 'กำลังดึงราคา…' : 'Fetching nightly prices…';
+
+    const resp = await fetchPricesForRange(theSlug, s, e);
+    if(!resp.ok){
+      container.textContent = (document.documentElement.lang === 'th') ? `ไม่สามารถดึงราคา: ${resp.error}` : `Failed to fetch prices: ${resp.error}`;
+      return;
+    }
+
+    // resp.prices = [ { date, price, currency } ... ] with end exclusive
+    const prices = resp.prices;
+    // Validate prices: if any price is null -> show error asking admin to set price
+    const missing = prices.find(p => p.price === null || p.price === undefined);
+    if(missing){
+      container.innerHTML = (document.documentElement.lang === 'th')
+        ? `ไม่มีราคาสำหรับวันที่ ${missing.date} — โปรดติดต่อผู้ดูแลระบบ`
+        : `No price set for ${missing.date} — please contact admin`;
+      return;
+    }
+
+    // build breakdown
+    let total = 0;
+    const lines = [];
+    for(const p of prices){
+      const priceVal = Number(p.price);
+      total += priceVal;
+      const labelDate = (document.documentElement.lang === 'th') ? p.date : p.date;
+      lines.push(`<div class="line"><div>${labelDate}</div><div>฿${Math.round(priceVal)}</div></div>`);
+    }
+    const nights = prices.length;
     const nightsLabel = (nights === 1) ? (document.documentElement.lang === 'th' ? '1 คืน' : '1 night') : (document.documentElement.lang === 'th' ? `${nights} คืน` : `${nights} nights`);
-    document.getElementById('priceCalc').textContent = `฿${pricePerNight} × ${nightsLabel} = ฿${total}`;
+    const totalHtml = `<div class="total">฿${Math.round(total)} — ${nightsLabel}</div>`;
+
+    container.innerHTML = lines.join('') + totalHtml;
   }
 
   // --------- Load availability (grouped: DB blocks + OTA iCal) ----------
@@ -489,7 +562,7 @@ async function loadAvailabilityViaSlug(theSlug){
     if(!s || !e || e <= s) return;
     if(!groupSlug && !isUnit) return;
     try{
-      const res = await fetch("/api/public/create_intent/" + groupSlug, {
+      const res = await fetch("/api/public/create_intent/" + encodeURIComponent(groupSlug), {
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ start_date: s, end_date: e })
@@ -568,7 +641,7 @@ async function loadAvailabilityViaSlug(theSlug){
         let client_secret = cachedClientSecret;
         if(!client_secret){
           // create intent now (fallback)
-          const piRes = await fetch("/api/public/create_intent/" + groupSlug, {
+          const piRes = await fetch("/api/public/create_intent/" + encodeURIComponent(groupSlug), {
             method:"POST",
             headers:{"Content-Type":"application/json"},
             body: JSON.stringify({ start_date: startDate, end_date: endDate })
@@ -586,7 +659,7 @@ async function loadAvailabilityViaSlug(theSlug){
       }
 
       // Proceed to create booking in backend (grouped or unit)
-      const postUrl = groupSlug ? `/api/public/book_group/${groupSlug}` : (isUnit ? `/api/public/book/${unitId}` : "/api/public/book");
+      const postUrl = groupSlug ? `/api/public/book_group/${encodeURIComponent(groupSlug)}` : (isUnit ? `/api/public/book/${unitId}` : "/api/public/book");
 
       const res = await fetch(postUrl, {
         method:"POST",
@@ -603,14 +676,10 @@ async function loadAvailabilityViaSlug(theSlug){
         cachedClientSecret = null;
 
         // Refresh availability intelligently:
-        // - If this page has a groupSlug (public group page) refresh that
-        // - If this is a unit page, resolve the group via api/admin/find_group and then refresh
-        // - Otherwise, just re-render calendars
         try{
           if(groupSlug){
             await loadAvailabilityViaSlug(groupSlug);
           }else if(isUnit){
-            // try to find the group's slug for this unit and reload
             try{
               const r2 = await fetch(`/api/admin/find_group?unit_id=${unitId}`);
               const j2 = await r2.json();
@@ -618,16 +687,13 @@ async function loadAvailabilityViaSlug(theSlug){
                 groupSlug = j2.slug;
                 await loadAvailabilityViaSlug(groupSlug);
               }else{
-                // fallback: render calendars (blocks for this unit only available via blocks endpoint)
-                await loadAvailabilityViaSlug(groupSlug); // will be no-op if groupSlug falsy
+                await loadAvailabilityViaSlug(groupSlug); // no-op if falsy
               }
             }catch(fe){
               console.warn("find_group failed:", fe);
-              // fallback re-render
               renderCalendars();
             }
           }else{
-            // fallback re-render
             renderCalendars();
           }
         }catch(fe){
