@@ -482,49 +482,6 @@
     container.innerHTML = lines.join('') + totalHtml;
   }
 
-<script>
-async function loadPrices(unitId, start, end) {
-  const res = await fetch(`/api/public/prices/${unitId}?start=${start}&end=${end}`);
-  return await res.json();
-}
-
-document.addEventListener('DOMContentLoaded', async () => {
-  const unitId = {{ unit.id }};
-  const calendar = document.getElementById('calendar');
-
-  // Example for November 2025
-  const prices = await loadPrices(unitId, '2025-11-01', '2025-11-30');
-
-  // Show prices on calendar
-  for (const date in prices) {
-    const cell = document.querySelector(`[data-date="${date}"]`);
-    if (cell) {
-      cell.innerHTML += `<div class='price'>฿${prices[date]}</div>`;
-      cell.addEventListener('click', () => editPrice(unitId, date, prices[date]));
-    }
-  }
-});
-
-async function editPrice(unitId, date, currentPrice) {
-  const newPrice = prompt(`Enter new price for ${date}`, currentPrice);
-  if (!newPrice) return;
-
-  const res = await fetch('/api/admin/price_override', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({unit_id: unitId, date: date, price: parseFloat(newPrice)})
-  });
-
-  const json = await res.json();
-  if (json.status === 'ok') {
-    alert('Price updated!');
-    location.reload();
-  } else {
-    alert('Error: ' + (json.error || 'unknown'));
-  }
-}
-  <script>
-
   // --------- Load availability (grouped: DB blocks + OTA iCal) ----------
 async function loadAvailabilityViaSlug(theSlug){
   // guard -- if no slug provided, show an empty calendar (safer)
