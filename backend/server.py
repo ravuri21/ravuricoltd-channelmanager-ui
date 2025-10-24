@@ -1164,6 +1164,57 @@ def admin_calendar(slug):
     ctx.update(_template_context_extra())
     return render_template("admin_calendar.html", **ctx)
 
+# --- Admin simple Price Editor ---
+@app.route("/admin/prices")
+def admin_prices():
+    if "user" not in session:
+        return redirect(url_for("login"))
+    # groups from unit_meta.json (same as properties page)
+    meta = _load_meta()
+    groups = meta.get("groups", {})
+    # Build a lightweight list with slug, title, unit_ids and current base/weekend if available
+    db = SessionLocal()
+    try:
+        # load RatePlan for all unit ids in groups (take first unit's rate as group's default)
+        group_list = []
+        for slug, info in groups.items():
+            unit_ids = info.get("unit_ids", [])
+            base_rate = None
+            currency = "THB"
+            weekend = None
+            if unit_ids:
+                # check first unit's RatePlan for base and currency
+                rp = db.query(RatePlan).filter(RatePlan.unit_id == unit_ids[0]).first()
+                if rp:
+                    try:
+                        base_rate = float(rp.base_rate) if rp.base_rate is not None else None
+                    except Exception:
+                        base_rate = None
+                    currency = rp.currency or "THB"
+            # check overrides store for weekend price (reads date_rates.json)
+            dr = load_date_rates()
+            wkmap = dr.get("weekend_price", {})
+            if unit_ids:
+                weekend = None
+                try:
+                    weekend = wkmap.get(str(unit_ids[0]))
+                except Exception:
+                    weekend = None
+            group_list.append({
+                "slug": slug,
+                "title": info.get("title", slug),
+                "unit_ids": unit_ids,
+                "base_rate": base_rate,
+                "currency": currency,
+                "weekend_price": weekend
+            })
+    finally:
+        db.close()
+
+    ctx = {"groups": group_list}
+    ctx.update(_template_context_extra())
+    return render_template("admin_prices.html", **ctx)
+
 @app.route("/api/admin/toggle_day/<slug>", methods=["POST"])
 def api_admin_toggle_day(slug):
     if "user" not in session:
